@@ -334,7 +334,7 @@ static const char* const ONBOARD_LINES[] = {
     "MuleSkin listens for surveillance nearby -- cameras, plate readers, trackers like AirTags.",
     "No magic. Just WiFi and Bluetooth, matching known hardware as it passes by.",
     "All zeroes down there means nothing's around. It flips to a big flashing ALERT the second something matches.",
-    "Down there: SCAN rescans, LOG shows history, DESK is a big clock.",
+    "Down there: LOG shows history.",
 #if defined(AWOK)
     "Up top left: Settings. The far left/right edges of the screen swap backgrounds, one swap per tap.",
 #else
@@ -1993,15 +1993,9 @@ static const int NO_TAIL = -10000;
 // on the way out, so nothing drawn after a bubble notices.
 static void drawBubbleIn(TFT_eSPI& t, int cx, int topY, const char* text,
                          uint32_t now, bool mayRise, int tailX);
-// Desk mode holds his bubble while a squad message's box is up beside him:
-// the bubble spans the screen and would sit across the message. He keeps
-// moving; only the words wait.
-static bool s_bubbleHeld = false;
-void holdBubble(bool held) { s_bubbleHeld = held; }
 
 static void drawBubble(TFT_eSPI& t, int cx, int topY, const char* text,
                        uint32_t now, bool mayRise = false, int tailX = NO_TAIL) {
-    if (s_bubbleHeld) return;
     Theme::bubbleFontOn(t);
     drawBubbleIn(t, cx, topY, text, now, mayRise, tailX);
     Theme::bubbleFontOff(t);
@@ -2599,34 +2593,12 @@ void unlockAllOutfits() {
     }
 }
 
-// Flavor pools for scanReaction() -- separate from the normal idle-
-// chatter rotation (DET_LINES etc.) since these are tied to a specific
-// screen's specific moments, not rolled at random during idle time.
-// STARTED isn't a pool at all, deliberately -- it's the one place a
-// new user learns the long-press-to-watch gesture exists, so it says
-// the same fixed instructional line every single time rather than
-// rolling flavor text that might never mention it.
-static const char* const SCAN_STARTED_LINE = "Tap & hold a result to set a target.";
-static const char* const SCAN_HIT_LINES[] = {
-    "Ooh, found one!",
-    "Got a hit.",
-    "There's another.",
-};
-static const char* const SCAN_EMPTY_LINES[] = {
-    "...nothing? Huh.",
-    "Quiet out there today.",
-    "Not a peep.",
-};
-static const char* const SCAN_FOUND_LINES[] = {
-    "That's a lot of signals.",
-    "Busy neighborhood!",
-    "Scan's done. Take a look.",
-};
-
 // Flavor pools for huntReaction() -- see HuntMoment in muleskin.h.
-// STARTED isn't a pool, same reasoning as SCAN_STARTED_LINE above: the
-// one place someone learns there's no compass, just a strength meter
-// you sweep by hand.
+// Separate from the normal idle-chatter rotation (DET_LINES etc.) since
+// these are tied to a specific screen's specific moments. STARTED isn't a
+// pool, deliberately: it's the one place someone learns there's no
+// compass, just a strength meter you sweep by hand, so it says the same
+// fixed line every time.
 static const char* const HUNT_STARTED_LINE =
     "No compass. Turn your body -- weaker means it's behind you.";
 static const char* const HUNT_FIRST_SIGNAL_LINES[] = {
@@ -3282,66 +3254,14 @@ static const char* const WATCH_ALERT_LINES[] = {
     "Back again, huh? Persistent little thing.",
 };
 
-// STARTED's hint bubble gets a grace window nothing else is allowed to
-// interrupt -- BLE can turn up a device within the first second, and a
-// HIT quip immediately overwriting the hint before it's even readable
-// defeats the whole point of it existing.
-static uint32_t s_scanHintUntil = 0;
-static const uint32_t SCAN_HINT_GRACE_MS = 3000;
-
-// Same protection for HUNT MODE's STARTED line -- a trend can compute
+// HUNT MODE's STARTED line gets a grace window nothing else is allowed
+// to interrupt -- a trend can compute
 // within a couple seconds of entering (as soon as 2 RSSI samples come
 // in), which would otherwise overwrite the "no compass" hint before
 // anyone's had a chance to read it.
 static uint32_t s_huntHintUntil = 0;
 static const uint32_t HUNT_HINT_GRACE_MS = 5000;
 
-void scanReaction(ScanMoment moment, uint8_t count) {
-    uint32_t now = millis();
-    switch (moment) {
-        case ScanMoment::STARTED:
-            // No mood override here -- his normal idle cycling keeps
-            // running underneath the scanning-fx ping, only the bubble
-            // changes. Longer than his other bubbles get (5500 vs
-            // 2200-4500), and MIN_BUBBLE_MS still applies underneath --
-            // this is the one line that actually needs to be read.
-            say(SCAN_STARTED_LINE, 5500);
-            s_scanHintUntil = now + SCAN_HINT_GRACE_MS;
-            break;
-        case ScanMoment::HIT:
-            mood = Mood::SHOCKED;
-            moodUntil = now + tempo(800);
-            // Mood still reacts (visual feedback that something was
-            // found); only the bubble text is held back so it can't
-            // cut the hint off early.
-            if (now >= s_scanHintUntil) say(pick(SCAN_HIT_LINES, 3), 2200);
-            break;
-        case ScanMoment::DONE_EMPTY:
-            mood = Mood::SLEEPY;
-            moodUntil = now + tempo(2000);
-            if (now >= s_scanHintUntil) say(pick(SCAN_EMPTY_LINES, 3), 4000);
-            break;
-        case ScanMoment::DONE_FOUND:
-            mood = Mood::BOUNCE;
-            moodUntil = now + tempo(2000);
-            if (now >= s_scanHintUntil) say(pick(SCAN_FOUND_LINES, 3), 4500);
-            // "A lot" flourish -- same rare party-confetti mechanism
-            // milestone detections and the outfit-unlock easter egg
-            // use (see unlockAllOutfits() above), not a separate
-            // effect of its own.
-            if (count >= 5) {
-                s_legendary      = true;
-                s_legendaryUntil = now + 4000;
-                for (uint8_t i = 0; i < CONFETTI_N; i++) {
-                    s_cfx[i]   = (float)random(0, 240);
-                    s_cfy[i]   = (float)random(-60, 0);
-                    s_cfvy[i]  = 1.0f + (float)random(0, 20) / 10.0f;
-                    s_cfcol[i] = (uint8_t)random(0, 6);
-                }
-            }
-            break;
-    }
-}
 
 void huntReaction(HuntMoment moment) {
     uint32_t now = millis();
@@ -3377,9 +3297,8 @@ void huntReaction(HuntMoment moment) {
             if (now >= s_huntHintUntil) say(pick(HUNT_COLDER_LINES, 4), 2200);
             break;
         case HuntMoment::HOT:
-            // BOUNCE, not SHOCKED -- matches the same "found something
-            // great" convention scanReaction()'s big-haul DONE_FOUND
-            // uses, rather than an alarmed startle.
+            // BOUNCE, not SHOCKED -- "found something great", rather
+            // than an alarmed startle.
             mood = Mood::BOUNCE;
             moodUntil = now + tempo(1500);
             if (now >= s_huntHintUntil) say(pick(HUNT_HOT_LINES, 3), 3500);
@@ -7117,8 +7036,8 @@ static void drawHeartFx(TFT_eSPI& t, int cx, int headTopY, uint32_t now) {
     }
 }
 
-// Small radiating "ping" rings beside his head while a raw scan is
-// running (see ui_rawscan.cpp's scanningFx) -- purely a function of
+// Small radiating "ping" rings beside his head while HUNT MODE is
+// running (see ui_hunt.cpp's scanningFx) -- purely a function of
 // `now`, no persistent state of its own, so the caller can turn it on
 // and off between ticks with nothing to reset.
 static void drawScanFx(TFT_eSPI& t, int cx, int headTopY, uint32_t now, float scale) {
@@ -8032,7 +7951,7 @@ void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
     // popping in, returns before recording anything, and the rectangle
     // left in lastBubble* is then somebody else's.
     {
-        const bool drew = showBubble && !s_bubbleHeld;
+        const bool drew = showBubble;
         if (drew) { ownX = (int16_t)lastBubbleX; ownY = (int16_t)lastBubbleY;
                     ownW = (int16_t)lastBubbleW; ownH = (int16_t)lastBubbleH; }
         else      { ownW = 0; ownH = 0; }

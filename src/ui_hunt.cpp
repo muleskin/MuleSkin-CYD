@@ -125,8 +125,8 @@ void uiHuntTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adva
     int bodyTop = 16, bodyBottom = bar.y - 4;
     t.fillRect(0, bodyTop, w, bodyBottom - bodyTop, Theme::BG);
 
-    // Mini MuleSkin cameo, same reduced-header-strip reuse ui_rawscan.cpp
-    // and ui_watchalert.cpp already use -- his normal idle tick, just
+    // Mini MuleSkin cameo, same reduced-header-strip reuse
+    // ui_watchalert.cpp already uses -- his normal idle tick, just
     // given a small box instead of the whole screen. scanningFx ties
     // his little "ping" animation to the hunting theme.
     const int sqH = 44;

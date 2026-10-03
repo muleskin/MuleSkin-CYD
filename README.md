@@ -134,11 +134,10 @@ A full beginner-friendly walkthrough is in [docs/BUILD.md](docs/BUILD.md).
    version (from `git describe`, so a working-tree build says so).
 3. The main screen appears: your chosen background, MuleSkin, and live
    per-type counters. He says something reassuring every thirty seconds.
-4. The three soft buttons at the bottom:
-   - **`[ SCAN ]`** — return to the main (idle) screen.
-   - **`[ LOG ]`** — open the rolling 200-entry detection log.
-   - **`[ DESK ]`** — desk mode: the big clock, with MuleSkin under it.
-   - On the LOG screen the third button is **`[ CLR ]`** — wipe the log and return.
+4. The soft button at the bottom:
+   - **`[ LOG ]`** — open the rolling 200-entry detection log; tap it again
+     to return to the main screen.
+   - On the LOG screen a second button, **`[ CLR ]`**, wipes the log and returns.
 5. When something is detected, the device **flashes a full-screen ALERT**:
    a header strip in the detection's own colour with the type in the
    Bangers face, a data plate with the vendor, the device's own name where
@@ -159,7 +158,7 @@ flasher's **Set Time & Zone** button sends this computer's clock and zone
 down the same cable right after flashing; the first time the clock is set
 with no zone chosen, a card on the main screen asks, with the live time in
 the zone it shows so you can see when it's right; and **TIME ZONE** on the
-DESK MODE page changes it later. Daylight saving takes care of itself. Without
+SYSTEM page changes it later. Daylight saving takes care of itself. Without
 a saved network the clock can still be set over serial with a `TIME <epoch>`
 line at 2,000,000 baud, and `ZONE US EASTERN` sets the zone the same way.
 And every squad hello carries the sender's clock and zone, so a board with
@@ -170,7 +169,7 @@ note of the time in flash every ten minutes, and a cold boot with no clock
 starts from that note: not the right time, since nobody knows how long the
 power was off, but never earlier than the note, which keeps the day count
 honest. Such a clock is used for the date only; the LOG times, the night
-tag, the hour lines and the desk digits wait for a real answer.
+tag and the hour lines wait for a real answer.
 
 Once it is set, the LOG shows the real time of each catch (or the date, for
 one from another day); the alert card says **AT NIGHT** for anything caught
@@ -183,28 +182,6 @@ first knew the date: a week, a month, a hundred days, a year.
 happening: IMPORTANT (idle chatter off; he still speaks for a catch, a
 message, a newer release and the daily hello), LESS, NORMAL or MORE. The
 set pieces two MuleSkins act out follow the same setting.
-
-### Desk mode
-
-<p align="center">
-  <img src="docs/desk-mode.gif" width="640"
-       alt="Desk mode: the date and time in big digits over the fire scene with MuleSkin talking below; a catch appears as a small card; a squad message drops out from behind the clock with the sender's polaroid; the focus timer starts; the LOG shows real times; the time zone card asks once.">
-</p>
-
-**DESK MODE** in Settings turns the board into the thing beside the
-keyboard: your background, the date and the time in big seven-segment
-digits on a plate over it, MuleSkin underneath doing what he does, and a
-focus timer. **FOCUS 25** starts twenty-five minutes: the scene clears, he
-goes still and quiet, and when it runs out the light on the back goes
-green, he tells you to stand up, and a five-minute break counts down on its
-own. A tap on the running timer stops it. The desk keeps its own
-background, picked with a tap at the left or right edge and remembered
-separately from the main screen's. Detection keeps running behind all of
-it: a catch shows as a small card by the buttons instead of the full
-ALERT (tap it for the full card), and a squad message stands where MuleSkin
-stands, as a polaroid of the sender's MuleSkin with his name in the margin,
-the message on a note beside it and the time it came, until you tap it.
-The power saver never dims this screen.
 
 ## The status light
 

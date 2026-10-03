@@ -104,7 +104,6 @@ UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/ui_boot.cpp \
             $(SRC)/ui_colorcheck.cpp \
             $(SRC)/ui_diagnostics.cpp \
-            $(SRC)/ui_desk.cpp \
             $(SRC)/ui_zone.cpp \
             $(SRC)/ui_diary.cpp \
             $(SRC)/ui_hunt.cpp \
@@ -113,7 +112,6 @@ UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/ignore_list.cpp \
             $(SRC)/ui_ignorelist.cpp \
             $(SRC)/ui_detfilter.cpp \
-            $(SRC)/ui_rawscan.cpp \
             $(SRC)/ui_watchalert.cpp \
             $(SRC)/ui_update.cpp \
             $(SRC)/ui_nudge.cpp \

@@ -92,7 +92,7 @@ static const SettingsRow ALL_ROWS[] = {
     // -- see APPEARANCE_ROWS. Everything about how he LOOKS is on one page;
     // what stays here is what he DOES.
     SettingsRow::REPLAY_INTRO, SettingsRow::SHOW_OFF, SettingsRow::VIEW_DIARY,
-    SettingsRow::BINGO, SettingsRow::DEX, SettingsRow::DESK_MODE,
+    SettingsRow::BINGO, SettingsRow::DEX,
     SettingsRow::POWER_SAVER,
 #if defined(ESP32) && !defined(TWATCH_S3)
     SettingsRow::CHARGE_MODE,
@@ -149,29 +149,17 @@ static const SettingsRow SYSTEM_ROWS[] = {
 #endif
     SettingsRow::CALIBRATE, SettingsRow::CHECK_COLORS,
     SettingsRow::DIAGNOSTICS, SettingsRow::UPDATE_FIRMWARE, SettingsRow::UPDATE_CHECK, SettingsRow::WIFI_NETWORKS,
-    SettingsRow::RESET_STATS,
+    SettingsRow::TIME_ZONE, SettingsRow::RESET_STATS,
 };
 static const uint8_t SYSTEM_ROWS_N = sizeof(SYSTEM_ROWS) / sizeof(SYSTEM_ROWS[0]);
 
-// The DESK MODE page: everything about the desk in one place, so it can grow.
-// The way in comes first; then how it looks; then who is on it.
-static const SettingsRow DESK_ROWS[] = {
-    SettingsRow::DESK_OPEN, SettingsRow::DESK_BACKGROUND,
-    SettingsRow::CLOCK_FONT, SettingsRow::CLOCK_SIZE, SettingsRow::CLOCK_BACKDROP,
-    SettingsRow::TIME_ZONE,
-#if MULESKIN_MESH
-    SettingsRow::DESK_SQUAD, SettingsRow::DESK_CROWD, SettingsRow::DESK_VISIT,
-#endif
-};
-static const uint8_t DESK_ROWS_N = sizeof(DESK_ROWS) / sizeof(DESK_ROWS[0]);
 static const uint8_t APPEARANCE_ROWS_N = sizeof(APPEARANCE_ROWS) / sizeof(APPEARANCE_ROWS[0]);
 // The display buffers below are sized off the longest of the lists (the
-// DESK MODE page's is checked against it just below).
+// SYSTEM page's is checked against it just below).
 // It used to be the main one, until that list lost its NICKNAME row and
 // the APPEARANCE page outgrew it.
 static const uint8_t LIST_MAX_N = APPEARANCE_ROWS_N > ALL_ROWS_N ? APPEARANCE_ROWS_N : ALL_ROWS_N;
 static_assert(SYSTEM_ROWS_N <= LIST_MAX_N, "the display list is sized off LIST_MAX_N");
-static_assert(DESK_ROWS_N <= LIST_MAX_N, "the display list is sized off LIST_MAX_N");
 #if defined(TWATCH_S3)
 static_assert(WATCH_ROWS_N <= LIST_MAX_N, "the display list is sized off LIST_MAX_N");
 #endif
@@ -200,7 +188,7 @@ static bool isMuleSkinOnlyRow(SettingsRow r) {
            r == SettingsRow::PET || r == SettingsRow::AURA;
 }
 
-enum class RowGroupId : uint8_t { APPEARANCE, BEHAVIOR, MULESKIN, SYSTEM, DESK, SQUAD, WATCH };
+enum class RowGroupId : uint8_t { APPEARANCE, BEHAVIOR, MULESKIN, SYSTEM, SQUAD, WATCH };
 
 static RowGroupId groupFor(SettingsRow r) {
     // Appearance sits with the MuleSkin rows because that is where it was asked
@@ -223,19 +211,6 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::WATCH_LORA_CHATS:
         case SettingsRow::WATCH_QUIET_TAGS:
             return RowGroupId::WATCH;
-        // TIME ZONE sat on the SYSTEM page too, the same setting twice. Only
-        // the clock reads it, so it lives with the clock.
-        case SettingsRow::TIME_ZONE:
-        case SettingsRow::DESK_OPEN:
-        case SettingsRow::DESK_BACKGROUND:
-        case SettingsRow::CLOCK_FONT:
-        case SettingsRow::CLOCK_SIZE:
-        case SettingsRow::CLOCK_BACKDROP:
-            return RowGroupId::DESK;
-        case SettingsRow::DESK_SQUAD:
-        case SettingsRow::DESK_CROWD:
-        case SettingsRow::DESK_VISIT:
-            return RowGroupId::SQUAD;
         case SettingsRow::THEME:
         case SettingsRow::BACKGROUND:
         case SettingsRow::BACKGROUND_LOCK:
@@ -270,7 +245,6 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::VIEW_DIARY:
         case SettingsRow::BINGO:
         case SettingsRow::DEX:
-        case SettingsRow::DESK_MODE:
         case SettingsRow::SHOW_OFF:
             return RowGroupId::MULESKIN;
         default:  // CALIBRATE, CHECK_COLORS, DIAGNOSTICS, RESET_STATS, BACK
@@ -283,7 +257,6 @@ static const char* groupName(RowGroupId g) {
         case RowGroupId::APPEARANCE: return "APPEARANCE";
         case RowGroupId::BEHAVIOR:   return "BEHAVIOR";
         case RowGroupId::MULESKIN:    return "MULESKIN";
-        case RowGroupId::DESK:       return "DESK";
         case RowGroupId::SQUAD:      return "SQUAD";
         case RowGroupId::WATCH:      return "WATCH";
         default:                     return "SYSTEM";
@@ -298,7 +271,6 @@ static uint16_t groupColor(RowGroupId g) {
         case RowGroupId::APPEARANCE: return Theme::CYAN;
         case RowGroupId::BEHAVIOR:   return Theme::AMBER;
         case RowGroupId::MULESKIN:    return Theme::VAPOR_PINK;
-        case RowGroupId::DESK:       return Theme::CYAN;
         case RowGroupId::SQUAD:      return Theme::GREEN;
         case RowGroupId::WATCH:      return Theme::AMBER;
         default:                     return Theme::VAPOR_PURPLE;
@@ -323,7 +295,6 @@ static uint8_t buildDisplayList(DisplayItem* out) {
     uint8_t            srcN = ALL_ROWS_N;
     if (s_page == SettingsPage::APPEARANCE) { src = APPEARANCE_ROWS; srcN = APPEARANCE_ROWS_N; }
     else if (s_page == SettingsPage::SYSTEM) { src = SYSTEM_ROWS;    srcN = SYSTEM_ROWS_N; }
-    else if (s_page == SettingsPage::DESK)   { src = DESK_ROWS;      srcN = DESK_ROWS_N; }
 #if defined(TWATCH_S3)
     else if (s_page == SettingsPage::WATCH)  { src = WATCH_ROWS;     srcN = WATCH_ROWS_N; }
 #endif
@@ -380,7 +351,7 @@ static uint8_t buildDisplayList(DisplayItem* out) {
 // on one screen" the way this used to work -- doubling the text size
 // (the only step available with the built-in GLCD font; no fractional
 // sizes) meant not everything could fit anymore regardless, so this
-// scrolls now instead, same pattern LOG/raw-scan already use. Headers
+// scrolls now instead, same pattern LOG already uses. Headers
 // use the smaller size-1 text, both to distinguish them from real rows
 // and to keep them from eating too much vertical space. Needs a live
 // TFT_eSPI& since heights depend on actual font metrics -- shared by
@@ -397,8 +368,7 @@ static uint8_t buildDisplayList(DisplayItem* out) {
 // Giving the value its own line makes that impossible for any name, now or
 // later, which is why this beats shrinking the text or truncating it.
 static bool isTwoLineRow(SettingsRow r) {
-    return r == SettingsRow::BACKGROUND || r == SettingsRow::DESK_BACKGROUND ||
-           r == SettingsRow::OUTFIT;
+    return r == SettingsRow::BACKGROUND || r == SettingsRow::OUTFIT;
 }
 
 static int itemHeight(const DisplayItem& it, int rowH, int headerH, int tallH) {
@@ -626,28 +596,9 @@ static void drawPinnedBack(TFT_eSPI& t, int screenW, int screenH) {
     t.setTextFont(1);
     t.setTextSize(Theme::uiMenuTextSize(t));
     t.setTextColor(Theme::CYAN, Theme::BG);
-    // The DESK MODE page splits the strip: OK on the left goes straight out
-    // to wherever Settings was opened from, the desk or the main screen; UP
-    // on the right is the usual one level up.
-    if (s_page == SettingsPage::DESK) {
-        const int half = w / 2;
-        t.drawFastVLine(x + half, y + 4, h - 8, Theme::PURPLE);
-        t.setCursor(x + (half - t.textWidth("[ OK ]")) / 2, y + (h - t.fontHeight()) / 2);
-        t.print("[ OK ]");
-        t.setCursor(x + half + (half - t.textWidth("[ UP ]")) / 2, y + (h - t.fontHeight()) / 2);
-        t.print("[ UP ]");
-        return;
-    }
     const char* lbl = (s_page == SettingsPage::MAIN) ? "[ BACK ]" : "[ UP ]";
     t.setCursor(x + (w - t.textWidth(lbl)) / 2, y + (h - t.fontHeight()) / 2);
     t.print(lbl);
-}
-
-bool uiSettingsTapPinnedOk(int x, int y, int screenW, int screenH) {
-    if (s_page != SettingsPage::DESK) return false;
-    int bx, by, bw, bh;
-    pinnedBackRect(screenW, screenH, bx, by, bw, bh);
-    return x >= bx && x < bx + bw / 2 && y >= by && y < by + bh;
 }
 
 bool uiSettingsTapPinnedBack(TFT_eSPI& t, int x, int y, int screenW, int screenH) {
@@ -793,33 +744,6 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
         case SettingsRow::BACKGROUND:
             label = "BACKGROUND"; value = Settings::backgroundName(Settings::background());
             break;
-        case SettingsRow::DESK_OPEN:
-            label = "OPEN DESK"; value = ">";
-            break;
-        case SettingsRow::DESK_BACKGROUND:
-            label = "BACKGROUND"; value = Settings::backgroundName(Settings::deskBackground());
-            break;
-        case SettingsRow::CLOCK_FONT:
-            label = "CLOCK FONT"; value = Settings::clockFontName();
-            break;
-        case SettingsRow::CLOCK_SIZE:
-            label = "CLOCK SIZE"; value = Settings::clockSizeName();
-            break;
-        case SettingsRow::CLOCK_BACKDROP:
-            label = "CLOCK BG"; value = Settings::clockBackdropName();
-            break;
-#if MULESKIN_MESH
-        case SettingsRow::DESK_SQUAD:
-            label = "SQUAD ON DESK"; value = Settings::deskSquad() ? "ON" : "OFF";
-            break;
-        case SettingsRow::DESK_CROWD:
-            label = "HOW MANY"; value = Settings::deskCrowdLabel();
-            break;
-        // With one visitor. A crowd of them always chats, as on the main screen.
-        case SettingsRow::DESK_VISIT:
-            label = "VISITOR"; value = Settings::deskFullVisit() ? "FULL VISIT" : "CHATS";
-            break;
-#endif
         case SettingsRow::BACKGROUND_LOCK:
             label = "LOCK BACKGROUND"; value = Settings::backgroundLocked() ? "ON" : "OFF";
             break;
@@ -1046,10 +970,6 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             value = dexVal;
             break;
         }
-        case SettingsRow::DESK_MODE:
-            label = "DESK MODE";
-            value = ">";
-            break;
         case SettingsRow::RESET_STATS:
             label = "RESET STATS";
             snprintf(valBuf, valBufN, "%lu total", (unsigned long)eng.lifetimeTotal());
@@ -1123,7 +1043,6 @@ switch (Settings::background()) {
     const char* pageTitle = ">> SETTINGS <<";
     if (s_page == SettingsPage::APPEARANCE) pageTitle = ">> APPEARANCE <<";
     else if (s_page == SettingsPage::SYSTEM) pageTitle = ">> SYSTEM <<";
-    else if (s_page == SettingsPage::DESK)   pageTitle = ">> DESK MODE <<";
     else if (s_page == SettingsPage::WATCH)  pageTitle = ">> WATCH SETTINGS <<";
     Theme::drawTitleBar(t, pageTitle);
 
@@ -1156,8 +1075,7 @@ switch (Settings::background()) {
                 drawRow(t, w, y, itemH, label, "boring mode", false, Theme::W95_SHADOW, h > w);
             } else if (isTwoLineRow(items[idx].row)) {
                 drawTwoLineRow(t, w, y, itemH, label, value, groupColor(items[idx].group),
-                               items[idx].row == SettingsRow::BACKGROUND ||
-                               items[idx].row == SettingsRow::DESK_BACKGROUND);
+                               items[idx].row == SettingsRow::BACKGROUND);
             } else {
                 drawRow(t, w, y, itemH, label, value, danger, groupColor(items[idx].group),
                         h > w);

@@ -170,9 +170,8 @@ namespace MuleSkin {
     uint8_t     unlockedOutfitCount();
     uint8_t     outfitCount();
 
-    // Hidden unlock-everything trigger: main.cpp watches for a button
-    // sequence (9x CLR, 1x SCAN, 1x CLR) and calls this when it
-    // completes. Persists immediately, same as any other cosmetic.
+    // Hidden unlock-everything trigger: main.cpp calls this when the
+    // main screen's empty right-hand bar slot is held for four seconds. Persists immediately, same as any other cosmetic.
     void unlockAllOutfits();
 
     // ---- the pet -------------------------------------------------------
@@ -299,9 +298,6 @@ namespace MuleSkin {
     // there is nothing to say. main.cpp announces what comes back.
     const char* takeDayLine();
 
-    // Hold his speech bubble off the screen (he still moves). Desk mode
-    // uses it while a message box shares the screen with him.
-    void holdBubble(bool held);
 
 #if MULESKIN_MESH
     // Which beat of a visit a line is wanted for. The pools live in
@@ -310,7 +306,7 @@ namespace MuleSkin {
     enum class VisitMoment : uint8_t { MEET, HANGOUT, PART };
 
     // Host's side of the conversation: picks a line and says it, exactly the
-    // way watchAlertReaction() and the scan reactions do. Returns how long
+    // way watchAlertReaction() and the hunt reactions do. Returns how long
     // the bubble will be up, so the caller can put the next line on screen
     // as this one comes down instead of guessing at a fixed beat.
     uint32_t visitReaction(VisitMoment m);
@@ -464,13 +460,13 @@ namespace MuleSkin {
     // pixel drawing runs every call so each band still gets painted.
     // minScale: normally he never renders below scale 1.0 (keeps his
     // proportions legible) -- a call site with a genuinely tiny box
-    // (e.g. the raw-scan screen's mini cameo) can lower this floor.
+    // (e.g. HUNT MODE's mini cameo) can lower this floor.
     // Leave it at the default everywhere else; it changes nothing
     // about the CLEAR screen's normal sizing.
     // scanningFx: draws a small radiating "ping" beside his head every
     // call while true -- purely a function of `now`, no state of its
     // own, so the caller can flip it on/off between ticks freely (see
-    // ui_rawscan.cpp).
+    // ui_hunt.cpp).
     // wanderRangePx: -1 (default) leaves Mood::WALK's wander and
     // Mood::SHOCKED's panicked jitter at their normal behavior (WALK
     // computes its own range from the full screen width; SHOCKED
@@ -487,20 +483,11 @@ namespace MuleSkin {
               bool advance = true, float minScale = 1.0f, bool scanningFx = false,
               int wanderRangePx = -1, uint8_t sizePct = 100);
 
-    // Themed one-liner reactions for the raw-scan screen (see
-    // ui_rawscan.cpp), pulled from their own flavor pool instead of
-    // the normal idle-chatter rotation -- call once per actual moment,
-    // not every tick. count is the number of results so far/at finish
-    // (ignored for STARTED); DONE_FOUND with a high count also
-    // triggers his rare party-confetti flourish, the same one
-    // milestone detections and the outfit-unlock easter egg use.
-    enum class ScanMoment { STARTED, HIT, DONE_EMPTY, DONE_FOUND };
-    void scanReaction(ScanMoment moment, uint8_t count = 0);
-
-    // Same pattern as scanReaction(), for HUNT MODE's live gauge (see
-    // ui_hunt.cpp) -- call once per actual moment, not every tick.
-    // STARTED fires once on entering the screen with a fixed
-    // instructional line (same reasoning as ScanMoment::STARTED: the
+    // Themed one-liner reactions for HUNT MODE's live gauge (see
+    // ui_hunt.cpp), pulled from their own flavor pool instead of the
+    // normal idle-chatter rotation -- call once per actual moment, not
+    // every tick. STARTED fires once on entering the screen with a fixed
+    // instructional line (the
     // one place someone learns the body-fade technique, so it always
     // says the same thing rather than rolling flavor text that might
     // never mention it). FIRST_SIGNAL fires once the very first RSSI
@@ -518,7 +505,7 @@ namespace MuleSkin {
     // into range. No STARTED-style fixed line here: by the time anyone
     // sees this screen they've already long-pressed a result and hit
     // WATCH, so the mechanic itself was already taught upstream (the
-    // raw-scan/LOG screens' own hint lines).
+    // LOG screen's own hint line).
     void watchAlertReaction();
 
     // A lightweight cameo draw for screens that just want him standing

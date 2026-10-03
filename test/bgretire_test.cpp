@@ -57,13 +57,6 @@ int main() {
     Settings::cycleBackground();
     ck("cycling still changes the background", Settings::background() != before);
 
-    suite("The desk screen picks from the same ring");
-    for (int i = 0; i < Settings::BACKGROUND_COUNT * 2; i++) {
-        Settings::cycleDeskBackground();
-        if (Settings::deskBackground() == Background::TUNNEL) seenFwd = true;
-    }
-    ck("the desk never lands on it either", !seenFwd);
-
     suite("A board that had it saved");
     // Written the way an older firmware wrote it -- straight to the key,
     // behind the API that now refuses the value.

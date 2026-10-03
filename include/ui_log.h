@@ -8,11 +8,7 @@ void uiLogInit(TFT_eSPI& t);
 // confirmPending/confirmLabel: draws a modal "TRACK THIS TARGET?"
 // panel with WATCH/HUNT/MORE INFO/CANCEL over everything else instead
 // of the normal list -- see uiLogHitConfirm() below. confirmLabel is
-// ignored when confirmPending is false. Mirrors ui_rawscan.cpp's
-// WATCH/HUNT/CANCEL panel as its own copy rather than a shared helper
-// (that screen doesn't get the INFO option -- see its own comment for
-// why), consistent with this screen already keeping its own geometry/
-// scrollbar code instead of reaching into that module.
+// ignored when confirmPending is false.
 //
 // infoPending/infoTypeName/infoText: drawn INSTEAD of the confirm panel
 // (the two are mutually exclusive -- confirmPending is only ever
@@ -24,7 +20,7 @@ void uiLogInit(TFT_eSPI& t);
 // DetectionInfo::explain()/rssiConfidencePrimer()), this module just
 // hands them through to Theme:: unchanged. Hit-testing its dismiss
 // button is Theme::infoPanelHitDismiss(), not owned here.
-// confirmWatched: see ui_rawscan.h's copy -- the panel's WATCH button becomes
+// confirmWatched: the panel's WATCH button becomes
 // UNWATCH when the device it is asking about is the one already being watched,
 // and IGNORE becomes UN-IGNORE when it is on the ignore list.
 void uiLogTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,

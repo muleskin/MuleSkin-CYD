@@ -31,7 +31,6 @@
 #include "ui_settings.h"
 #include "ui_diary.h"
 #include "ui_hunt.h"
-#include "ui_rawscan.h"
 #include "muleskinmesh.h"
 #include "ui_phone.h"
 #include "qwerty.h"
@@ -52,7 +51,6 @@
 #include "ignore_list.h"
 #include "ui_colorcheck.h"
 #include "ui_diagnostics.h"
-#include "ui_desk.h"
 #include "ui_zone.h"
 #include "clock.h"
 #include "ui_boot.h"
@@ -274,7 +272,7 @@ static int renderTouchCal(TFT_eSPI& tft, int W, int H, int skip, int want,
 static void usage() {
     fprintf(stderr,
         "usage: muleskinsim <screen> [out.png] [options]\n"
-        "  screens: clear log alert settings detfilter power diary hunt rawscan watchalert colorcheck boot phone meshmenu meshwarn bingo dex touchcal icons\n"
+        "  screens: clear log alert settings detfilter power diary hunt watchalert colorcheck boot phone meshmenu meshwarn bingo dex touchcal icons\n"
         "  dex               --pose N opens entry N\'s card (1-17); 0 is the index\n"
         "  touchcal          the touch calibration, played by a scripted finger:\n"
         "                    --frames skips that many 66 ms frames, --sequence films\n"
@@ -294,7 +292,6 @@ static void usage() {
         "  --peer N          draw a visiting MuleSkinMesh peer in outfit N\n"
         "  --peername NAME   give that visitor a custom name\n"
         "  --crowd N         clear screen: N squad members in range, roaming with ours\n"
-        "  --ondesk          desk screen: the squad under the clock (DESK MODE > SQUAD ON DESK)\n"
         "  --tab N           sysprops screen: 0 update, 1 notes, 2 board\n"
         "  --beacons         turn IBEACON on, which gives it a counter column\n"
         "  --from NAME       sysprops screen: heard from that squad member, not the site\n"
@@ -353,7 +350,6 @@ int main(int argc, char** argv) {
     int crowdN = 0;
     int tabIdx = 0;
     bool beacons = false;
-    bool onDesk  = false;
     std::string heardFrom;
     std::string inboxText;
     // --type feeds the payphone a tap sequence: digits are key presses,
@@ -390,7 +386,6 @@ int main(int argc, char** argv) {
         else if (a == "--crowd" && i + 1 < argc) crowdN = atoi(argv[++i]);
         else if (a == "--tab" && i + 1 < argc) tabIdx = atoi(argv[++i]);
         else if (a == "--beacons") beacons = true;
-        else if (a == "--ondesk") onDesk = true;
         else if (a == "--from" && i + 1 < argc) heardFrom = argv[++i];
         else if (a == "--inboxtext" && i + 1 < argc) inboxText = argv[++i];
         else if (a == "--type" && i + 1 < argc) typeSeq = argv[++i];
@@ -542,11 +537,6 @@ int main(int argc, char** argv) {
         MeshTalk::tick(millis());
     }
 
-    // Set rather than toggled: the NVS shim may remember a previous run.
-    if (onDesk != Settings::deskSquad()) Settings::toggleDeskSquad();
-    // The desk's HOW MANY follows --crowd, the way the main screen's does.
-    for (int g = 0; g < 10 && Settings::deskCrowd() != Settings::meshCrowd(); g++) Settings::cycleDeskCrowd();
-    if (getenv("MULESKINSIM_FULLVISIT") && !Settings::deskFullVisit()) Settings::toggleDeskFullVisit();
     // MULESKINSIM_LEGEND=1: the Legend look, aura and all, without the catches.
     if (getenv("MULESKINSIM_LEGEND")) MuleSkin::previewLegend(true);
     // MULESKINSIM_PRIVACY=1: PRIVACY MODE on, for shots of the masked screens.
@@ -554,14 +544,6 @@ int main(int argc, char** argv) {
     // MULESKINSIM_LTBRIGHT=N: the STATUS LIGHT's BRIGHTNESS step, 1..7.
     if (const char* lb = getenv("MULESKINSIM_LTBRIGHT"))
         for (int g = 0; g < 8 && Settings::lightBrightness() != atoi(lb); g++) Settings::cycleLightBrightness();
-    // MULESKINSIM_CLOCK="font,size,backdrop", e.g. "1,2,3" for large Bangers over toasters.
-    if (const char* ck = getenv("MULESKINSIM_CLOCK")) {
-        int f = 0, z = 1, b = 0;
-        sscanf(ck, "%d,%d,%d", &f, &z, &b);
-        for (int g = 0; g < 4 && Settings::clockFont() != f; g++)     Settings::cycleClockFont();
-        for (int g = 0; g < 4 && Settings::clockSize() != z; g++)     Settings::cycleClockSize();
-        for (int g = 0; g < 8 && Settings::clockBackdrop() != b; g++) Settings::cycleClockBackdrop();
-    }
     // Off by default on the board, so the counter column only exists when
     // somebody has asked for the type.
     if (beacons && !Settings::typeEnabled(DetectionType::IBEACON))
@@ -605,7 +587,7 @@ int main(int argc, char** argv) {
 
     auto tick = [&](uint32_t t) {
         SimClock::nowMs = t;
-        if      (screen == "clear")    { uiClearEmoteTick(t); uiClearTick(frame, t, engine, true, false); }
+        if      (screen == "clear")    { uiClearEmoteTick(t); uiClearTick(frame, t, engine, true); }
         else if (screen == "log") {
             const bool info = (infoType >= 0);
             const DetectionType it = info ? (DetectionType)infoType : DetectionType::UNKNOWN;
@@ -622,10 +604,8 @@ int main(int argc, char** argv) {
         else if (screen == "ignorelist") uiIgnoreListTick(frame, t);
         else if (screen == "light")    uiLightTick(frame, t, engine);
         else if (screen == "diary")    uiDiaryTick(frame, t, engine);
-        else if (screen == "desk")     uiDeskTick(frame, t, engine);
-        else if (screen == "zonecard") { uiClearTick(frame, t, engine, true, false); uiZoneCardDraw(frame, t); }
+        else if (screen == "zonecard") { uiClearTick(frame, t, engine, true); uiZoneCardDraw(frame, t); }
         else if (screen == "hunt")     uiHuntTick(frame, t, engine);
-        else if (screen == "rawscan")  uiRawScanTick(frame, t, engine, true, true, false, "", false, false, false);
         else if (screen == "phone")    uiPhoneTick(frame, t, engine);
         else if (screen == "bingo")    uiBingoTick(frame, t, engine);
         else if (screen == "dex")      uiDexTick(frame, t, engine);
@@ -788,20 +768,11 @@ int main(int argc, char** argv) {
     }
     else if (screen == "settings")   {
         uiSettingsInit(frame);
-        // MULESKINSIM_PAGE=N opens a sub-page: 1 appearance, 2 system, 3 desk.
+        // MULESKINSIM_PAGE=N opens a sub-page: 1 appearance, 2 system.
         if (const char* pg = getenv("MULESKINSIM_PAGE")) uiSettingsOpenPage((SettingsPage)atoi(pg));
     }
     else if (screen == "detfilter")  uiDetFilterInit(frame);
     else if (screen == "diary")      uiDiaryInit(frame);
-    else if (screen == "desk")       {
-        uiDeskInit(frame);
-        if (getenv("MULESKIN_TIMER")) uiDeskTapTimer(now);
-        // MULESKINSIM_EPOCH=<unix seconds> sets the clock, for rendering a
-        // particular time (a two-digit hour, a PM).
-        if (const char* ep = getenv("MULESKINSIM_EPOCH")) Clock::setEpoch((uint32_t)strtoul(ep, nullptr, 10));
-        if (getenv("MULESKIN_ALERT") && engine.logAt(0)) uiDeskAlert(*engine.logAt(0), now);
-    }
-    else if (screen == "rawscan")    uiRawScanInit(frame, true);
     else if (screen == "watchalert") {
         // Watching the seeded AirTag, with a signal that has been climbing for
         // the last twenty seconds -- so the screen has a name, a type and a
@@ -1034,7 +1005,6 @@ int main(int argc, char** argv) {
     // one of the eight could only ever test one of them.
     for (int k = 0; k < scrollBy; k++) {
         if      (screen == "log")        uiLogScroll(1);
-        else if (screen == "rawscan")    uiRawScanScroll(1);
         else if (screen == "power")      uiPowerScroll(1);
         else if (screen == "security")   uiSecurityScroll(1);
         else if (screen == "light")      uiLightScroll(1);

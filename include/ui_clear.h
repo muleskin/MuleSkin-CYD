@@ -9,10 +9,6 @@ void uiClearInit(TFT_eSPI& t);
 // mutation for boards that render in multiple physical bands per
 // logical frame. Defaults to true (unchanged behavior for single-pass
 // boards).
-// scanMenu: true while the SCAN button's BLE/WIFI picker is open --
-// swaps the bottom bar to Theme::ButtonBarMode::SCAN_PICKER. Nothing
-// else on this screen changes; the caller (main.cpp) is what actually
-// interprets a tap on the relabeled slots differently.
 // The mascot's own clock. MuleSkin, the pet, a visitor, the crowd and the
 // idle events step once per call with no notion of elapsed time -- they were
 // tuned by eye on a board that drew sixteen frames a second, and the day the
@@ -32,7 +28,7 @@ void     uiMascotStepSet(uint32_t ms);
 uint32_t uiMascotStepMs();
 
 void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
-                  bool advance = true, bool scanMenu = false);
+                  bool advance = true);
 
 #if MULESKIN_MESH
 // SPIKE: the peer currently visiting, or nullptr. Owned by whatever discovers
@@ -63,29 +59,18 @@ bool uiClearNearbyHit(int x, int y);
 bool uiClearCrowdTap(int x, int y, uint32_t now);
 
 #if MULESKIN_MESH
-// The roaming crowd, drawn into a band. The desk borrows it (see
-// ui_desk.cpp) rather than growing a second copy: the shrink-to-fit rule,
-// the seat ours holds in the middle, the nameplates and the drift all
-// live here. `bottomInset` is what the caller keeps clear under the band
-// -- 22 on the main screen for the squad badge and the counters, 0 on the
-// desk, which has neither.
+// The roaming crowd, drawn into a band: the shrink-to-fit rule, the seat
+// ours holds in the middle, the nameplates and the drift all live here.
+// `bottomInset` is what the caller keeps clear under the band -- 22 on the
+// main screen for the squad badge and the counters.
 //
 // `grow` enlarges them past the size the band would pick (still no taller
 // than the band); `bubbleY`, when not -1, is the row the speech bubbles
-// hang from instead of just over their heads. The desk uses both for a pair:
-// bigger, with their words up on the clock.
+// hang from instead of just over their heads.
 void uiClearDrawCrowd(TFT_eSPI& t, uint32_t now, const Mesh::SquadMember* crowd,
                       uint8_t n, int top, int floorY, bool advance, bool msgFresh,
                       int bottomInset, float grow = 1.0f, int bubbleY = -1);
 
-// The visit machine, for a screen other than the main one that has the squad
-// on it (the desk): who is visiting, whose turn it is to talk, the laughs and
-// the set pieces. Once a frame, before drawing.
-void uiClearVisitTick(uint32_t now);
-// The main screen's ordinary visit -- ours on the left, the visitor walking
-// in on the right -- drawn into the band from `top` to `floorY`. False, and
-// nothing drawn, when nobody is visiting.
-bool uiClearDrawVisit(TFT_eSPI& t, uint32_t now, int top, int floorY, bool advance);
 #endif
 // An emote (MeshMsg::Emote) and its setup: one this board just sent, or one from the
 // visitor's board (fromGuest). The two of them act it out at the next free

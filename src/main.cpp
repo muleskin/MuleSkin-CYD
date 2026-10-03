@@ -256,7 +256,6 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "theme.h"
 #include "detection.h"
 #include "clock.h"
-#include "ui_desk.h"
 #include "ui_zone.h"
 #include "ui_wifinets.h"
 #include "flood_bench.h"
@@ -265,7 +264,6 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "crowd_bench.h"
 #include "ui_alert.h"
 #include "ui_log.h"
-#include "ui_rawscan.h"
 #include "ui_watchalert.h"
 #include "ui_settings.h"
 #include "ui_diagnostics.h"
@@ -576,10 +574,9 @@ const uint16_t      TOUCH_DEBOUNCE_MS = 200;
 // LOG row's WATCH/HUNT) are timed separately and unaffected.
 static const uint32_t TAP_MAX_MS = 500;
 
-// Hidden "unlock every MuleSkin outfit" gesture: hold the third button (DESK)
-// for CLR_UNLOCK_HOLD_MS on the CLEAR screen (see the CLEAR case's touch
-// handling in loop()) -- replaces a fragile 11-tap sequence that broke once
-// SCAN stopped being a no-op there. The name is from when that button was CLR.
+// Hidden "unlock every MuleSkin outfit" gesture: hold the bar's empty right
+// slot (where DESK, and before it CLR, used to be) for CLR_UNLOCK_HOLD_MS on
+// the CLEAR screen (see the CLEAR case's touch handling in loop()).
 // The ALERT screen carries real information (type, confidence, MAC,
 // RSSI) — tapping it away is the expected dismiss, but the automatic
 // fallback still needs to actually clear itself in a reasonable time
@@ -1101,13 +1098,12 @@ static void clearSharedFrameBuffer() {
 }
 #endif
 
-// Long-press-to-watch/hunt confirmation -- see the LOG and RAWSCAN
-// cases in loop(). Owned here rather than in ui_log.cpp/ui_rawscan.cpp
-// so main.cpp can decide what WATCH/HUNT actually do (call
-// DetectionEngine::watchBle/watchWifi/huntBle/huntWifi) without those
-// modules needing to know about DetectionEngine's tracking API at all,
-// just how to draw/hit-test the panel they're given. Shared by both
-// screens since only one can ever be showing at a time.
+// Long-press-to-watch/hunt confirmation -- see the LOG case in loop().
+// Owned here rather than in ui_log.cpp so main.cpp can decide what
+// WATCH/HUNT actually do (call DetectionEngine::watchBle/watchWifi/
+// huntBle/huntWifi) without that module needing to know about
+// DetectionEngine's tracking API at all, just how to draw/hit-test the
+// panel it's given.
 static bool    s_confirmPending = false;
 static uint8_t s_confirmMac[6];
 // Which DEVICE the MORE INFO page is about, not just which type: the label
@@ -1123,10 +1119,8 @@ static char    s_confirmLabel[24];
 // WATCH and HUNT hand the engine.
 static const char* privLabel(const char* in) { static char b[40]; return Privacy::name(in, b, sizeof b); }
 static const char* privName(const char* in)  { static char b[40]; return Privacy::name(in, b, sizeof b); }
-// LOG's long-press sets this per-row (BLE vs WiFi isn't implied by a
-// "current mode" the way it is for RAWSCAN, which already knows that
-// from s_rawScanIsBle) -- RAWSCAN's own WATCH/HUNT branches don't
-// touch this, only LOG's do.
+// LOG's long-press sets this per-row: BLE vs WiFi is a property of the
+// entry, not of the screen.
 static bool    s_confirmIsBle = true;
 static bool s_alertLastFree = false;
 static bool s_alertSpam     = false;   // this alert is a spam flood's one announcement
@@ -1192,9 +1186,9 @@ static bool alertMayInterrupt(const Detection& d) {
 #if defined(CROWPANEL7)
     // The chirp, on the board that has something to chirp with. HERE and not
     // in enterAlert(): this is the one gate every AUTOMATIC announcement
-    // passes -- the main screen, the desk's small card, the lock screen, the
-    // update window -- and none of the manual ones (NEARBY's hold, a tap on
-    // the desk card), which open a card for something already on the glass.
+    // passes -- the main screen, the lock screen, the update window -- and
+    // none of the manual ones (NEARBY's hold), which open a card for
+    // something already on the glass.
     // Everything upstream of this line is the board's own idea of
     // alert-worthy: within ALERT_GRACE_MS of firstSeen, past ALERT FILTER,
     // not ignored or snoozed, and now past AUTO SNOOZE. The buzzer adds four
@@ -1222,9 +1216,7 @@ static bool    s_alertIsBle = true;
 // Captured alongside mac/label at row-hold time (LOG) or straight from
 // the current alert (ALERT, see enterAlert()) so MORE INFO knows what
 // to explain without needing the original Detection* to still be valid
-// by the time it's tapped. RAWSCAN's own results aren't necessarily
-// matched to any known type at all, so its panel has no INFO button
-// and never touches this.
+// by the time it's tapped.
 static DetectionType s_confirmType = DetectionType::UNKNOWN;
 
 // The MORE INFO explanation panel -- opened by LOG's confirm panel or
@@ -1307,28 +1299,18 @@ static void enterBoot() {
 #endif
 }
 
-// True while CLEAR's SCAN button has swapped the bottom bar to the
-// [BLE][WIFI][BACK] picker (see the CLEAR case's touch handling in
-// loop()). Reset on every enterClear() so returning here from
-// anywhere else never leaves a stale picker showing.
-static bool s_scanPickerOpen = false;
-
 static void enterLocked();
 // The frame buffer lent to a WiFi download, and taken back; defined with the update code below.
 static void lendFrameToDownload();
 static void restoreFrameBuffer();
 // Every way home goes through here, which makes it the one place the lock has
 // to be honoured: while locked, "home" is the lock screen.
-// An ALERT opened from the desk's small card goes back to the desk when it
-// is dismissed, not to CLEAR. Set in enterAlert(), spent here.
-static bool s_backToDesk = false;
-static void enterDesk();
 
-// The screens that run the raw scan, which switches detection off while it
-// runs. Leaving one by anything but its own BACK -- the lock icon, the gear,
-// an auto-lock -- has to stop it, or detection stays off until a restart.
+// The screens that run the raw WiFi scan, which switches detection off while
+// it runs. Leaving one by anything but its own BACK -- the lock icon, the
+// gear, an auto-lock -- has to stop it, or detection stays off until a restart.
 static bool onRawScanScreen() {
-    return state == AppState::RAWSCAN || state == AppState::WIFI_ADD
+    return state == AppState::WIFI_ADD
 #if MULESKIN_MESH
         || state == AppState::SQUAD_UPDATE
 #endif
@@ -1337,12 +1319,8 @@ static bool onRawScanScreen() {
 static void enterClear() {
     if (Security::locked()) { enterLocked(); return; }
     restoreFrameBuffer();   // lent to a download that did not end in a restart
-    if (s_backToDesk) { s_backToDesk = false; enterDesk(); return; }
-    Settings::deskActive(false);
-    Theme::releaseClockBackdrop();   // the clock fire's heat, if the desk had one
     state = AppState::CLEAR;
     transitionStart = millis();
-    s_scanPickerOpen = false;
     uiClearInit(*canvas);
 #if defined(CYD35)
     clearSharedFrameBuffer();
@@ -1408,7 +1386,6 @@ enum class Buzz : uint8_t { ALERT, WATCH, SAMPLE, MESSAGE };
 static void twatchBuzz(Buzz kind);
 #endif
 static void enterAlert(const Detection& d) {
-    s_backToDesk = (state == AppState::DESK);
     state = AppState::ALERT;
 #if defined(TWATCH_S3)
     twatchBuzz(Buzz::ALERT);
@@ -1495,32 +1472,11 @@ static void enterLog() {
     uiLogInit(*canvas);
 }
 
-static bool    s_rawScanIsBle = true;
-
-static void enterRawScan(bool isBle) {
-    state = AppState::RAWSCAN;
-    transitionStart = millis();
-    s_rawScanIsBle = isBle;
-    s_confirmPending = false;
-    if (isBle) engine.startRawBleScan();
-    else       engine.startRawWifiScan();
-    uiRawScanInit(*canvas, isBle);
-}
-
 static void enterSettings() {
     restoreFrameBuffer();   // lent to a download that did not end in a restart
-    Settings::deskActive(false);
-    Theme::releaseClockBackdrop();
     state = AppState::SETTINGS;
     transitionStart = millis();
     uiSettingsInit(*canvas);
-}
-
-static void enterDesk() {
-    Settings::deskActive(true);
-    state = AppState::DESK;
-    transitionStart = millis();
-    uiDeskInit(*canvas);
 }
 
 static void enterDiagnostics() {
@@ -1531,7 +1487,6 @@ static void enterDiagnostics() {
 }
 
 static void enterUpdate() {
-    Theme::releaseClockBackdrop();   // the download wants every byte
     state = AppState::UPDATE;
     transitionStart = millis();
     uiUpdateInit(*canvas);
@@ -1763,13 +1718,6 @@ static void enterWifiPass(const char* ssid) {
 // WIFI NETWORKS, and the scan it adds from. The password keyboard is the
 // update flow's; this flag says whose turn it is when it comes back.
 static bool s_passForNets = false;
-// The screen this board lives on: the desk for a board on a desk, the main
-// screen for every other one. Where anything that took the screen over goes
-// when it is done -- the update window, and BINGO's OK.
-static void goHome() {
-    if (Settings::deskWanted()) enterDesk();
-    else                        enterClear();
-}
 static void enterSysProps() {
     state = AppState::SYS_PROPS;
     transitionStart = millis();
@@ -1923,10 +1871,8 @@ static void startPinFlow(PinFlow f, const char* prompt = nullptr) {
 }
 
 static void enterLocked() {
-    Settings::deskActive(false);
     state = AppState::LOCKED;
     transitionStart = millis();
-    s_scanPickerOpen = false;
     uiPhoneInitPin(*canvas, Security::pinLength(), "LOCKED", false);
     uiPhonePinAllowForgot(true);
 }
@@ -2837,7 +2783,7 @@ static void twatchCrownTick(uint32_t now) {
 static void printBootBanner() {
     Serial.println("╔══════════════════════════════════════════════════╗");
     Serial.println("║   .-\"\"\"-.                                        ║");
-    Serial.println("║  /  ^ ^  \\     ███ S Q U A C H W A T C H ███     ║");
+    Serial.println("║  /  ^ ^  \\     ███    M U L E S K I N    ███     ║");
     Serial.println("║  | [o|o] |     surveillance detector             ║");
     // %-13.13s holds the right border in place whatever the tag turns out
     // to be: the fixed text ahead of it is 37 columns and the box is 50.
@@ -3679,8 +3625,6 @@ static const char* timedScreenName(AppState s) {
     switch (s) {
         case AppState::CLEAR:       return "MAIN";
         case AppState::LOG:         return "LOG";
-        case AppState::DESK:        return "DESK";
-        case AppState::RAWSCAN:     return "SCAN";
         case AppState::HUNT:        return "HUNT";
         case AppState::ALERT:       return "ALERT";
         case AppState::WATCH_ALERT: return "WATCH";
@@ -4210,7 +4154,7 @@ void loop() {
 #endif
     Clock::tick(now);   // the note to self, when it is due
 #if MULESKIN_MESH && defined(BENCH_TOOLS)
-    if (g_benchUpdateNow && (state == AppState::CLEAR || state == AppState::DESK)) {
+    if (g_benchUpdateNow && state == AppState::CLEAR) {
         // Waits for the main screen rather than barging in from wherever the
         // board happens to be -- the same place a person would start from.
         g_benchUpdateNow = false;
@@ -4362,11 +4306,10 @@ void loop() {
     // wake tap gets -- so nothing underneath sees the finger.
     if (touchJustDown && Security::enabled() && !Security::locked() &&
         (state == AppState::CLEAR || state == AppState::LOG || state == AppState::SETTINGS ||
-         state == AppState::OUTFIT || state == AppState::RAWSCAN || state == AppState::DETECTION_FILTER ||
+         state == AppState::OUTFIT || state == AppState::DETECTION_FILTER ||
          state == AppState::IGNORE_LIST || state == AppState::POWER_SAVER || state == AppState::SECURITY ||
          state == AppState::STATUS_LIGHT ||
-         state == AppState::DIARY || state == AppState::HUNT || state == AppState::DIAGNOSTICS ||
-         state == AppState::DESK) &&
+         state == AppState::DIARY || state == AppState::HUNT || state == AppState::DIAGNOSTICS) &&
         Theme::lockButtonHit(tp.x, tp.y, tft.width())) {
         lastTouch = now;
         if (onRawScanScreen()) engine.stopRawScan();
@@ -4537,8 +4480,8 @@ void loop() {
     if (g_consoleRotate || (tp.valid && !Settings::rotationLocked() && !MuleSkin::isHeld() &&
         (state == AppState::CLEAR || state == AppState::LOG ||
                       state == AppState::SETTINGS || state == AppState::OUTFIT ||
-                      state == AppState::RAWSCAN || state == AppState::DETECTION_FILTER ||
-                      state == AppState::IGNORE_LIST || state == AppState::DESK) &&
+                      state == AppState::DETECTION_FILTER ||
+                      state == AppState::IGNORE_LIST) &&
         Theme::rotateButtonHit(tp.x, tp.y, tft.width()) &&
         (now - lastTouch) > TOUCH_DEBOUNCE_MS)) {
         if (g_consoleRotate) { g_consoleRotate = false; Serial.printf("[console] rotation -> %u\n", (unsigned)((screenRotation + 1) % 4)); }
@@ -4603,10 +4546,9 @@ void loop() {
     if (tp.valid && !MuleSkin::isHeld() &&
         (state == AppState::CLEAR || state == AppState::LOG ||
                       state == AppState::SETTINGS || state == AppState::OUTFIT ||
-                      state == AppState::RAWSCAN || state == AppState::DETECTION_FILTER ||
+                      state == AppState::DETECTION_FILTER ||
                       state == AppState::IGNORE_LIST || state == AppState::POWER_SAVER ||
-                      state == AppState::SECURITY || state == AppState::STATUS_LIGHT ||
-                      state == AppState::DESK) &&
+                      state == AppState::SECURITY || state == AppState::STATUS_LIGHT) &&
         Theme::settingsButtonHit(tp.x, tp.y) &&
         // ...but not where the watch/hunt pill is sitting. The gear's tap box
         // is 55x50, much larger than its 28px glyph, so it reaches into the
@@ -4630,17 +4572,7 @@ void loop() {
             else                                               enterClear();
         }
         else {
-            // Leaving RAWSCAN via the settings icon, same as BACK does
-            // -- otherwise the raw scan (and the continuous detection
-            // scan it's pausing) would just sit there indefinitely
-            // while the user is off in Settings.
-            if (onRawScanScreen()) engine.stopRawScan();
-            // From the desk, Settings' BACK comes back to the desk, the way
-            // the alert card's does. The gear drew on the desk from the day
-            // desk mode shipped and this is the first time it did anything.
-            if (state == AppState::DESK) s_backToDesk = true;
-            // The main list, as from every other screen. The desk's own page
-            // is the gear at the bottom left of the desk.
+            // The main list, as from every other screen.
             enterSettings();
         }
     }
@@ -4650,7 +4582,7 @@ void loop() {
     // hold on the middle of the button bar on CLEAR/LOG recalibrates touch.
     //
     // It lands on the LOG button, which is deliberate rather than awkward:
-    // the DESK button beside it already carries a four second hold for the
+    // the empty slot beside it already carries a four second hold for the
     // outfit unlock, so this follows a gesture the same bar already has
     // instead of inventing one. LOG had no hold of its own.
     //
@@ -4719,7 +4651,6 @@ void loop() {
                 // board gets on with its day. Not over the first-boot
                 // walkthrough, which has a screen of its own to finish.
                 else if (OtaCore::availableVersion()[0] && !Security::locked()) enterSysProps();
-                else if (Settings::deskWanted())  enterDesk();   // switched off on the desk: back to it
                 else                              enterClear();
             }
             break;
@@ -4728,11 +4659,11 @@ void loop() {
             drawTwoBand([&](TFT_eSPI& t, bool advance) { uiBingoTick(t, now, engine, advance); });
             if (touchJustDown) {
                 lastTouch = now;
-                // OK leaves for the main screen or the desk, not back into
+                // OK leaves for the main screen, not back into
                 // the settings menu: somebody who opened the card to look at
                 // it wants the board back, not another list.
                 if (uiBingoHitTest(*canvas, tp.x, tp.y, tft.width(), tft.height()) == BingoTap::BACK)
-                    goHome();
+                    enterClear();
             }
             break;
         }
@@ -4741,7 +4672,7 @@ void loop() {
             if (touchJustDown) {
                 lastTouch = now;
                 if (uiDexHitTest(*canvas, tp.x, tp.y, tft.width(), tft.height()) == DexTap::BACK)
-                    goHome();
+                    enterClear();
             }
             break;
         }
@@ -4757,7 +4688,6 @@ void loop() {
                     alertMayInterrupt(*latest)) {
                     uiAlertSetRedacted(false);
                     enterAlert(*latest);
-                    s_backToDesk = Settings::deskWanted();   // dismissed, back where the window was over
                     break;
                 }
                 if (engine.watchHitPending()) { enterWatchAlert(); break; }
@@ -4776,7 +4706,7 @@ void loop() {
                             Theme::showToast("CAN'T START UPDATE", updateRefusedWhy(), Theme::AMBER);
                         }
                         break;
-                    case SysPropsHit::CLOSE: goHome(); break;
+                    case SysPropsHit::CLOSE: enterClear(); break;
                     case SysPropsHit::NONE:  break;
                 }
                 lastTouch = now;
@@ -4826,13 +4756,13 @@ void loop() {
                 // than clipped a pixel at a time -- see draw_band.h.
                 DrawBand::set(0, halfH);
                 frame.setViewport(0, 0, tft.width(), tft.height(), true);
-                uiClearTick(frame, now, engine, true, s_scanPickerOpen);
+                uiClearTick(frame, now, engine, true);
                 s_bandUs[0] = micros() - tBand;
                 pushFrame(0, 0);
                 tBand = micros();
                 DrawBand::set(halfH, tft.height());
                 frame.setViewport(0, -halfH, tft.width(), tft.height(), true);
-                uiClearTick(frame, now, engine, false, s_scanPickerOpen);
+                uiClearTick(frame, now, engine, false);
                 s_bandUs[1] = micros() - tBand;
                 pushFrame(0, halfH);
                 DrawBand::all();
@@ -4841,10 +4771,10 @@ void loop() {
                 // Fallback if a post-boot rotate ever failed to
                 // reallocate `frame` (see loop()) -- same direct-to-tft
                 // path this board already uses for every other screen.
-                uiClearTick(tft, now, engine, true, s_scanPickerOpen);
+                uiClearTick(tft, now, engine, true);
             }
 #else
-            uiClearTick(*canvas, now, engine, true, s_scanPickerOpen);
+            uiClearTick(*canvas, now, engine, true);
 #endif
             FrameProf::lap(FrameProf::CHROME);
             // Toasts on the main screen too. They were only drawn on LOG and
@@ -4985,15 +4915,12 @@ void loop() {
             constexpr int32_t  SQ_MOVE_PX = 12;
             constexpr int32_t  SQ_MOVE_PX_SQ = SQ_MOVE_PX * SQ_MOVE_PX;
 
-            // Hidden outfit-unlock gesture: hold the third button -- DESK
-            // now, CLR when this was written -- (not tap it) for
+            // Hidden outfit-unlock gesture: hold the bar's right slot -- an
+            // empty one now, CLR and then DESK before it -- for
             // CLR_UNLOCK_HOLD_MS. Same tracked-across-frames shape as
-            // MuleSkin's own HELD/PETTED just below -- a touch that
-            // starts on CLR is armed for that touch's whole lifetime,
-            // so it can't also fire the normal "clear log" tap action
-            // once the hold succeeds; released early, it still clears
-            // the log exactly like a normal tap always has (see
-            // touchJustUp below).
+            // MuleSkin's own HELD/PETTED just below: a touch that starts
+            // there is armed for that touch's whole lifetime. Not LOG: its
+            // 1.5 s hold is the touch recalibration, which would win.
             static bool     clrHoldActive = false;
             static bool     clrHoldFired  = false;
             static uint32_t clrHoldStart  = 0;
@@ -5024,10 +4951,10 @@ void loop() {
                 sqStartX = tp.x;
                 sqStartY = tp.y;
                 sqLastDx = 0;
-                clrHoldActive = !s_scanPickerOpen && barBtn == ButtonId::CLR;
+                clrHoldActive = barBtn == ButtonId::CLR;
                 clrHoldFired  = false;
                 clrHoldStart  = now;
-                nbActive = !s_scanPickerOpen && uiClearNearbyHit(tp.x, tp.y);
+                nbActive = uiClearNearbyHit(tp.x, tp.y);
                 nbStart  = now;
             }
 
@@ -5043,7 +4970,7 @@ void loop() {
                 // The messages tutorial owns the screen while it runs: every
                 // touch goes to it, so nobody pets MuleSkin, cycles the scene
                 // or clears the log halfway through a sentence. The whole
-                // gesture is claimed, and the CLR long-press disarmed with it.
+                // gesture is claimed, and the bar's long-press disarmed with it.
                 sqActive      = false;
                 clrHoldActive = false;
                 if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
@@ -5183,17 +5110,9 @@ void loop() {
                 }
             } else if (tp.valid && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
                 lastTouch = now;
-                if (s_scanPickerOpen) {
-                    // The bar's slots are relabeled [BLE][WIFI][BACK]
-                    // right now (see the scanMenu arg on uiClearTick()
-                    // above) -- same ButtonId::SCAN/LOG/CLR positions,
-                    // different meaning while this is open.
-                    if (barBtn == ButtonId::SCAN)      { s_scanPickerOpen = false; enterRawScan(true); }
-                    else if (barBtn == ButtonId::LOG)  { s_scanPickerOpen = false; enterRawScan(false); }
-                    else if (barBtn == ButtonId::CLR)  { s_scanPickerOpen = false; }
-                } else if (barBtn == ButtonId::LOG)  { MuleSkin::trigger(MuleSkin::Event::LOG_OPENED); enterLog(); }
-                else if (barBtn == ButtonId::SCAN) { s_scanPickerOpen = true; }
-                else if (boring && tp.y >= 20 && !Settings::backgroundLocked()) {
+                // The bar's outer slots are empty on this screen.
+                if (barBtn == ButtonId::LOG) { MuleSkin::trigger(MuleSkin::Event::LOG_OPENED); enterLog(); }
+                else if (barBtn == ButtonId::NONE && boring && tp.y >= 20 && !Settings::backgroundLocked()) {
                     // No MuleSkin to tap for this in boring mode — any tap
                     // on the main content area (below the title bar, not
                     // a real button, and not already claimed by an edge
@@ -5219,16 +5138,7 @@ void loop() {
                 }
                 sqActive = false;
             }
-            // Released before the hold threshold -- a normal tap on DESK.
-            // Clearing the log moved to the LOG screen's own CLR, where the
-            // thing being cleared is in front of you.
-            if (touchJustUp && clrHoldActive) {
-                clrHoldActive = false;
-                // Only a press that started on THIS screen. One that began
-                // before an alert or the update window took over, and lifts
-                // after it handed back, is not a tap on DESK.
-                if (!clrHoldFired && clrHoldStart >= transitionStart) enterDesk();
-            }
+            if (touchJustUp) clrHoldActive = false;
             break;
         }
         case AppState::ALERT: {
@@ -5490,8 +5400,7 @@ void loop() {
             // The confirm panel is modal: while it's up, a tap only
             // ever means WATCH, HUNT, INFO, or CANCEL on it, nothing
             // else on this screen (the button bar, another long-press,
-            // scrolling) is reachable underneath it -- same pattern
-            // RAWSCAN's identical (minus INFO) panel uses.
+            // scrolling) is reachable underneath it.
             if (s_confirmPending) {
                 if (!s_confirmArmed) {
                     // Still the same touch that opened the panel --
@@ -5585,7 +5494,6 @@ void loop() {
                 if (!gestureMoved && now - gestureDownMs <= TAP_MAX_MS) {
                     lastTouch = now;
                     ButtonId b = Theme::hitTestButtonBar(gestureStartX, gestureStartY, tft.width(), tft.height());
-                    if (b == ButtonId::SCAN) { enterClear(); }
                     if (b == ButtonId::CLR)  {
                         engine.clearLog();
                         BlackBox::markCleared();   // or a restart brings it all back
@@ -5597,10 +5505,9 @@ void loop() {
                 gestureActive = false;
             }
 
-            // Long-press a log entry to bring up the same WATCH/HUNT/
-            // CANCEL panel RAWSCAN's results use -- disambiguated from
-            // the drag-to-scroll gesture above the same way RAWSCAN's
-            // is, by requiring the touch to stay roughly still past a
+            // Long-press a log entry to bring up the WATCH/HUNT/
+            // CANCEL panel -- disambiguated from the drag-to-scroll
+            // gesture above by requiring the touch to stay roughly still past a
             // hold threshold (same pattern CLEAR uses for petting
             // MuleSkin). BLE vs WiFi is inferred from channel: postBle()
             // always leaves it 0 (see detection.h), every WiFi-sourced
@@ -5642,173 +5549,6 @@ void loop() {
             }
             break;
         }
-        case AppState::RAWSCAN: {
-            bool done = s_rawScanIsBle ? engine.rawBleScanDone() : engine.rawWifiScanDone();
-            drawTwoBand([&](TFT_eSPI& t, bool advance) {
-                uiRawScanTick(t, now, engine, s_rawScanIsBle, done, s_confirmPending, privLabel(s_confirmLabel),
-                              engine.isWatched(s_confirmMac, s_rawScanIsBle),
-                              engine.isHunted(s_confirmMac, s_rawScanIsBle),
-                              IgnoreList::contains(s_confirmMac), advance);
-                Theme::drawToast(t, now);
-            });
-
-            // The confirm panel is modal: while it's up, a tap only
-            // ever means WATCH, HUNT, or CANCEL on it, nothing else on
-            // this screen (BACK/SWITCH, another long-press, scrolling)
-            // is reachable underneath it.
-            if (s_confirmPending) {
-                if (!s_confirmArmed) {
-                    // Still the same touch that opened the panel --
-                    // ignore it until it's released (see s_confirmArmed's
-                    // comment) so it can't register as an instant tap.
-                    if (!tp.valid) s_confirmArmed = true;
-                } else if (tp.valid && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
-                    RawScanConfirmTap ctap = uiRawScanHitConfirm(tp.x, tp.y, tft.width(), tft.height());
-                    if (ctap == RawScanConfirmTap::WATCH) {
-                        lastTouch = now;
-                        s_confirmPending = false;
-                        // See the LOG screen's copy: same toggle. Unwatching
-                        // stays on this screen -- the reason to leave was to
-                        // go watch the thing, and there is nothing to go to.
-                        if (engine.isWatched(s_confirmMac, s_rawScanIsBle)) {
-                            engine.clearWatch();
-                            Theme::showToast("UNWATCHED", nullptr, Theme::CYAN);
-                        } else {
-                            if (s_rawScanIsBle) engine.watchBle(s_confirmMac, s_confirmLabel);
-                            else                engine.watchWifi(s_confirmMac, s_confirmLabel);
-                            engine.stopRawScan();
-                            enterClear();
-                        }
-                    } else if (ctap == RawScanConfirmTap::IGNORE) {
-                        lastTouch = now;
-                        s_confirmPending = false;
-                        // The raw scanner classifies nothing, so there is no
-                        // type to record and none to name in the toast.
-                        const bool wasOn = IgnoreList::contains(s_confirmMac);
-                        if (wasOn) IgnoreList::remove(s_confirmMac);
-                        else       IgnoreList::add(s_confirmMac, DetectionType::UNKNOWN);
-                        Theme::showToast(wasOn ? "UN-IGNORED" : "IGNORED",
-                                         nullptr, Theme::CYAN);
-                    } else if (ctap == RawScanConfirmTap::HUNT) {
-                        lastTouch = now;
-                        s_confirmPending = false;
-                        // See the LOG screen's copy: same toggle. Stopping
-                        // leaves the scan running, because the list you were
-                        // looking at is still the thing you came here for.
-                        if (engine.isHunted(s_confirmMac, s_rawScanIsBle)) {
-                            engine.clearHunt();
-                            Theme::showToast("HUNT STOPPED", nullptr, Theme::CYAN);
-                        } else {
-                            if (s_rawScanIsBle) engine.huntBle(s_confirmMac, s_confirmLabel);
-                            else                engine.huntWifi(s_confirmMac, s_confirmLabel);
-                            engine.stopRawScan();
-                            enterHunt();
-                        }
-                    } else if (ctap == RawScanConfirmTap::CANCEL) {
-                        lastTouch = now;
-                        s_confirmPending = false;
-                    }
-                }
-                break;
-            }
-
-            // BACK/SWITCH commit on release, not press, and only if the
-            // touch never moved past the scroll threshold -- same
-            // reasoning as LOG's identical fix: firing on press meant a
-            // swipe starting on a button acted on it instantly, before
-            // the drag could be recognized as a scroll. Independent of
-            // (but coexists fine with) the row-hold gesture below --
-            // whichever one actually has a target at the touch's start
-            // position is the only one that ever fires anything.
-            static bool gestureActive = false;
-            static bool gestureMoved  = false;
-            static int  gestureStartX = 0, gestureStartY = 0;
-            if (touchJustDown) {
-                gestureActive = true;
-                gestureMoved  = false;
-                gestureStartX = tp.x;
-                gestureStartY = tp.y;
-            }
-            if (touchJustUp && gestureActive) {
-                if (!gestureMoved) {
-                    RawScanTap tap = uiRawScanHitTest(gestureStartX, gestureStartY, tft.width(), tft.height());
-                    if (tap == RawScanTap::BACK) {
-                        lastTouch = now;
-                        engine.stopRawScan();
-                        enterClear();
-                    } else if (tap == RawScanTap::SWITCH) {
-                        lastTouch = now;
-                        enterRawScan(!s_rawScanIsBle);
-                    }
-                }
-                gestureActive = false;
-            }
-            // Long-press a result row (once the scan's actually done)
-            // to bring up the watch-confirm panel above -- disambiguated
-            // from the drag-to-scroll gesture below by requiring the
-            // touch to stay roughly still past a hold threshold, same
-            // pattern CLEAR uses for petting MuleSkin (HELD).
-            static bool     rowHoldFired  = false;
-            static uint32_t rowHoldStart  = 0;
-            static int      rowHoldX = 0, rowHoldY = 0;
-            constexpr uint32_t ROW_HOLD_MS      = 500;
-            constexpr int32_t  ROW_MOVE_PX_SQ   = 12 * 12;
-            if (touchJustDown) {
-                rowHoldFired = false;
-                rowHoldStart = now;
-                rowHoldX = tp.x;
-                rowHoldY = tp.y;
-            }
-            if (done && tp.valid && !rowHoldFired) {
-                int32_t hdx = tp.x - rowHoldX, hdy = tp.y - rowHoldY;
-                if ((hdx * hdx + hdy * hdy) <= ROW_MOVE_PX_SQ && (now - rowHoldStart) >= ROW_HOLD_MS) {
-                    int row = uiRawScanRowAt(*canvas, tp.x, tp.y, tft.width(), tft.height());
-                    uint8_t count = s_rawScanIsBle ? engine.rawBleCount() : engine.rawWifiCount();
-                    if (row >= 0 && row < (int)count) {
-                        rowHoldFired = true;
-                        bool haveTarget = false;
-                        if (s_rawScanIsBle) {
-                            const RawBleResult* r = engine.rawBleAt((uint8_t)row);
-                            if (r) {
-                                memcpy(s_confirmMac, r->mac, 6);
-                                strncpy(s_confirmLabel, r->name[0] ? r->name : "Unnamed device",
-                                        sizeof(s_confirmLabel) - 1);
-                                haveTarget = true;
-                            }
-                        } else {
-                            const uint8_t* bssid = engine.rawWifiBssid((uint8_t)row);
-                            if (bssid) {
-                                memcpy(s_confirmMac, bssid, 6);
-                                const char* ssid = engine.rawWifiSsid((uint8_t)row);
-                                strncpy(s_confirmLabel, ssid[0] ? ssid : "(hidden)", sizeof(s_confirmLabel) - 1);
-                                haveTarget = true;
-                            }
-                        }
-                        if (haveTarget) {
-                            s_confirmLabel[sizeof(s_confirmLabel) - 1] = 0;
-                            s_confirmPending = true;
-                            s_confirmArmed   = false;
-                        }
-                    }
-                }
-            }
-            // Swipe to scroll, same as LOG -- also marks gestureMoved
-            // so the deferred BACK/SWITCH tap above cancels correctly
-            // when this touch turns out to be a scroll.
-            static int lastY = -1;
-            if (touchJustDown) lastY = tp.y;
-            if (tp.valid && lastY >= 0) {
-                int dy = tp.y - lastY;
-                if (abs(dy) > 10) {
-                    gestureMoved = true;
-                    uiRawScanScroll(dy > 0 ? -1 : 1);
-                    lastY = tp.y;
-                }
-            } else if (!tp.valid) {
-                lastY = -1;
-            }
-            break;
-        }
         case AppState::SETTINGS: {
             // Nothing on this screen moves by the call -- no background, no
             // mascot -- so both passes are the same picture and the row
@@ -5816,7 +5556,7 @@ void loop() {
             drawTwoBand([&](TFT_eSPI& t, bool) { uiSettingsTick(t, now, engine); });
             // Row taps commit on release, not on press, and only if
             // the touch never moved past the scroll threshold -- same
-            // fix as LOG/raw-scan: firing on press meant a swipe that
+            // fix as LOG: firing on press meant a swipe that
             // started on a row acted on it instantly, before the drag
             // could be recognized as a scroll instead.
             static bool gestureActive = false;
@@ -5893,14 +5633,6 @@ void loop() {
                     // The pinned strip along the bottom: up a level from a
                     // sub-page, out of Settings from the main list. Reachable
                     // from anywhere in the list, which is the point of it.
-                    // OK on the DESK MODE page: out, to the desk if that is
-                    // where Settings was opened from (enterClear() honours
-                    // that), otherwise the main screen.
-                    if (uiSettingsTapPinnedOk(gestureStartX, gestureStartY, tft.width(), tft.height())) {
-                        enterClear();
-                        gestureActive = false;
-                        break;
-                    }
                     if (uiSettingsTapPinnedBack(*canvas, gestureStartX, gestureStartY,
                                                  tft.width(), tft.height())) {
                         if (uiSettingsCurrentPage() != SettingsPage::MAIN)
@@ -6062,26 +5794,6 @@ void loop() {
                         case SettingsRow::CHECK_COLORS: enterColorCheck(true); break;
                         case SettingsRow::DIAGNOSTICS:  enterDiagnostics(); break;
                         case SettingsRow::WIFI_NETWORKS: enterWifiNets(); break;
-                        case SettingsRow::DESK_MODE:    uiSettingsOpenPage(SettingsPage::DESK); break;
-                        case SettingsRow::DESK_OPEN:
-                            // Settings' BACK from the desk comes back to it;
-                            // having just been sent there, that is not a
-                            // detour anybody wants on the way out.
-                            s_backToDesk = false;
-                            enterDesk();
-                            break;
-                        case SettingsRow::DESK_BACKGROUND:
-                            if (gestureStartX < tft.width() / 2) Settings::cyclePrevDeskBackground();
-                            else                                 Settings::cycleDeskBackground();
-                            break;
-                        case SettingsRow::CLOCK_FONT:     Settings::cycleClockFont();     break;
-                        case SettingsRow::CLOCK_SIZE:     Settings::cycleClockSize();     break;
-                        case SettingsRow::CLOCK_BACKDROP: Settings::cycleClockBackdrop(); break;
-#if MULESKIN_MESH
-                        case SettingsRow::DESK_SQUAD:   Settings::toggleDeskSquad();     break;
-                        case SettingsRow::DESK_CROWD:   Settings::cycleDeskCrowd();      break;
-                        case SettingsRow::DESK_VISIT:   Settings::toggleDeskFullVisit(); break;
-#endif
                         case SettingsRow::UPDATE_FIRMWARE: enterUpdate(); break;
                         case SettingsRow::SHOW_OFF:
                             MuleSkin::startShowOff();
@@ -6976,78 +6688,6 @@ void loop() {
             }
             break;
         }
-        case AppState::DESK: {
-            Settings::deskActive(true);
-            // The same late news as on the main screen (see CLEAR). An alert
-            // already takes the desk over a focus block, so this may too, and
-            // LATER comes back here: deskActive stays set through the window.
-            if (now - transitionStart > 1500 && OtaCore::takeAvailableNotice()) {
-                enterSysProps();
-                break;
-            }
-            // The same test CLEAR makes, but the answer is a small card
-            // beside the clock, and MuleSkin's reaction, not a new screen.
-            {
-                const Detection* latest = engine.latest();
-                if (latest && (now - latest->firstSeen) < 200 &&
-                    latest->conf >= Settings::minConfidence() && !IgnoreList::silenced(latest->mac) &&
-                    alertMayInterrupt(*latest)) {
-                    uiDeskAlert(*latest, now);
-                    lastAlertType = latest->type;
-                    muleskinCatch(latest->type, latest->mac, latest->hits, latest->rssi, latest->conf);
-                }
-            }
-            // The toast goes inside: anything drawn after the bands are
-            // pushed would land straight on the panel again, over the top of
-            // what was just sent, and flicker on its own.
-            drawTwoBand([&](TFT_eSPI& t, bool advance) {
-                uiDeskTick(t, now, engine, advance);
-                Theme::drawToast(t, now);
-            });
-            // A fresh press only. A finger still down from the screen before
-            // -- LATER on the update window opens the desk under it -- used to
-            // land on BACK or the timer the moment the debounce ran out.
-            if (touchJustDown && tp.valid && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
-                // The same edge slivers CLEAR uses, below the title bar and
-                // above the buttons: left edge back, right edge forward.
-                const int ez = tft.width() / 10;
-                const bool edge = (tp.x < ez || tp.x >= tft.width() - ez) && tp.y >= 16 &&
-                                  tp.y < Theme::computeButtonBar(tft.width(), tft.height()).y;
-                if (uiDeskHitMessage(tp.x, tp.y)) {
-                    lastTouch = now;
-                } else if (uiDeskHitAlert(tp.x, tp.y, now)) {
-                    lastTouch = now;
-                    uiAlertSetRedacted(false);
-                    enterAlert(*uiDeskAlertDetection());
-                } else if (uiDeskHitBack(tp.x, tp.y, tft.width(), tft.height())) {
-                    lastTouch = now;
-                    enterClear();   // BACK means the main screen, not the settings it came through
-                } else if (uiDeskHitSettings(tp.x, tp.y, tft.width(), tft.height())) {
-                    // The desk's own page in Settings, and back to the desk on
-                    // the way out. (The title bar's icon opens the main list.)
-                    lastTouch = now;
-                    s_backToDesk = true;
-                    enterSettings();
-                    uiSettingsOpenPage(SettingsPage::DESK);
-                } else if (uiDeskHitTimer(tp.x, tp.y, tft.width(), tft.height())) {
-                    lastTouch = now;
-                    uiDeskTapTimer(now);
-                } else if (touchJustDown && uiDeskHitClockEdge(tp.x, tp.y) != 0) {
-                    // The clock's own background turns over the same way the
-                    // scene's does: right fifth forward, left fifth back.
-                    lastTouch = now;
-                    if (uiDeskHitClockEdge(tp.x, tp.y) > 0) Settings::cycleClockBackdrop();
-                    else                                    Settings::cyclePrevClockBackdrop();
-                    Theme::showToast(Settings::clockBackdropName(), "CLOCK BG", Theme::CYAN);
-                } else if (edge && touchJustDown && !Settings::backgroundLocked()) {
-                    lastTouch = now;
-                    if (tp.x < ez) Settings::cyclePrevDeskBackground();
-                    else           Settings::cycleDeskBackground();
-                    Theme::showToast(Settings::backgroundName(Settings::background()), "DESK BACKGROUND", Theme::CYAN);
-                }
-            }
-            break;
-        }
         case AppState::DIAGNOSTICS: {
             DiagnosticsInfo info;
             {
@@ -7258,9 +6898,8 @@ void loop() {
         // hides the thing it just found is worse than one with no saver at all.
         const bool alerting = (state == AppState::ALERT || state == AppState::WATCH_ALERT);
         const uint16_t timeoutSec = Settings::screenTimeoutSec();
-        // Desk mode is a clock; a clock that goes dark is not there.
         bool wantDim = timeoutSec && idleMs > (uint32_t)timeoutSec * 1000UL &&
-                       !(Settings::wakeOnAlert() && alerting) && state != AppState::DESK;
+                       !(Settings::wakeOnAlert() && alerting);
 #if defined(TWATCH_S3)
         // On the cable the watch stays lit; on battery the timeout always runs
         // (see Settings::screenTimeoutSec), unless it is set to NEVER.
@@ -7348,8 +6987,6 @@ void loop() {
         // A fox caught on the HUNT gauge flashes the light green, the same
         // three flashes a detection gets in its own colour.
         if (state == AppState::HUNT && uiHuntCaught()) { lc.alert = true; lc.alertColor = Theme::GREEN; }
-        if (state == AppState::DESK && uiDeskChime(now)) { lc.alert = true; lc.alertColor = Theme::GREEN; }
-        if (state == AppState::DESK && uiDeskAlertUp(now)) { lc.alert = true; lc.alertColor = Theme::colorFor(uiDeskAlertDetection()->type); }
 #if MULESKIN_MESH
         lc.unread     = MeshTalk::inbox().unread;
         lc.visiting   = MuleSkin::visiting();

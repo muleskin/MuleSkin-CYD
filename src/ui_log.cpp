@@ -143,9 +143,7 @@ void uiLogScroll(int delta) {
 }
 
 // Confirm panel geometry/drawing/hit-test. A 2x2 grid (WATCH/HUNT on
-// top, INFO/CANCEL below) rather than the single row of three
-// ui_rawscan.cpp's identical-minus-INFO panel uses (see that module's
-// own comment for why it doesn't get a fourth button) -- a single row
+// top, INFO/CANCEL below) rather than a single row -- a single row
 // of four got too cramped on the narrowest 240px rotation once CANCEL
 // had to share the row with three other labels.
 static void confirmRects(int screenW, int screenH,
@@ -228,8 +226,8 @@ static void drawConfirmPanel(TFT_eSPI& t, int w, int h, const char* label, bool 
     if (lw > maxLw) lw = maxLw; // clipped, not shrunk -- real labels fit comfortably as-is
     Theme::drawBangersText(t, px + (pw - lw) / 2, py + 26, upperLabel, Theme::RED, Theme::BangersSize::MD);
 
-    // See ui_rawscan.cpp's copy of this panel: toggling, so the label names
-    // the next tap rather than the thing already done.
+    // Toggling, so the label names the next tap rather than the thing
+    // already done.
     Theme::drawButton(t, wX, wY, wW, wH, watched ? "UNWATCH" : "WATCH", watched);
     // Toggles like WATCH beside it -- see that button's comment.
     Theme::drawButton(t, huX, huY, huW, huH, hunted ? "STOP HUNT" : "HUNT", hunted);
@@ -241,9 +239,8 @@ static void drawConfirmPanel(TFT_eSPI& t, int w, int h, const char* label, bool 
 }
 
 // Row geometry, shared by uiLogTick() (drawing) and uiLogRowAt() (hit
-// testing) so the two can never drift apart -- same reasoning as
-// ui_rawscan.cpp's rowLayout(): rowH depends on live font metrics, not
-// a compile-time constant.
+// testing) so the two can never drift apart: rowH depends on live font
+// metrics, not a compile-time constant.
 static void rowLayout(TFT_eSPI& t, int bodyTop, int& detailY, int& rowH) {
     t.setTextSize(2);
     int nameH = t.fontHeight();

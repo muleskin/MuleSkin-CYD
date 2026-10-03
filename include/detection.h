@@ -10,17 +10,6 @@
 #include <Preferences.h>
 #include <cstring>   // memcmp, for the inline isWatched()/isHunted() below
 
-// A single unfiltered BLE sighting from the manual raw scanner (see
-// startRawBleScan() below) -- every device seen, not just ones
-// matching a known surveillance signature like the log's Detection
-// does.
-struct RawBleResult {
-    uint8_t mac[6];
-    int8_t  rssi;
-    int8_t  prev;       // the reading before this one; equal to rssi until there is one
-    char    name[24];   // empty if the device didn't advertise one
-};
-
 #if MULESKIN_MESH
 // Phase 0: does advertising cost anything worth caring about?
 //
@@ -235,29 +224,13 @@ public:
     // Called from the BT Classic inquiry callback when a name match hits.
     void postBtClassic(Detection d);
 
-    // Called from the BLE scan callback while a raw BLE scan is active
-    // (see startRawBleScan()) -- every advertisement, not just known
-    // signatures.
-    void postRawBle(RawBleResult r);
-
-    // ---- Manual raw scanner (CLEAR screen's SCAN button picker) -----
-    // Pauses the continuous signature-matched scan above entirely and
-    // dedicates the radio to a single focused sweep -- only one of
-    // these (or the continuous scan) is ever active at a time, which
-    // is what keeps this from needing its own separate memory budget
-    // on top of the continuous scan's already-measured heap usage.
-    //
-    // BLE stays on the same always-running NimBLE scan (just points its
-    // callback at postRawBle() instead of the signature matcher) for a
-    // fixed focused dwell; WiFi runs a real one-shot WiFi.scanNetworks()
-    // AP sweep instead of the continuous promiscuous-frame sniffer.
-    // stopRawScan() ends whichever is active and resumes the continuous
-    // scan; safe to call even when neither is running.
-    void     startRawBleScan();
-    bool     rawBleScanDone() const;
-    uint8_t  rawBleCount() const { return _rawBleCount; }
-    const RawBleResult* rawBleAt(uint8_t idx) const;   // insertion order, nullptr if idx is out of range
-
+    // ---- Raw WiFi network scan (WIFI NETWORKS' add screen) -----------
+    // Pauses the continuous signature-matched scan and runs a real
+    // one-shot WiFi.scanNetworks() AP sweep instead of the continuous
+    // promiscuous-frame sniffer -- only one of the two is ever active at
+    // a time, which keeps this from needing its own memory budget.
+    // stopRawScan() ends it and resumes the continuous scan; safe to call
+    // even when it is not running.
     void     startRawWifiScan();
     bool     rawWifiScanDone() const;
     uint8_t  rawWifiCount() const;
@@ -283,8 +256,7 @@ public:
     // ---- Watched target ("stalker tracker") --------------------------
     // Session-only (not persisted to NVS -- resets on reboot). One
     // target at a time; setting a new one replaces whatever was being
-    // watched before. Set from the raw-scan results screen (long-press
-    // a row). Checked against every BLE advertisement / WiFi frame
+    // watched before. Set from the LOG screen (long-press a row). Checked against every BLE advertisement / WiFi frame
     // already being parsed for the continuous scan, regardless of
     // whether it matches a known vendor signature -- watching fires
     // even for a completely generic/unknown device, since that's the
@@ -440,7 +412,7 @@ public:
     int8_t  huntRssiAt(uint8_t idx) const;
 
     // Called from the BLE scan callback (every advertisement, any
-    // mode) -- public for the same reason postBle()/postRawBle() are:
+    // mode) -- public for the same reason postBle() is:
     // the callback lives in a separate class, not a DetectionEngine
     // member.
     void checkWatchBle(const uint8_t* mac, int8_t rssi);
@@ -469,14 +441,6 @@ private:
     static const uint8_t  WIFI_Q_CAP    = 8;
     static const uint32_t STALE_MS      = 60000;
     static const uint32_t ALERT_GRACE_MS= 200;
-    static const uint8_t  RAW_BLE_CAP   = 20;
-
-    // Raw (unfiltered) BLE scan results -- see startRawBleScan(). Not a
-    // ring buffer like _log: entries are looked up by MAC and updated
-    // in place, so this reads as "everything currently visible" rather
-    // than a chronological history.
-    RawBleResult _rawBle[RAW_BLE_CAP];
-    uint8_t      _rawBleCount = 0;
 
     struct WiFiQEntry {
         uint8_t mac[6];

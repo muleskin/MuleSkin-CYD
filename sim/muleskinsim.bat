@@ -12,7 +12,7 @@ REM   muleskinsim --list
 setlocal enabledelayedexpansion
 
 if "%~1"=="--list" (
-    echo screens: clear log alert settings diary hunt rawscan watchalert colorcheck boot
+    echo screens: clear log alert settings diary hunt watchalert colorcheck boot
     echo options: --portrait  --bg N  --theme N  --frames N  --onboard
     exit /b 0
 )

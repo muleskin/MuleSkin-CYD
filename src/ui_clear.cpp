@@ -1825,8 +1825,7 @@ void uiClearDrawCrowd(TFT_eSPI& t, uint32_t now, const Mesh::SquadMember* crowd,
     // Sizing the screen for `n` and then spending slot zero on ourselves is
     // what quietly dropped a visitor: with four in range you saw three.
     const uint8_t total = (uint8_t)(n + 1);
-    // Clear of the squad badge and the counters on the main screen. The desk
-    // has neither under its band, so it asks for none.
+    // Clear of the squad badge and the counters on the main screen.
     const int bottom = floorY - bottomInset;
 
     // The shape is chosen, not fixed: one, two or three rows, whichever lets
@@ -2085,8 +2084,8 @@ void uiClearDrawCrowd(TFT_eSPI& t, uint32_t now, const Mesh::SquadMember* crowd,
         // can only land on whole steps, so he is never exactly on the crowd's
         // size; chasing the leftover sliver crept the correction along until
         // the rounding flipped, and every eighth frame or so he shrank for a
-        // frame and popped back -- the twitch the desk showed, worst there
-        // because a pair stands big enough for one step to be a pixel.
+        // frame and popped back -- a twitch, worst for a pair standing big
+        // enough for one step to be a pixel.
         static float corr = 0.85f;
         static int   lastPct = 100;
         const float got = MuleSkin::lastScale();
@@ -2596,8 +2595,7 @@ static void drawCounterLine(TFT_eSPI& t, int w, int y, const DetectionEngine& en
 #if MULESKIN_MESH
 // The ordinary visit: ours on the left at SMALL, the guest walking in on the
 // right, the high five, the conversation and the set pieces. Drawn into the
-// band from `titleBottom` to `muleskinBottom`, which is the main screen's
-// MuleSkin band there and the room under the clock on the desk.
+// band from `titleBottom` to `muleskinBottom`, the main screen's MuleSkin band.
 static void drawVisit(TFT_eSPI& t, uint32_t now, const MuleSkinMesh::Peer* guest,
                       int titleBottom, int muleskinBottom, bool advance, bool msgFresh) {
     const int w = t.width();
@@ -2697,20 +2695,8 @@ static void drawVisit(TFT_eSPI& t, uint32_t now, const MuleSkinMesh::Peer* guest
     s_msgHeadTop = muleskinBottom - (int)(58.0f * gs);
 }
 
-void uiClearVisitTick(uint32_t now) {
-    visitTick(now);
-    // Whoever draws this frame says again whether a crowd is up; until then,
-    // nobody has.
-    s_crowdDrawn = false;
-}
 
-bool uiClearDrawVisit(TFT_eSPI& t, uint32_t now, int top, int floorY, bool advance) {
-    const MuleSkinMesh::Peer* guest = visitHosting();
-    if (!guest) return false;
-    s_msgGuestOn = false;
-    drawVisit(t, now, guest, top, floorY, advance, false);
-    return true;
-}
+
 #endif
 
 static uint32_t s_mascotStepMs = 0;   // 0: not yet read from settings
@@ -2725,7 +2711,7 @@ bool uiMascotStep(uint32_t now, bool advance) {
     return true;
 }
 
-void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool advance, bool scanMenu) {
+void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool advance) {
     int w = t.width();
     int h = t.height();
     // This boot's only: the rows the black box brought back were last boot's.
@@ -3178,8 +3164,7 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     // strip under them every frame, margins and gaps included. Each
     // button fills its own box, so the labels stay on a dark ground.
     if (DrawBand::has(bar.y, bar.y + bar.h))
-        Theme::drawButtonBar(t, ButtonId::NONE,
-                             scanMenu ? Theme::ButtonBarMode::SCAN_PICKER : Theme::ButtonBarMode::MAIN);
+        Theme::drawButtonBar(t, ButtonId::NONE, Theme::ButtonBarMode::MAIN);
 #if MULESKIN_MESH
     // Last, so it sits over the counters and the buttons -- which it has
     // taken over for as long as it runs; main.cpp routes every tap to it.

@@ -135,7 +135,7 @@ public:
     virtual void resetViewport() {}
     // Read back what is set, so code that saves a viewport, replaces it and
     // puts the original back round-trips here the way it does on the device
-    // (drawClockBackdrop does exactly that).
+    // (a band-clipped draw does exactly that).
     virtual int32_t getViewportX()      { return 0; }
     virtual int32_t getViewportY()      { return 0; }
     virtual int32_t getViewportWidth()  { return width(); }

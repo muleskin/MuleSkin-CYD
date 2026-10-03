@@ -146,7 +146,7 @@ start from `settings.cpp`'s own defaults.
 ./muleskinsim <screen> [out.png] [options]
 ```
 
-Screens: `clear log alert settings diary hunt rawscan watchalert
+Screens: `clear log alert settings diary hunt watchalert
 colorcheck boot`
 
 | Option | Effect |

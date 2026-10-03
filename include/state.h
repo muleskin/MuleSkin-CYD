@@ -140,7 +140,7 @@ enum class AppState : uint8_t {
     SETTINGS = 4,
     DIARY    = 5,
     OUTFIT   = 6,
-    RAWSCAN     = 7,  // manual BLE/WiFi scanner, reached via CLEAR's SCAN picker
+    // 7 was RAWSCAN, the manual BLE/WiFi scanner; removed, number kept free.
     WATCH_ALERT = 8,  // a watched target (see DetectionEngine::watchBle/watchWifi) came back in range
     DIAGNOSTICS = 9,  // on-device diagnostics screen, reached via Settings
     HUNT        = 10, // live signal-strength gauge for the watched target,
@@ -182,7 +182,7 @@ enum class AppState : uint8_t {
     NUDGE            = 29, // another board asked the squad to update: the countdown
     SQUAD_UPDATE     = 30, // UPDATE SQUAD, from the UPDATE FIRMWARE screen
     INVITE           = 31, // ADD TO SQUAD, either side of it
-    DESK             = 32, // desk mode: the clock, the date, the focus timer
+    // 32 was DESK, desk mode; removed, number kept free.
     WIFI_NETS        = 33, // WIFI NETWORKS, from the SYSTEM page: the saved list
     WIFI_ADD         = 34, // ...and the scan to add one from
     SYS_PROPS        = 35, // SYSTEM PROPERTIES: the window that says an update

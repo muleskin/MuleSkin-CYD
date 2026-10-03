@@ -456,7 +456,7 @@ void uiLogTouch(const TouchPoint& tp);        // scroll / select / back
   counters. A new detection transitions to `ALERT`.
 - `ALERT` shows the full-screen dramatic overlay. Auto-dismisses after 5 s,
   or earlier if the user taps anywhere.
-- `LOG` shows the rolling log (last 32). Tap `[SCAN]` to return to `CLEAR`.
+- `LOG` shows the rolling log (last 32). Tap `[LOG]` again to return to `CLEAR`.
 - Tap `[CLR]` from anywhere returns to `CLEAR` and wipes the log.
 
 ## 10. Touch Buttons
@@ -465,9 +465,8 @@ Bottom-of-screen soft buttons, drawn in `CLEAR` and `LOG` states:
 
 | Button | Position (320×240) | Hit box | Action |
 |---|---|---|---|
-| `[SCAN]` | x=10..105, y=210..232 | 95×22 | Force-return to `CLEAR` |
-| `[LOG]`  | x=115..210, y=210..232 | 95×22 | Open `LOG` |
-| `[CLR]`  | x=220..315, y=210..232 | 95×22 | Clear log + return to `CLEAR` |
+| `[LOG]`  | x=115..210, y=210..232 | 95×22 | Open `LOG` (from `LOG`: return to `CLEAR`) |
+| `[CLR]`  | x=220..315, y=210..232 | 95×22 | `LOG` only: clear log + return to `CLEAR` |
 
 Buttons are styled in MuleSkinWare chrome: cyan label, purple 1 px border,
 filled with `BG`; on press, swap to `PURPLE` background with white text.

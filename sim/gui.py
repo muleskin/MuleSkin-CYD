@@ -53,7 +53,7 @@ MuleSkin = os.environ.get("MuleSkin", os.path.dirname(HERE))
 NVS_DIR = os.path.join(HERE, ".nvs")
 
 SCREENS = ["clear", "log", "alert", "settings", "diary", "hunt",
-           "rawscan", "watchalert", "colorcheck", "boot"]
+           "watchalert", "colorcheck", "boot"]
 
 # Mirrors Settings::Background in include/settings.h -- order matters,
 # the index is what --bg takes.

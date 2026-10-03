@@ -264,7 +264,7 @@ namespace Theme {
     void drawWin95Button(TFT_eSPI& t, int x, int y, int w, int h,
                          const char* label, bool sunken);
 
-    // Bottom [SCAN][LOG][DESK] button bar, laid out from the current
+    // Bottom button bar, laid out from the current
     // screen width/height so it adapts to any rotation (landscape or
     // portrait). Button height is a fixed finger-sized touch target,
     // independent of screen size. Settings lives in the title bar (see
@@ -275,16 +275,12 @@ namespace Theme {
     };
     ButtonBarGeom computeButtonBar(int screenW, int screenH);
 
-    // MAIN is the normal [SCAN][LOG][DESK] bar. SCAN_PICKER relabels the
-    // exact same three slots as [BLE][WIFI][BACK] -- CLEAR's SCAN
-    // button opens this in place rather than switching screens, so the
-    // slot positions (and hitTestButtonBar's ButtonId::SCAN/LOG/CLR
-    // return values) stay identical; only the caller's interpretation
-    // of a hit changes based on which mode it asked to draw.
-    // LOG is the log screen's own bar: [SCAN][LOG][CLR]. The main screen's
-    // third slot is DESK, and clearing the log is only offered where the log
-    // is actually on screen.
-    enum class ButtonBarMode { MAIN, SCAN_PICKER, LOG };
+    // Three slots; hitTestButtonBar answers ButtonId::SCAN/LOG/CLR by slot
+    // position whatever is drawn in them (the DEX screen pages with the
+    // outer two). MAIN draws only [LOG] in the middle. LOG is the log
+    // screen's own bar, [LOG][CLR]: clearing the log is only offered where
+    // the log is actually on screen.
+    enum class ButtonBarMode { MAIN, LOG };
     void drawButtonBar(TFT_eSPI& t, ButtonId highlighted, ButtonBarMode mode = ButtonBarMode::MAIN);
     ButtonId hitTestButtonBar(int x, int y, int screenW, int screenH);
 
@@ -570,35 +566,6 @@ namespace Theme {
     // Total advance width of s at the given size, for centering —
     // same role as TFT_eSPI's textWidth().
     int bangersTextWidth(const char* s, BangersSize size);
-
-    // One LG glyph drawn at any scale, for the desk clock. Sampled rather
-    // than pixel-doubled, so a digit at x1.6 keeps its curves instead of
-    // turning to steps; and never glitched -- a clock that tears is a clock
-    // you cannot read. (x, yTop) is the top-left of the glyph's ascender box,
-    // as for drawBangersText.
-    // `outline` > 0 first draws a keyline that many pixels wide in
-    // `outlineColor`, from the same sampling: the glyph is sampled once and
-    // the outline built from its rows, rather than the whole glyph being
-    // sampled again at every offset.
-    void drawBangersGlyphScaled(TFT_eSPI& t, int x, int yTop, char c, uint16_t color, float scale,
-                                int outline = 0, uint16_t outlineColor = 0);
-    int  bangersGlyphAdvance(char c);    // LG, unscaled
-    int  bangersGlyphInkLeft(char c);    // LG, unscaled: where its ink starts past the pen
-    // The digits' ink, unscaled: its top row inside the ascender box and its
-    // height, so a caller can size a digit by what actually shows.
-    void bangersDigitInk(int& top, int& height);
-
-    // What plays inside the desk clock's plate: 1 digital rain, 2 snow,
-    // 3 flying toasters, 4 fire, 5 starfield, 6 fireflies (0 is nothing). Small, self-contained cousins of the
-    // backgrounds, not the backgrounds themselves -- those keep state for the
-    // whole screen and would scramble if drawn twice a frame. Everything here
-    // is worked out from `now`, so it keeps nothing and can be drawn anywhere.
-    // Clipped to the rectangle it is given.
-    // Fire is the one that has to remember something -- its heat, about 2 KB
-    // at most. It is allocated when fire is picked and let go the moment the
-    // clock draws anything else, or when this is called on leaving the desk.
-    void drawClockBackdrop(TFT_eSPI& t, uint32_t now, int x, int y, int w, int h, uint8_t kind);
-    void releaseClockBackdrop();
 
     // True during the shared random glitch burst drawBangersText()
     // already rolls every ~5-10s (see its own comment) -- exposed so

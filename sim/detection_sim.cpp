@@ -112,17 +112,9 @@ void DetectionEngine::mergeRemoteId(const uint8_t* mac, const uint8_t* payload,
     RemoteId::merge(payload, len, _rid, millis());
 }
 void DetectionEngine::postBtClassic(Detection d) { pushLog(d); }
-void DetectionEngine::postRawBle(RawBleResult r) {
-    if (_rawBleCount < RAW_BLE_CAP) _rawBle[_rawBleCount++] = r;
-}
 
-// Raw scanner: reports "done, nothing found" so the raw-scan screen
+// Raw WiFi scan: reports "done, nothing found" so the add-network screen
 // renders its empty-result state rather than spinning forever.
-void DetectionEngine::startRawBleScan() { _rawBleCount = 0; }
-bool DetectionEngine::rawBleScanDone() const { return true; }
-const RawBleResult* DetectionEngine::rawBleAt(uint8_t idx) const {
-    return idx < _rawBleCount ? &_rawBle[idx] : nullptr;
-}
 void DetectionEngine::startRawWifiScan() {}
 bool DetectionEngine::rawWifiScanDone() const { return true; }
 uint8_t DetectionEngine::rawWifiCount() const { return 0; }

@@ -51,23 +51,15 @@
 // -------- global engine instance (referenced by callbacks) --------
 static DetectionEngine* g_engine = nullptr;
 
-// -------- manual raw scanner state (see startRawBleScan/startRawWifiScan) --------
+// -------- raw WiFi scan state (see startRawWifiScan) --------
 // NONE = normal continuous signature-matched scanning (the default).
 // Only one of these is ever active at a time -- see stopRawScan().
 // REST is the watch's radio duty cycle: WiFi stopped, BLE scanning stopped
 // or left running (s_restBle). Detections that do arrive are handled as
 // usual, which is what sets it apart from UPDATE.
-enum class RawScanMode : uint8_t { NONE, BLE, WIFI, UPDATE, REST };
+enum class RawScanMode : uint8_t { NONE, WIFI, UPDATE, REST };
 static bool g_restBle = false;   // REST: is the BLE scan resting too?
 static RawScanMode g_rawMode        = RawScanMode::NONE;
-static uint32_t    g_rawBleStartMs  = 0;
-// How long a raw BLE sweep stays open before the UI is told it's
-// "done" -- a deliberately longer, focused dwell than the continuous
-// scan ever gives any one moment, which is the actual "more thorough"
-// part; devices keep updating in _rawBle past this point too (nothing
-// stops capturing), it's purely a UI cue for when to stop showing
-// "SCANNING..." and reveal the list.
-static const uint32_t RAW_BLE_SCAN_MS = 8000;
 
 // -------- helpers --------
 
@@ -322,7 +314,7 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         if (!g_engine) return;
         // Checked regardless of raw-scan mode -- a watched/hunted
         // target still fires even if it's not a known signature and
-        // even while the raw-scan screen happens to be open. The two
+        // even while a WiFi network scan happens to be running. The two
         // are independent slots (see detection.h), so both are always
         // checked -- either, both, or neither can match a given frame.
         int8_t rssi = (int8_t)adv->getRSSI();
@@ -330,19 +322,6 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         g_engine->checkHuntBle(mac, rssi);
         // The radio is dedicated to a WiFi sweep or a firmware update right now.
         if (g_rawMode == RawScanMode::WIFI || g_rawMode == RawScanMode::UPDATE) return;
-        if (g_rawMode == RawScanMode::BLE) {
-            RawBleResult r;
-            memset(&r, 0, sizeof(r));
-            memcpy(r.mac, mac, 6);
-            r.rssi = adv->getRSSI();
-            // Held, not borrowed: getName() returns a temporary, and a pointer
-            // into it dangles by the next line (issue #22).
-            const std::string advName = adv->getName();
-            const char* name = advName.c_str();
-            if (name && name[0]) strncpy(r.name, name, sizeof(r.name) - 1);
-            g_engine->postRawBle(r);
-            return;
-        }
         Detection det;
         memset(&det, 0, sizeof(det));
         memcpy(det.mac, mac, 6);
@@ -1231,8 +1210,7 @@ void DetectionEngine::loop() {
         // A raw scan owns the radio right now -- channel hopping here
         // would fight WiFi.scanNetworks()'s own hopping during a WIFI
         // sweep, and the WiFi promiscuous queue is empty anyway (it's
-        // disabled for the duration of either raw mode, see
-        // startRawBleScan/startRawWifiScan).
+        // disabled for the duration, see startRawWifiScan).
         _sd.tick();
         return;
     }
@@ -1552,51 +1530,6 @@ void DetectionEngine::postBle(Detection d) {
 // new row per sighting.
 void DetectionEngine::postBtClassic(Detection d) {
     postBle(d);
-}
-
-void DetectionEngine::postRawBle(RawBleResult r) {
-    // Looked up by MAC and updated in place -- this is "everything
-    // currently visible", not a chronological log, so a device seen
-    // again just refreshes its existing row instead of duplicating it.
-    for (uint8_t i = 0; i < _rawBleCount; i++) {
-        if (memcmp(_rawBle[i].mac, r.mac, 6) == 0) {
-            _rawBle[i].prev = _rawBle[i].rssi;   // for the NEARBY list's closer/further arrow
-            _rawBle[i].rssi = r.rssi;
-            if (r.name[0]) strncpy(_rawBle[i].name, r.name, sizeof(_rawBle[i].name) - 1);
-            return;
-        }
-    }
-    if (_rawBleCount < RAW_BLE_CAP) {
-        r.prev = r.rssi;
-        _rawBle[_rawBleCount++] = r;
-    }
-    // else: full -- ignore further new devices until the next
-    // startRawBleScan() resets the list. RAW_BLE_CAP entries is plenty
-    // for a single focused sweep and keeps this bounded regardless of
-    // how many devices happen to be nearby.
-}
-
-void DetectionEngine::startRawBleScan() {
-    if (g_rawMode == RawScanMode::WIFI) WiFi.scanDelete();
-    _rawBleCount = 0;
-    // The continuous NimBLE scan (started once, forever, in init())
-    // keeps running -- onResult() just routes into postRawBle() above
-    // instead of the signature matcher while g_rawMode == BLE. WiFi's
-    // promiscuous capture is switched off so the radio is focused on
-    // BLE for the duration, per the "pause the continuous scan and
-    // focus on what we're scanning for" design.
-    esp_wifi_set_promiscuous(false);
-    g_rawMode = RawScanMode::BLE;
-    g_rawBleStartMs = millis();
-}
-
-bool DetectionEngine::rawBleScanDone() const {
-    return g_rawMode == RawScanMode::BLE && (millis() - g_rawBleStartMs) >= RAW_BLE_SCAN_MS;
-}
-
-const RawBleResult* DetectionEngine::rawBleAt(uint8_t idx) const {
-    if (idx >= _rawBleCount) return nullptr;
-    return &_rawBle[idx];
 }
 
 void DetectionEngine::startRawWifiScan() {
