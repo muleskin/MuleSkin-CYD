@@ -25,7 +25,7 @@ import os, subprocess, sys, glob, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT  = os.path.join(HERE, "out", "demo")
-GIF  = os.path.join(HERE, "..", "docs", "demo.gif")
+GIF  = os.path.join(HERE, "..", "docs", "demo1.gif")   # docs/demo.gif is the hand-made artwork
 
 ZOOM = 2     # integer only: nearest-neighbour has to keep device pixels square
 MS   = 66    # ~15fps, close to what the panel actually manages

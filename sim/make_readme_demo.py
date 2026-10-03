@@ -20,7 +20,7 @@ EXE  = ".exe" if os.name == "nt" else ""
 def sim(name):
     return os.path.join(HERE, name + EXE)
 OUT  = os.path.join(HERE, "out", "readmedemo")
-GIF  = os.path.join(HERE, "..", "docs", "demo.gif")
+GIF  = os.path.join(HERE, "..", "docs", "demo1.gif")   # docs/demo.gif is the hand-made artwork
 ZOOM = 2
 MS   = 60
 BG   = 10            # SYNTHWAVE
