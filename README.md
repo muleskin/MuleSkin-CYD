@@ -13,16 +13,13 @@ the glitchy MuleSkin wordmark.
 
 <p align="center">
   <a href="https://MuleSkin.com/emulator/" title="Drive it in your browser">
-    <img src="docs/demo.gif" width="640"
-         alt="MuleSkin booting, MuleSkin in the VOID EYE costume on the synthwave sunset, a Flock camera detection card, his reaction to it, and a visiting MuleSkin walking on to say hello">
+    <img src="docs/demo.gif" width="280"
+         alt="MuleSkin seen from behind: a hooded figure with mule ears sitting at a computer in a dark room, ears twitching">
   </a>
 </p>
 
 <p align="center">
-  <b>That is the firmware itself, not a mockup.</b><br>
-  Every frame above was rendered by the same C++ that runs on the board,
-  compiled for a PC.<br>
-  <a href="https://MuleSkin.com/emulator/"><b>Click it to drive it in your browser &rarr;</b></a>
+  <a href="https://MuleSkin.com/emulator/"><b>Drive the real firmware in your browser &rarr;</b></a>
 </p>
 
 ## What it detects
