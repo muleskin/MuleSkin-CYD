@@ -1,8 +1,9 @@
 // MuleSkin-CYD — boot splash implementation
 #include "ui_boot.h"
 #include "theme.h"
-#include "muleskin.h"
 #include "settings.h"
+#include "boot_art.h"
+#include "draw_band.h"
 
 // Stamped in by extra_script.py from `git describe` at build time --
 // same macro the Diary screen already reads (see its own guard
@@ -11,26 +12,6 @@
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "unknown"
 #endif
-
-// A dozen one-liners for MuleSkin's boot-splash speech bubble — one is
-// picked at random each boot (see uiBootInit) so the splash doesn't
-// say the exact same thing every single time.
-static const char* BOOT_LINES[] = {
-    "Surveillance state? Not on my watch.",
-    "Smile! I'm watching the watchers.",
-    "No cameras were harmed. Yet.",
-    "Privacy is dead. I'm the eulogy.",
-    "Big Brother's ugly cousin, actually.",
-    "I collect MAC addresses, not friends.",
-    "They see everything. I see them too.",
-    "Cryptid by trade, snitch by hobby.",
-    "Somewhere, a camera just got nervous.",
-    "Not paranoid. Just well-informed.",
-    "Trust no lens.",
-    "Detecting nonsense since day one.",
-};
-static const uint8_t BOOT_LINE_COUNT = sizeof(BOOT_LINES) / sizeof(BOOT_LINES[0]);
-static uint8_t s_bootLineIdx = 0;
 
 // When this splash started, and how far through its scripted glitch
 // bursts we are. The subtitle's chromatic split rides the shared burst
@@ -47,9 +28,61 @@ void uiBootInit(TFT_eSPI& t) {
     // remnants when t is a sprite. fillRect() with the (virtual,
     // correctly-overridden) width()/height() clears the whole thing.
     t.fillRect(0, 0, t.width(), t.height(), Theme::BG);
-    s_bootLineIdx = (uint8_t)random(0, BOOT_LINE_COUNT);
     s_bootAt      = 0;
     s_glitchStage = 0;
+}
+
+// ---- the artwork ------------------------------------------------------------
+// The hooded MuleSkin at his computer (include/boot_art.h, packed by
+// tools/make_boot_art.py), drawn `size` px square at (x0, y0) with its ears
+// twitching. The twitch is docs/twich.py's, redone per row at draw time rather
+// than stored as frames: a 24-step cycle at 41 ms, the left ear flicking out
+// and back, then the right ear in, back and a smaller second flick. Each ear
+// is a vertical slice of the picture rolled sideways, fully at the tips and
+// fading to nothing 55% of the way down, so the hood and shoulders stay put.
+// Shifts are twich.py's, in its 460 px source, scaled to `size`.
+static void drawBootArt(TFT_eSPI& t, int x0, int y0, int size, uint32_t el) {
+    const int step = (int)((el / 41) % 24);
+    int left = 0, right = 0;
+    if      (step >= 5  && step <= 7)  left  = -7;
+    else if (step >= 8  && step <= 9)  left  =  3;
+    if      (step >= 14 && step <= 15) right = -5;
+    else if (step >= 16 && step <= 17) right =  5;
+    else if (step >= 18 && step <= 19) right = -3;
+
+    const int earRows = (size * 55) / 100;
+    const int lx0 = size * 20 / 100, mid = size / 2, rx1 = size * 80 / 100;
+    const float k = (float)size / 460.0f;
+    for (int y = 0; y < size; y++) {
+        if (!DrawBand::has(y0 + y, y0 + y + 1)) continue;
+        int amtL = 0, amtR = 0;
+        if (y < earRows) {
+            const float f = (float)(earRows - y) / (float)earRows;
+            // Rounded, not truncated as twich.py's int() does: at a third of
+            // its size the right ear's flicks would truncate to nothing.
+            amtL = (int)lroundf((float)left  * k * f * f);
+            amtR = (int)lroundf((float)right * k * f * f);
+        }
+        const uint8_t* row = BootArt::PIXELS + (y * BootArt::SIZE / size) * BootArt::SIZE;
+        int runX = 0;
+        uint16_t runC = 0;
+        for (int x = 0; x <= size; x++) {
+            uint16_t c = 0;
+            if (x < size) {
+                // np.roll: what lands at x came from x - amt, wrapped inside its slice.
+                int sx = x;
+                if (amtL && x >= lx0 && x < mid) sx = lx0 + ((x - lx0 - amtL) % (mid - lx0) + (mid - lx0)) % (mid - lx0);
+                if (amtR && x >= mid && x < rx1) sx = mid + ((x - mid - amtR) % (rx1 - mid) + (rx1 - mid)) % (rx1 - mid);
+                c = BootArt::PALETTE[row[sx * BootArt::SIZE / size]];
+            }
+            // Runs of one colour go out as a single line, not pixel by pixel.
+            if (x == size || (x > runX && c != runC)) {
+                t.drawFastHLine(x0 + runX, y0 + y, x - runX, runC);
+                runX = x;
+            }
+            runC = c;
+        }
+    }
 }
 
 void uiBootTick(TFT_eSPI& t, uint32_t now) {
@@ -173,53 +206,18 @@ void uiBootTick(TFT_eSPI& t, uint32_t now) {
     // false, so this is safe to call every frame.
     Theme::drawGlitchStatic(t, sx - 4, sy - 2, sx + sw + 4, sy + 18);
 
-    // MuleSkin himself, standing on the floor just past the horizon,
-    // giving a friendly wave (and a little on-brand attitude) while
-    // everything spins up. Sized as big as the gap between the
-    // subtitle and INITIALIZING... below allows — dropping the v1.0
-    // line and tightening the title stack above is what buys him the
-    // extra room to be this big. Skipped in "boring mode" — the rest
-    // of the boot splash (wordmark, subtitle, INITIALIZING...) is
-    // unaffected, this only cuts the mascot cameo.
+    // The artwork, framed, in the band between the subtitle and the
+    // INITIALIZING line -- where the mascot's cameo used to stand. Square,
+    // as big as the band allows, so a taller panel gets a bigger picture.
+    // Skipped in "boring mode", like the cameo it replaced.
     if (!Settings::boringMode()) {
-        // 2.0, up from 1.6, standing on h-19 rather than yHoriz+50.
-        //
-        // Measured off a render: the subtitle's ink ends at row 67 and
-        // INITIALIZING starts at 224, so there are about 150 usable rows and
-        // he was only occupying 94 of them. The rest was air above his head.
-        //
-        // Both numbers had to move together. drawWaving puts his speech
-        // bubble a fixed 34px above the head anchor, and the anchor is
-        // baseY - 58*scale, so growing him alone drives the bubble up into
-        // the subtitle -- at 1.6 it already sat only six rows clear. Lowering
-        // where he stands buys that back. His feet barely move either way,
-        // since they land at baseY - 5*scale.
-        //
-        // 2.06 is the hard ceiling with the bubble above him: 150 rows has to
-        // hold a 14px bubble, his 60 base units, and air at each end. 2.0 hits
-        // it exactly and leaves 2px top and bottom, which is a rounding error
-        // away from touching. 1.95 gives 4px at both ends instead.
-        // 1.95 was fitted by hand to a 240-tall panel, where the band between
-        // the subtitle and INITIALIZING is about 150 rows and the bubble above
-        // his head was what capped it. A 320-tall panel leaves 80 rows more and
-        // he sat in the middle of them, small, with air all round -- the same
-        // complaint the main screen's geometry solved years ago by sizing him
-        // from the band he is handed rather than from a constant.
-        //
-        // So on a wide panel he is sized from the band. The limit is unchanged:
-        // his head anchor is baseY - 58*scale and the bubble sits above that,
-        // so the scale that just clears the subtitle is (band / 58). Narrow
-        // panels keep the measured 1.95 exactly -- this is the one screen
-        // where the constant was chosen against a render, and it still holds
-        // there.
-        float bootScale = 1.95f;
-        if (w >= 400) {
-            const int band = (h - 21) - 34 - (sy + 16);   // feet, bubble, subtitle
-            bootScale = (float)(band - 10) / 58.0f;       // 10 rows of air at the top
-            if (bootScale < 1.95f) bootScale = 1.95f;
-            if (bootScale > 3.2f)  bootScale = 3.2f;
-        }
-        MuleSkin::drawWaving(t, w / 2, h - 21, now, bootScale, BOOT_LINES[s_bootLineIdx]);
+        const int top = sy + 16 + 4, bottom = h - 16 - 4;
+        int size = bottom - top;
+        if (size > w - 16) size = w - 16;
+        const int ax = (w - size) / 2;
+        const int ay = top + ((bottom - top) - size) / 2;
+        t.drawRect(ax - 1, ay - 1, size + 2, size + 2, Theme::VAPOR_PURPLE);
+        drawBootArt(t, ax, ay, size, bootEl);
     }
 
     // INITIALIZING...  vX.Y.Z -- version tacked onto this line rather
