@@ -229,8 +229,12 @@ def clip_geom(clip):
 def out_dir(clip):
     return os.path.join(HERE, "out", "show-" + clip)
 
+# Clips whose docs/<clip>.gif now holds hand-made artwork: the render goes
+# beside it instead, so re-running the clip never overwrites the art.
+GIF_NAME = {"blast-processing": "blast-processing_1"}
+
 def gif_path(clip):
-    return os.path.join(HERE, "..", "docs", clip + ".gif")
+    return os.path.join(HERE, "..", "docs", GIF_NAME.get(clip, clip) + ".gif")
 
 # ---- render ----
 
