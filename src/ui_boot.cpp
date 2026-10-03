@@ -82,7 +82,9 @@ void uiBootTick(TFT_eSPI& t, uint32_t now) {
 
     // Big title, Bangers comic-impact font — landscape-only screen
     // (boot always starts at rotation 1) so the width is never tight.
-    const char* title = "MuleSkin";
+    // Capitals: the Bangers subset is A-Z, 0-9 and a few marks, and
+    // drawBangersText skips any glyph it lacks -- "MuleSkin" drew as "MS".
+    const char* title = "MULESKIN";
     int tw = Theme::bangersTextWidth(title, Theme::BangersSize::LG);
     int tx = (w - tw) / 2;
     // 3px black outline. The title sits over a bright sunset now, and

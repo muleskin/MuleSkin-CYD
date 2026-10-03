@@ -20,6 +20,11 @@ rather than nudging until it looks right.
 import json, os, shutil, struct, subprocess, sys, zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# The emulator binaries: ./muleskinsim under Linux/WSL, muleskinsim.exe from a
+# MinGW build on Windows.
+EXE  = ".exe" if os.name == "nt" else ""
+def sim(name):
+    return os.path.join(HERE, name + EXE)
 OUT  = os.path.join(HERE, "out", "releasedemo")
 GIF  = os.path.join(HERE, "..", "docs", "muleskinmesh-messages.gif")
 
@@ -29,7 +34,7 @@ BG   = 8          # the v1.5.23 clip's background, so the two read as one series
 
 # Where things are. See the note above.
 ICON     = (284, 94)    # the speech bubble beside the visitor (inside its padded target)
-LINE     = (80, 64)     # "On my way.": left column, first row
+LINE     = (80, 87)     # "On my way.": left column, first row, under the tabs
 
 # What the visitor types: 45 of the 48 characters, so three parts, and long
 # enough to wrap the red bubble -- which is the thing worth showing.
@@ -53,7 +58,7 @@ def png(path, w, h, rgb):
 class Live:
     """muleskinsim-live over its pipe: commands in, one RGB888 frame per S."""
     def __init__(self, nvs):
-        self.p = subprocess.Popen([os.path.join(HERE, "muleskinsim-live")], cwd=HERE,
+        self.p = subprocess.Popen([sim("muleskinsim-live")], cwd=HERE,
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL,
                                   env=dict(os.environ, MULESKINSIM_NVS=nvs))
@@ -85,7 +90,7 @@ class Live:
 
 def render():
     for b in ("muleskinsim", "muleskinsim-live"):
-        if not os.path.exists(os.path.join(HERE, b)):
+        if not os.path.exists(sim(b)):
             sys.exit(b + " not built -- run `make` first")
     shutil.rmtree(OUT, ignore_errors=True)
     os.makedirs(OUT)
@@ -145,7 +150,7 @@ def render():
     # The phrase picker comes from the one-shot renderer: reaching it live is
     # six taps through menus, which would be most of the clip.
     for mode in (3, 2):
-        cmd = ["./muleskinsim", "phrase", os.path.join(OUT, "phrase%d.png" % mode),
+        cmd = [sim("muleskinsim"), "phrase", os.path.join(OUT, "phrase%d.png" % mode),
                "--phrase-mode", str(mode), "--bg", str(BG), "--msgs"]
         if subprocess.call(cmd, cwd=HERE, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL) != 0:

@@ -28,6 +28,11 @@ it claims to be" stop agreeing very quickly.
 import os, subprocess, sys, glob, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# The emulator binaries: ./muleskinsim under Linux/WSL, muleskinsim.exe from a
+# MinGW build on Windows.
+EXE  = ".exe" if os.name == "nt" else ""
+def sim(name):
+    return os.path.join(HERE, name + EXE)
 OUT  = os.path.join(HERE, "out", "meshdemo")
 GIF  = os.path.join(HERE, "..", "docs", "muleskinmesh.gif")
 
@@ -61,16 +66,15 @@ SEGMENTS = [
 
 
 def render():
-    if not os.path.exists(os.path.join(HERE, "muleskinsim")):
+    if not os.path.exists(sim("muleskinsim")):
         sys.exit("muleskinsim not built -- run `make` first")
     shutil.rmtree(OUT, ignore_errors=True)
     os.makedirs(OUT, exist_ok=True)
     for name, frame in SEGMENTS:
-        cmd = "./muleskinsim clear %s/%s.png %s --frames %d --sequence %d" % (
-            OUT, name, COMMON, frame, LEN)
-        print(cmd)
-        if subprocess.call(cmd, shell=True, cwd=HERE,
-                           stdout=subprocess.DEVNULL) != 0:
+        cmd = ([sim("muleskinsim"), "clear", os.path.join(OUT, name + ".png")] +
+               COMMON.split() + ["--frames", str(frame), "--sequence", str(LEN)])
+        print(" ".join(cmd))
+        if subprocess.call(cmd, cwd=HERE, stdout=subprocess.DEVNULL) != 0:
             sys.exit("render failed: " + name)
 
 

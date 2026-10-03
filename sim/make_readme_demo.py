@@ -14,6 +14,11 @@ MuleSkinMesh consented, the outfit chosen and earned.
 import json, os, shutil, struct, subprocess, sys, zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# The emulator binaries: ./muleskinsim under Linux/WSL, muleskinsim.exe from a
+# MinGW build on Windows.
+EXE  = ".exe" if os.name == "nt" else ""
+def sim(name):
+    return os.path.join(HERE, name + EXE)
 OUT  = os.path.join(HERE, "out", "readmedemo")
 GIF  = os.path.join(HERE, "..", "docs", "demo.gif")
 ZOOM = 2
@@ -36,7 +41,7 @@ def png(path, w, h, rgb):
 
 class Live:
     def __init__(self, nvs):
-        self.p = subprocess.Popen([os.path.join(HERE, "muleskinsim-live")], cwd=HERE,
+        self.p = subprocess.Popen([sim("muleskinsim-live")], cwd=HERE,
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL,
                                   env=dict(os.environ, MULESKINSIM_NVS=nvs))
@@ -69,14 +74,14 @@ class Live:
 def seed(nvs):
     os.makedirs(nvs, exist_ok=True)
     open(os.path.join(nvs, "settings.nvs"), "w").write(
-        "b colorchk 1\nb meshok 1\nb meshrx 1\nb meshtx 1\nb infoprimer 1\nu bg %d\n" % BG)
-    open(os.path.join(nvs, "muleskin.nvs"), "w").write("b onboarded 1\n")
+        "b colorchk 1\nb meshok 1\nb meshrx 1\nb meshtx 1\nb infoprimer 1\nb tzSet 1\nu bg %d\n" % BG)
+    open(os.path.join(nvs, "muleskinpet.nvs"), "w").write("b onboarded 1\n")
 
 
 
 def render():
     for b in ("muleskinsim-live",):
-        if not os.path.exists(os.path.join(HERE, b)):
+        if not os.path.exists(sim(b)):
             sys.exit(b + " not built -- run `make` first")
     shutil.rmtree(OUT, ignore_errors=True)
     os.makedirs(OUT)

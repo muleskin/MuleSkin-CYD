@@ -55,6 +55,10 @@ CXX      ?= g++
 EXTRA_CXXFLAGS ?=
 CXXFLAGS := -std=c++17 -O1 -g -Wall -Wno-unused-parameter $(EXTRA_CXXFLAGS) \
             -I$(SIM_DIR) -I$(INC) -DMULESKIN_MESH=1
+# MinGW (Windows) compilers: the POSIX bits its runtime lacks (see win_compat.h).
+ifneq ($(findstring mingw,$(shell $(CXX) -dumpmachine)),)
+CXXFLAGS += -include $(SIM_DIR)/win_compat.h
+endif
 
 UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/muleskin.cpp \

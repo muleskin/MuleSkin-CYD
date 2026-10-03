@@ -18,12 +18,14 @@ InviteState s_demoState = InviteState::IDLE;
 uint16_t    s_demoCode = 0;
 char        s_demoName[13] = "";
 bool        s_demoInviter = false;
+bool        s_demoConfirmed = false;
 bool        s_showPhrase = false;
 
 InviteState st()      { return s_demo ? s_demoState : MeshTalk::inviteState(); }
 uint16_t    code()    { return s_demo ? s_demoCode : MeshTalk::inviteCode(); }
 const char* peer()    { return s_demo ? s_demoName : MeshTalk::invitePeerName(); }
 bool        inviter() { return s_demo ? s_demoInviter : MeshTalk::inviteIsInviter(); }
+bool        confirmed() { return s_demo ? s_demoConfirmed : MeshTalk::inviteConfirmed(); }
 
 struct Btns { int y, w, leftX, rightX, oneX; };
 
@@ -69,8 +71,8 @@ Page page() {
 }
 } // namespace
 
-void uiInviteDemo(InviteState s, uint16_t c, const char* name, bool inv) {
-    s_demo = true; s_demoState = s; s_demoCode = c; s_demoInviter = inv;
+void uiInviteDemo(InviteState s, uint16_t c, const char* name, bool inv, bool confirmed) {
+    s_demo = true; s_demoState = s; s_demoCode = c; s_demoInviter = inv; s_demoConfirmed = confirmed;
     snprintf(s_demoName, sizeof s_demoName, "%s", name ? name : "");
 }
 
@@ -148,7 +150,7 @@ void uiInviteTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
             centred(t, y + 12, Theme::W95_LIGHT, "Messages and visits are on.");
             break;
         case InviteState::DONE:
-            if (MeshTalk::inviteConfirmed()) {
+            if (confirmed()) {
                 snprintf(line, sizeof line, "%s is in your squad.", who);
                 t.setTextSize(2);
                 centred(t, midY - 8, Theme::GREEN, "ADDED");

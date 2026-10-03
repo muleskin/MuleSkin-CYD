@@ -1,5 +1,7 @@
 muleskinsim
 muleskinsim-live
+muleskinsim.exe
+muleskinsim-live.exe
 out/
 .nvs/
 __pycache__/

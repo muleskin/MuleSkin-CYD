@@ -21,6 +21,8 @@ InviteHit uiInviteHit(TFT_eSPI& t, int x, int y);
 bool      uiInviteShowingPhrase();
 
 // For the emulator: draw as if the invite were in this state, with this code
-// and this name. Cleared by uiInviteInit().
-void      uiInviteDemo(MeshTalk::InviteState st, uint16_t code, const char* name, bool inviter);
+// and this name. `confirmed` is DONE's answer from the other board. Cleared
+// by uiInviteInit().
+void      uiInviteDemo(MeshTalk::InviteState st, uint16_t code, const char* name, bool inviter,
+                       bool confirmed = false);
 #endif
