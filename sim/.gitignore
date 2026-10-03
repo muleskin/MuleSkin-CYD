@@ -1,0 +1,7 @@
+muleskinsim
+muleskinsim-live
+out/
+.nvs/
+__pycache__/
+muleskinsim.png
+build/

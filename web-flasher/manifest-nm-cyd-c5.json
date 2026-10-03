@@ -1,0 +1,29 @@
+{
+  "name": "MuleSkin-CYD (RockBase NM-CYD-C5, 2.8\" on an ESP32-C5)",
+  "version": "0.0.0",
+  "funding_url": "https://talkingsasquach.com",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-C5",
+      "parts": [
+        {
+          "path": "esp32c5-bootloader.bin",
+          "offset": 8192
+        },
+        {
+          "path": "nm-cyd-c5-partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "esp32c5-boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "nm-cyd-c5-firmware.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}

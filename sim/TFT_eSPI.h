@@ -1,0 +1,618 @@
+// MuleSkin-CYD PC emulator — TFT_eSPI/TFT_eSprite shim.
+//
+// The real TFT_eSPI library makes exactly 6 methods virtual --
+// drawPixel, drawChar, readPixel, setWindow, pushColor, and the
+// begin/end_nin_write transaction pair -- specifically so TFT_eSprite
+// can override just those and inherit every higher-level shape/text
+// function (fillRect, fillTriangle, fillEllipse, drawRoundRect, print,
+// textWidth, ...) from the base class for free. This shim follows the
+// exact same split: implement the 6 virtuals against an in-memory
+// RGB565 buffer, and every shape function this project actually calls
+// is hand-written once here in terms of those. That's the whole reason
+// this is worth doing as a shim instead of a from-scratch reimplementation
+// of every primitive -- the algorithm surface is small and the split
+// mirrors upstream, so behavior stays close to what real hardware draws.
+//
+// Text uses the real Adafruit GLCD 5x7 font table (glcdfont_data.h,
+// copied verbatim from the vendored TFT_eSPI package) rather than a
+// placeholder, since so much of this project's UI is label/counter text
+// -- a rendered screenshot with fake glyphs wouldn't actually be
+// readable enough to be useful.
+//
+// Known gaps (acceptable for a rendering-preview tool, not aiming for
+// hardware-exact parity): drawArc is a simple filled-wedge approximation,
+// not upstream's anti-aliased version; touch/SPI methods are inert
+// stubs (there's no touchscreen to simulate).
+//
+// Colour depth IS honoured. A sprite created with setColorDepth(8)
+// quantises every write to RGB332 exactly as TFT_eSPI does on the
+// device -- 3 bits of red, 3 of green, and only 2 of blue. That is not
+// a detail: the firmware's frame buffer is 8bpp, so a smooth blue
+// gradient that looks perfect here in 16-bit would land on the panel as
+// four flat bands. Rendering this faithfully is the difference between
+// previewing the device and previewing something prettier than the
+// device, and it cost real work to find that out the slow way.
+#pragma once
+#include <Arduino.h>      // must precede the font table: it defines PROGMEM
+#include <cstdint>
+#include <cstdio>
+#include <cstdarg>
+#include <cstring>
+#include <cmath>
+#include <vector>
+#include <algorithm>
+#include "glcdfont_data.h"
+#include "font16_data.h"
+#include "gfxff/gfxfont.h"
+
+// The GLCD font's cell, matching the real library exactly. Five glyph
+// columns plus one blank spacer column (6 across), and EIGHT rows, not
+// seven: TFT_eSPI's fontdata[1].height is 8 and its drawChar opens a
+// window of setWindow(x, y, x+5, y+7).
+//
+// This was 7 here, and it was wrong twice over. Row eight of the glyph
+// is where the descenders of g, j, p, q and y live, so the emulator was
+// clipping them off every lowercase word it drew. And fontHeight() feeds
+// the row arithmetic on the LOG screen, so every emulator frame packed
+// its rows tighter than the hardware ever would -- 24 pixels a row
+// against the device's 27, which is a whole extra row per screen.
+static const int GLCD_W = 5, GLCD_H = 8, GLCD_ADVANCE = 6;
+
+// Standard TFT_eSPI colour constants (RGB565). Only the handful the
+// project actually reaches for outside of Theme's own palette.
+#define TFT_BLACK       0x0000
+#define TFT_WHITE       0xFFFF
+#define TFT_RED         0xF800
+#define TFT_GREEN       0x07E0
+#define TFT_BLUE        0x001F
+#define TFT_YELLOW      0xFFE0
+#define TFT_CYAN        0x07FF
+#define TFT_MAGENTA     0xF81F
+#define TFT_ORANGE      0xFDA0
+#define TFT_DARKGREY    0x7BEF
+#define TFT_LIGHTGREY   0xD69A
+
+// Panel colour order, as the board user-setup headers and main.cpp's
+// applyColorOrder() reference them.
+#ifndef TFT_RGB
+#define TFT_RGB 0x00
+#endif
+#ifndef TFT_BGR
+#define TFT_BGR 0x08
+#endif
+
+class TFT_eSPI {
+public:
+    explicit TFT_eSPI(int w = 320, int h = 240) : _w(w), _h(h) {
+        _buf.assign((size_t)w * h, 0x0000);
+    }
+    virtual ~TFT_eSPI() {}
+
+    void init() {}
+    void begin() { init(); }
+    // The panel is landscape unless a harness opts in: then an odd/even
+    // rotation change swaps the two sides, the way the real panel does, so
+    // portrait layouts can be looked at. Off by default -- the web page and
+    // the screenshot tool both assume 320x240.
+    static inline bool rotates = false;
+    void setRotation(uint8_t r) {
+        // Odd rotations are landscape on the CYD; the shape follows that.
+        if (rotates && ((r & 1) != 0) != (_w > _h) && _w != _h) {
+            const int t = _w; _w = _h; _h = t;
+            _buf.assign((size_t)_w * _h, 0x0000);
+        }
+        _rotation = r;
+    }
+    uint8_t getRotation() const { return _rotation; }
+    int16_t width()  const { return _w; }
+    int16_t height() const { return _h; }
+    void invertDisplay(bool) {}
+    void fillScreen(uint32_t color) { fillRect(0, 0, _w, _h, color); }
+
+    // ---- the 6 real virtuals, targeting _buf ----------------------
+    virtual void drawPixel(int32_t x, int32_t y, uint32_t color) {
+        if (x < 0 || y < 0 || x >= _w || y >= _h) return;
+        _buf[(size_t)y * _w + x] = (uint16_t)color;
+    }
+    virtual uint16_t readPixel(int32_t x, int32_t y) {
+        if (x < 0 || y < 0 || x >= _w || y >= _h) return 0;
+        return _buf[(size_t)y * _w + x];
+    }
+    virtual void setWindow(int32_t xs, int32_t ys, int32_t xe, int32_t ye) {
+        _winX0 = xs; _winY0 = ys; _winX1 = xe; _winY1 = ye;
+        _winCurX = xs; _winCurY = ys;
+    }
+    virtual void pushColor(uint16_t color) {
+        if (_winCurY <= _winY1) {
+            drawPixel(_winCurX, _winCurY, color);
+            if (++_winCurX > _winX1) { _winCurX = _winX0; _winCurY++; }
+        }
+    }
+    // Viewports, as the real library has them on TFT_eSPI itself -- so code
+    // holding a TFT_eSPI& can clip. Only the sprite below honours them, and
+    // the sprite is what every screen draws into.
+    virtual void setViewport(int32_t, int32_t, int32_t, int32_t, bool = true) {}
+    virtual void resetViewport() {}
+    // Read back what is set, so code that saves a viewport, replaces it and
+    // puts the original back round-trips here the way it does on the device
+    // (drawClockBackdrop does exactly that).
+    virtual int32_t getViewportX()      { return 0; }
+    virtual int32_t getViewportY()      { return 0; }
+    virtual int32_t getViewportWidth()  { return width(); }
+    virtual int32_t getViewportHeight() { return height(); }
+    virtual bool    getViewportDatum()  { return false; }
+    virtual void begin_nin_write() {}
+    virtual void end_nin_write() {}
+
+    // ---- text glyphs (also virtual upstream, for the same reason) --
+    // Font 2: the library's 16-row proportional face, drawn the way its own
+    // drawChar does it -- (width + 6) / 8 bytes per row, MSB first, and the
+    // width table already carries the one-pixel gap after each glyph.
+    int16_t drawChar2(uint16_t c, int32_t x, int32_t y) {
+        if (c < 32 || c > 127) return 0;
+        const unsigned char* g = chrtbl_f16[c - 32];
+        const int width = widtbl_f16[c - 32];
+        const int wb = (width + 6) / 8;
+        for (int row = 0; row < 16; row++) {
+            for (int k = 0; k < wb; k++) {
+                const uint8_t line = g[wb * row + k];
+                for (int bit = 0; bit < 8; bit++) {
+                    const int col = k * 8 + bit;
+                    if (col >= width) break;
+                    const bool on = (line >> (7 - bit)) & 1;
+                    if (!on && transparent) continue;
+                    const uint16_t col565 = on ? textcolor : textbgcolor;
+                    if (textsize == 1) drawPixel(x + col, y + row, col565);
+                    else fillRect(x + col * textsize, y + row * textsize, textsize, textsize, col565);
+                }
+            }
+        }
+        return width * textsize;
+    }
+
+    // An Adafruit GFX face, the way the real library prints one: the cursor
+    // is the BASELINE, glyphs sit at (x + xOffset, y + yOffset), bits packed
+    // row-major with no padding, and the cursor moves on by xAdvance.
+    int16_t drawCharGfx(uint16_t c, int32_t x, int32_t y) {
+        if (c < gfxFont->first || c > gfxFont->last) return 0;
+        const GFXglyph& g = gfxFont->glyph[c - gfxFont->first];
+        const uint8_t* bm = gfxFont->bitmap + g.bitmapOffset;
+        uint32_t bit = 0;
+        for (int yy = 0; yy < g.height; yy++) {
+            for (int xx = 0; xx < g.width; xx++, bit++) {
+                const bool on = (bm[bit >> 3] >> (7 - (bit & 7))) & 1;
+                if (!on) continue;
+                if (textsize == 1) drawPixel(x + g.xOffset + xx, y + g.yOffset + yy, textcolor);
+                else fillRect(x + (g.xOffset + xx) * textsize, y + (g.yOffset + yy) * textsize, textsize, textsize, textcolor);
+            }
+        }
+        return g.xAdvance * textsize;
+    }
+
+    virtual int16_t drawChar(uint16_t c, int32_t x, int32_t y, uint8_t /*font*/ = 1) {
+        if (gfxFont) return drawCharGfx(c, x, y);
+        if (textfont == 2) return drawChar2(c, x, y);
+        if (c > 255) return GLCD_ADVANCE * textsize;
+        // GLCD_ADVANCE columns, not GLCD_W. The sixth is always blank and
+        // exists to be painted in the background colour: real TFT_eSPI writes
+        // it (`if (i == 5) line = 0x0;`), so opaque text on hardware sits in
+        // an unbroken box. Stopping at five left a one-pixel bar of whatever
+        // was underneath showing between every pair of characters -- which on
+        // this project's backgrounds is a sunset, and is precisely the kind of
+        // thing somebody would then "fix" in the firmware.
+        for (int col = 0; col < GLCD_ADVANCE; col++) {
+            uint8_t bits = (col >= GLCD_W) ? 0x00 : font[(size_t)c * GLCD_W + col];
+            for (int row = 0; row < GLCD_H; row++) {
+                bool on = (bits >> row) & 1;
+                uint16_t col565 = on ? textcolor : textbgcolor;
+                if (!on && transparent) continue;
+                if (textsize == 1) {
+                    drawPixel(x + col, y + row, col565);
+                } else {
+                    fillRect(x + col * textsize, y + row * textsize, textsize, textsize, col565);
+                }
+            }
+        }
+        return GLCD_ADVANCE * textsize;
+    }
+
+    // ---- shape primitives, built on the virtuals above (same split
+    // real TFT_eSPI uses) ------------------------------------------
+    void drawFastHLine(int32_t x, int32_t y, int32_t w, uint32_t color) {
+        for (int32_t i = 0; i < w; i++) drawPixel(x + i, y, color);
+    }
+    void drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color) {
+        for (int32_t i = 0; i < h; i++) drawPixel(x, y + i, color);
+    }
+    void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
+        for (int32_t j = 0; j < h; j++) drawFastHLine(x, y + j, w, color);
+    }
+    // Framebuffer push, for backgrounds that render pixels on the CPU.
+    // The real library byte-swaps on the way out when asked; here the
+    // colours are already native, so the flag is accepted and ignored.
+    void setSwapBytes(bool) {}
+    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t* data) {
+        for (int32_t j = 0; j < h; j++)
+            for (int32_t i = 0; i < w; i++) drawPixel(x + i, y + j, data[j * w + i]);
+    }
+    void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
+        drawFastHLine(x, y, w, color);
+        drawFastHLine(x, y + h - 1, w, color);
+        drawFastVLine(x, y, h, color);
+        drawFastVLine(x + w - 1, y, h, color);
+    }
+    void drawLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t color) {
+        int32_t dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        int32_t dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        int32_t err = dx + dy;
+        for (;;) {
+            drawPixel(x0, y0, color);
+            if (x0 == x1 && y0 == y1) break;
+            int32_t e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
+        }
+    }
+    void drawWideLine(float ax, float ay, float bx, float by, float wd, uint32_t color, uint32_t = 0) {
+        float dx = bx - ax, dy = by - ay;
+        float len = std::sqrt(dx * dx + dy * dy);
+        if (len < 0.01f) { fillCircle((int)ax, (int)ay, (int)(wd / 2), color); return; }
+        float nx = -dy / len * (wd / 2), ny = dx / len * (wd / 2);
+        fillTriangle((int)(ax + nx), (int)(ay + ny), (int)(ax - nx), (int)(ay - ny), (int)(bx + nx), (int)(by + ny), color);
+        fillTriangle((int)(bx + nx), (int)(by + ny), (int)(bx - nx), (int)(by - ny), (int)(ax - nx), (int)(ay - ny), color);
+        fillCircle((int)ax, (int)ay, (int)(wd / 2), color);
+        fillCircle((int)bx, (int)by, (int)(wd / 2), color);
+    }
+    void drawCircle(int32_t x0, int32_t y0, int32_t r, uint32_t color) {
+        int32_t x = r, y = 0, err = 0;
+        while (x >= y) {
+            drawPixel(x0 + x, y0 + y, color); drawPixel(x0 + y, y0 + x, color);
+            drawPixel(x0 - y, y0 + x, color); drawPixel(x0 - x, y0 + y, color);
+            drawPixel(x0 - x, y0 - y, color); drawPixel(x0 - y, y0 - x, color);
+            drawPixel(x0 + y, y0 - x, color); drawPixel(x0 + x, y0 - y, color);
+            y++;
+            if (err <= 0) { err += 2 * y + 1; }
+            if (err > 0)  { x--; err -= 2 * x + 1; }
+        }
+    }
+    void fillCircle(int32_t x0, int32_t y0, int32_t r, uint32_t color) {
+        for (int32_t y = -r; y <= r; y++) {
+            int32_t dx = (int32_t)std::sqrt((double)(r * r - y * y));
+            drawFastHLine(x0 - dx, y0 + y, 2 * dx + 1, color);
+        }
+    }
+    // rx or ry below 2 draws NOTHING, which looks like an off-by-one and is
+    // not: real TFT_eSPI opens with `if (rx<2) return; if (ry<2) return;`.
+    // The shim used to accept 1 and draw a stripe, so a scaled-down sprite
+    // could show detail in the emulator that the hardware never renders --
+    // and this project sizes MuleSkin by measuring emulator frames.
+    void fillEllipse(int32_t x0, int32_t y0, int32_t rx, int32_t ry, uint32_t color) {
+        if (rx < 2 || ry < 2) return;
+        for (int32_t y = -ry; y <= ry; y++) {
+            int32_t dx = (int32_t)((double)rx * std::sqrt(1.0 - (double)(y * y) / (double)(ry * ry)));
+            drawFastHLine(x0 - dx, y0 + y, 2 * dx + 1, color);
+        }
+    }
+    void drawEllipse(int32_t x0, int32_t y0, int32_t rx, int32_t ry, uint32_t color) {
+        if (rx < 2 || ry < 2) return;   // same guard as the real library
+        const int steps = 180;
+        for (int i = 0; i < steps; i++) {
+            double a0 = 2 * M_PI * i / steps, a1 = 2 * M_PI * (i + 1) / steps;
+            drawLine((int32_t)(x0 + rx * cos(a0)), (int32_t)(y0 + ry * sin(a0)),
+                     (int32_t)(x0 + rx * cos(a1)), (int32_t)(y0 + ry * sin(a1)), color);
+        }
+    }
+    static int32_t edge(int32_t ax, int32_t ay, int32_t bx, int32_t by, int32_t px, int32_t py) {
+        return (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+    }
+    void fillTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color) {
+        int32_t minX = std::min({x0, x1, x2}), maxX = std::max({x0, x1, x2});
+        int32_t minY = std::min({y0, y1, y2}), maxY = std::max({y0, y1, y2});
+        for (int32_t y = minY; y <= maxY; y++) {
+            for (int32_t x = minX; x <= maxX; x++) {
+                int32_t w0 = edge(x1, y1, x2, y2, x, y);
+                int32_t w1 = edge(x2, y2, x0, y0, x, y);
+                int32_t w2 = edge(x0, y0, x1, y1, x, y);
+                bool neg = (w0 < 0) || (w1 < 0) || (w2 < 0);
+                bool pos = (w0 > 0) || (w1 > 0) || (w2 > 0);
+                if (!(neg && pos)) drawPixel(x, y, color);
+            }
+        }
+    }
+    void drawTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint32_t color) {
+        drawLine(x0, y0, x1, y1, color);
+        drawLine(x1, y1, x2, y2, color);
+        drawLine(x2, y2, x0, y0, color);
+    }
+    void drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint32_t color) {
+        drawFastHLine(x + r, y, w - 2 * r, color);
+        drawFastHLine(x + r, y + h - 1, w - 2 * r, color);
+        drawFastVLine(x, y + r, h - 2 * r, color);
+        drawFastVLine(x + w - 1, y + r, h - 2 * r, color);
+        // One quadrant per corner. The bitmask matches the real library's:
+        // 1 = top-left, 2 = top-right, 4 = bottom-right, 8 = bottom-left.
+        drawCircleHelper(x + r,         y + r,         r, 1, color);
+        drawCircleHelper(x + w - 1 - r, y + r,         r, 2, color);
+        drawCircleHelper(x + w - 1 - r, y + h - 1 - r, r, 4, color);
+        drawCircleHelper(x + r,         y + h - 1 - r, r, 8, color);
+    }
+    void fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint32_t color) {
+        fillRect(x + r, y, w - 2 * r, h, color);
+        fillRect(x, y + r, r, h - 2 * r, color);
+        fillRect(x + w - r, y + r, r, h - 2 * r, color);
+        fillCircle(x + r, y + r, r, color);
+        fillCircle(x + w - 1 - r, y + r, r, color);
+        fillCircle(x + r, y + h - 1 - r, r, color);
+        fillCircle(x + w - 1 - r, y + h - 1 - r, r, color);
+    }
+    void drawArc(int32_t x, int32_t y, int32_t r, int32_t ir, uint32_t startAngle, uint32_t endAngle,
+                uint32_t color, uint32_t /*bg*/, bool /*roundEnds*/ = false) {
+        // Filled wedge, not upstream's anti-aliased ring -- see the
+        // file-level comment on known gaps.
+        if (endAngle < startAngle) endAngle += 360;
+        for (uint32_t a = startAngle; a <= endAngle; a++) {
+            double rad = (a - 90) * M_PI / 180.0;
+            for (int32_t rr = ir; rr <= r; rr++) {
+                drawPixel((int32_t)(x + rr * cos(rad)), (int32_t)(y + rr * sin(rad)), color);
+            }
+        }
+    }
+
+    // ---- text ------------------------------------------------------
+    void setCursor(int32_t x, int32_t y) { cursor_x = x; cursor_y = y; }
+    void setTextColor(uint16_t fg) { textcolor = fg; textbgcolor = fg; transparent = true; }
+    void setTextColor(uint16_t fg, uint16_t bg) { textcolor = fg; textbgcolor = bg; transparent = false; }
+    void setTextSize(uint8_t s) { textsize = s ? s : 1; }
+    void setTextWrap(bool) {}
+    // fontHeight(int font): real TFT_eSPI takes a FONT INDEX here, not a
+    // size multiplier -- this project only ever loads/uses font 1 (the
+    // default GLCD font via setTextSize()), so any call passing a
+    // different index is asking about a font that was never loaded and
+    // gets 0 back on real hardware too. Reproducing that faithfully
+    // (not "helpfully" treating the argument as a size) is deliberate:
+    // it's what would surface a real latent bug in the caller instead
+    // of hiding it.
+    int16_t fontHeight(int font) const { return font == 1 ? GLCD_H * textsize : (font == 2 ? 16 * textsize : 0); }
+    int16_t fontHeight() const { return gfxFont ? gfxFont->yAdvance * textsize : fontHeight(textfont); }
+    void setTextFont(uint8_t f) { textfont = (f == 2) ? 2 : 1; gfxFont = nullptr; }
+    void setFreeFont(const GFXfont* f) { gfxFont = f; textfont = 1; }
+    int16_t textWidth(const char* s) const {
+        int16_t w = 0;
+        if (gfxFont) {
+            // xAdvance for every glyph but the last, which counts only what it draws.
+            for (; *s; s++) {
+                const unsigned char c = (unsigned char)*s;
+                if (c < gfxFont->first || c > gfxFont->last) continue;
+                const GFXglyph& g = gfxFont->glyph[c - gfxFont->first];
+                w += (s[1] ? g.xAdvance : (g.xOffset + g.width)) * textsize;
+            }
+            return w;
+        }
+        if (textfont == 2) {
+            for (; *s; s++) { const unsigned char c = (unsigned char)*s; if (c >= 32 && c <= 127) w += widtbl_f16[c - 32] * textsize; }
+            return w;
+        }
+        for (; *s; s++) w += GLCD_ADVANCE * textsize;
+        return w;
+    }
+    size_t write(uint8_t c) {
+        if (c == '\n') { cursor_y += fontHeight() + 1; cursor_x = 0; return 1; }
+        cursor_x += drawChar(c, cursor_x, cursor_y);
+        return 1;
+    }
+    size_t print(const char* s) { size_t n = 0; for (; *s; s++) n += write((uint8_t)*s); return n; }
+    size_t println(const char* s) { size_t n = print(s); n += write('\n'); return n; }
+    size_t printf(const char* fmt, ...) {
+        char buf[256];
+        va_list ap; va_start(ap, fmt);
+        vsnprintf(buf, sizeof(buf), fmt, ap);
+        va_end(ap);
+        return print(buf);
+    }
+
+    uint16_t color565(uint8_t r, uint8_t g, uint8_t b) const {
+        return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
+    }
+
+    // ---- touch/SPI: inert, there's no touchscreen to simulate -------
+    bool getTouch(uint16_t*, uint16_t*, uint16_t = 600) { return false; }
+    uint16_t getTouchRawZ() { return 0; }
+    void getTouchRaw(uint16_t* x, uint16_t* y) { if (x) *x = 0; if (y) *y = 0; }
+    void setTouch(uint16_t*) {}
+    bool calibrateTouch(uint16_t*, uint32_t, uint32_t, uint8_t) { return true; }
+    void* getSPIinstance() { return nullptr; }
+    void writecommand(uint8_t) {}
+    void writedata(uint8_t) {}
+
+    // ---- sim-only access for the render harness ---------------------
+    const std::vector<uint16_t>& pixelsRGB565() const { return _buf; }
+
+protected:
+    int _w, _h;
+    uint8_t _rotation = 0;
+    std::vector<uint16_t> _buf;
+    int32_t _winX0 = 0, _winY0 = 0, _winX1 = 0, _winY1 = 0, _winCurX = 0, _winCurY = 0;
+
+    int32_t cursor_x = 0, cursor_y = 0;
+    uint16_t textcolor = 0xFFFF, textbgcolor = 0x0000;
+    uint8_t textsize = 1;
+    uint8_t textfont = 1;
+    const GFXfont* gfxFont = nullptr;
+    bool transparent = false;
+
+private:
+    // Quarter-circle outline helper for drawRoundRect, with the same corner
+    // bitmask the real library takes: 1 top-left, 2 top-right, 4
+    // bottom-right, 8 bottom-left.
+    //
+    // What was here before swept a FULL 360 degrees at each corner, despite
+    // its name, its comment, and an unnamed trailing bool that was plainly
+    // meant to pick the quadrant and was never read. So every drawRoundRect
+    // stamped four complete circles inset from the corners, and because
+    // every caller fills and then outlines, three quarters of each circle
+    // landed on top of the fill. On a 160x80 rect with r=20 that was 352
+    // outline pixels drawn inside the shape. The toasters and the speech
+    // bubbles wore them.
+    //
+    // Midpoint Bresenham now, emitting only the octants the mask asks for --
+    // which is also what removes the two lesser faults of the sweep: 360
+    // fixed samples both wasted work at r=3 (360 drawPixel calls for a dozen
+    // pixels) and left gaps past r=57, where the circumference needs more
+    // pixels than the loop had samples.
+    void drawCircleHelper(int32_t x0, int32_t y0, int32_t r, uint8_t corner, uint32_t color) {
+        if (r <= 0) return;
+        int32_t f = 1 - r, ddF_x = 1, ddF_y = -2 * r, x = 0, y = r;
+        while (x < y) {
+            if (f >= 0) { y--; ddF_y += 2; f += ddF_y; }
+            x++;
+            ddF_x += 2;
+            f += ddF_x;
+            if (corner & 0x4) {   // bottom right
+                drawPixel(x0 + x, y0 + y, color);
+                drawPixel(x0 + y, y0 + x, color);
+            }
+            if (corner & 0x2) {   // top right
+                drawPixel(x0 + x, y0 - y, color);
+                drawPixel(x0 + y, y0 - x, color);
+            }
+            if (corner & 0x8) {   // bottom left
+                drawPixel(x0 - y, y0 + x, color);
+                drawPixel(x0 - x, y0 + y, color);
+            }
+            if (corner & 0x1) {   // top left
+                drawPixel(x0 - y, y0 - x, color);
+                drawPixel(x0 - x, y0 - y, color);
+            }
+        }
+    }
+};
+
+// ---------------------------------------------------------------------
+// TFT_eSprite: overrides the same 6 virtuals to target its own buffer
+// instead of the parent TFT_eSPI's, and inherits every shape/text method
+// above unchanged -- exactly the mechanism real TFT_eSPI/TFT_eSprite use.
+// Pixels written into any sprite, for the `solo` screen's bench.
+inline unsigned long long g_simPix = 0;
+
+class TFT_eSprite : public TFT_eSPI {
+public:
+    explicit TFT_eSprite(TFT_eSPI* parent) : TFT_eSPI(0, 0), _parent(parent) {}
+
+    void* createSprite(int16_t w, int16_t h) {
+        _w = w; _h = h;
+        _buf.assign((size_t)w * h, 0x0000);
+        _created = true;
+        syncGeom();
+        return _buf.data();
+    }
+    void deleteSprite() { _buf.clear(); _created = false; }
+    bool created() const { return _created; }
+    void setColorDepth(uint8_t depth) { _depth = depth; }
+    uint8_t getColorDepth() const { return _depth; }
+    void* getPointer() { return _created ? (void*)_buf.data() : nullptr; }
+
+    // Blits this sprite's buffer onto the parent at (x,y) -- the
+    // real device's equivalent of an SPI DMA push to the panel; here
+    // it's just a straight copy into the parent's own in-memory buffer,
+    // which is exactly what the sim harness reads out to PNG.
+    void pushSprite(int32_t x, int32_t y) {
+        if (!_parent || !_created) return;
+        for (int32_t j = 0; j < _h; j++)
+            for (int32_t i = 0; i < _w; i++)
+                _parent->drawPixel(x + i, y + j, _buf[(size_t)j * _w + i]);
+    }
+
+    // Viewport support: main.cpp's CYD35 two-pass half-height render
+    // path calls this to redirect drawing into the top/bottom half of a
+    // shared buffer. Implemented as a simple coordinate offset + clip
+    // rather than the real library's datum/rotation interplay, which
+    // this project's viewport usage never actually exercises.
+    //
+    // Doubles as the landing point for main.cpp's ResizableSprite::
+    // resizeInPlace(), which rewrites the bookkeeping fields below by
+    // hand and then calls setViewport(0, 0, newW, newH). A full-canvas
+    // viewport on a created sprite is taken as that resize, which is
+    // what makes rotating the screen actually change the sim's frame
+    // dimensions. If resizeInPlace() ever stops ending with this call,
+    // rotation visibly stops resizing here -- a loud failure, not a
+    // silently wrong one.
+    void setViewport(int32_t x, int32_t y, int32_t w, int32_t h, bool datum = true) override {
+        if (_created && x == 0 && y == 0 && w > 0 && h > 0 && (w != _w || h != _h)) {
+            _w = w; _h = h;
+            _buf.assign((size_t)w * h, 0x0000);
+            syncGeom();
+            _vpActive = false;
+            return;
+        }
+        _vpX = x; _vpY = y; _vpW = w; _vpH = h; _vpActive = true; _vpDatum = datum;
+    }
+    void resetViewport() override { _vpActive = false; }
+    int32_t getViewportX()      override { return _vpActive && _vpDatum ? _vpX : 0; }
+    int32_t getViewportY()      override { return _vpActive && _vpDatum ? _vpY : 0; }
+    int32_t getViewportWidth()  override { return _vpActive ? _vpW : width(); }
+    int32_t getViewportHeight() override { return _vpActive ? _vpH : height(); }
+    bool    getViewportDatum()  override { return _vpActive && _vpDatum; }
+
+    void setPivot(int16_t, int16_t) {}
+
+    // TFT_eSPI's own 8bpp path: RGB565 in, RGB332 stored, expanded back
+    // on read. Reproduced here so what the emulator shows is what the
+    // panel can actually display.
+    static uint16_t quantise332(uint16_t c) {
+        const uint8_t r = (uint8_t)((c >> 11) & 0x1F);
+        const uint8_t g = (uint8_t)((c >>  5) & 0x3F);
+        const uint8_t b = (uint8_t)( c        & 0x1F);
+        const uint8_t r3 = (uint8_t)(r >> 2);        // 5 -> 3 bits
+        const uint8_t g3 = (uint8_t)(g >> 3);        // 6 -> 3 bits
+        const uint8_t b2 = (uint8_t)(b >> 3);        // 5 -> 2 bits
+        // Expand back the way the driver does, replicating high bits
+        // down so full scale stays full scale.
+        const uint8_t rr = (uint8_t)((r3 << 2) | (r3 >> 1));
+        const uint8_t gg = (uint8_t)((g3 << 3) | g3);   // 3 bits -> 6, high bits replicated down
+        const uint8_t bb = (uint8_t)((b2 << 3) | (b2 << 1) | (b2 >> 1));
+        return (uint16_t)((rr << 11) | ((gg & 0x3F) << 5) | (bb & 0x1F));
+    }
+
+    void drawPixel(int32_t x, int32_t y, uint32_t color) override {
+        if (_vpActive) {
+            // With the datum on the viewport, coordinates are relative to it;
+            // without, they stay the screen's and the viewport only clips.
+            if (_vpDatum) { x += _vpX; y += _vpY; if (x < 0 || y < 0) return; }
+            else if (x < _vpX || y < _vpY) return;
+            if (x >= _vpW + _vpX || y >= _vpH + _vpY) return;
+        }
+        if (x < 0 || y < 0 || x >= _w || y >= _h) return;
+        g_simPix++;
+        _buf[(size_t)y * _w + x] =
+            (_depth == 8) ? quantise332((uint16_t)color) : (uint16_t)color;
+    }
+    uint16_t readPixel(int32_t x, int32_t y) override {
+        if (x < 0 || y < 0 || x >= _w || y >= _h) return 0;
+        return _buf[(size_t)y * _w + x];
+    }
+
+protected:
+    // Bookkeeping fields the real TFT_eSprite exposes to subclasses, and
+    // which main.cpp's ResizableSprite writes directly (see its
+    // resizeInPlace()). Mirrored here so that subclass compiles
+    // unmodified; kept in step with _w/_h by syncGeom().
+    bool     _created = false;
+    int32_t  _iwidth = 0, _dwidth = 0, _bitwidth = 0;
+    int32_t  _iheight = 0, _dheight = 0;
+    int32_t  _sx = 0, _sy = 0, _sw = 0, _sh = 0;
+    uint8_t  rotation = 0;
+
+    void syncGeom() {
+        _iwidth = _dwidth = _bitwidth = _w;
+        _iheight = _dheight = _h;
+        _sw = _w; _sh = _h;
+        _sx = _sy = 0;
+    }
+
+private:
+    TFT_eSPI* _parent;
+    uint8_t _depth = 16;
+    int32_t _vpX = 0, _vpY = 0, _vpW = 0, _vpH = 0;
+    bool    _vpDatum = true;
+    bool _vpActive = false;
+};

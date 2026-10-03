@@ -1,0 +1,215 @@
+// MuleSkin-CYD — mbedtls behind MuleSkinMesh messages. See include/meshcrypto.h.
+#include "meshcrypto.h"
+
+#if MULESKIN_MESH
+#include "meshmsg_vectors.h"
+#include "mbedtls/ccm.h"
+#include "mbedtls/md.h"
+#include "mbedtls/pkcs5.h"
+#include "mbedtls/ecdh.h"
+#include "mbedtls/sha256.h"
+#include <esp_system.h>
+// esp_fill_random moved out of esp_system.h in IDF 5; on IDF 4 this header
+// exists too and re-including it is harmless, so it needs no version guard.
+#include <esp_random.h>
+#include <string.h>
+
+#include "mbedtls_compat.h"
+
+namespace {
+
+// One cipher context for the life of the program, keyed when a key is loaded
+// and reused for every message. mbedtls_ccm_setkey allocates, so setting up
+// per message would be allocation churn on the one heap this project has had
+// to fight; per key, it happens a handful of times a year.
+mbedtls_ccm_context s_ccm;
+bool s_ccmInit = false;
+bool s_keyed   = false;
+
+bool pbkdf2Derive(const char* phrase, size_t plen, const uint8_t* salt, size_t slen,
+                  uint32_t iters, uint8_t key[MeshMsg::KEY_LEN]) {
+#if MBEDTLS_VERSION_MAJOR >= 3
+    // Same PBKDF2-HMAC-SHA256, same inputs, same output. The _ext form sets up
+    // and tears down the HMAC context internally, so the allocation the comment
+    // below describes still happens -- it is just no longer this file's to own,
+    // and a failure inside it still comes back as a non-zero return and so
+    // still means a failed derive rather than a key made of stack contents.
+    return mbedtls_pkcs5_pbkdf2_hmac_ext(MBEDTLS_MD_SHA256,
+                                         (const unsigned char*)phrase, plen,
+                                         salt, slen, iters,
+                                         (uint32_t)MeshMsg::KEY_LEN, key) == 0;
+#else
+    const mbedtls_md_info_t* info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    if (!info) return false;
+    mbedtls_md_context_t md;
+    mbedtls_md_init(&md);
+    // The HMAC context is the one allocation in this whole path. Transient,
+    // a couple of hundred bytes, and checked -- a failed allocation here is a
+    // failed derive, never a key made of whatever was in the buffer.
+    bool ok = mbedtls_md_setup(&md, info, 1) == 0 &&
+              mbedtls_pkcs5_pbkdf2_hmac(&md, (const unsigned char*)phrase, plen,
+                                        salt, slen, iters,
+                                        (uint32_t)MeshMsg::KEY_LEN, key) == 0;
+    mbedtls_md_free(&md);
+    return ok;
+#endif
+}
+
+bool ccmSetKey(const uint8_t key[MeshMsg::KEY_LEN]) {
+    if (!s_ccmInit) { mbedtls_ccm_init(&s_ccm); s_ccmInit = true; }
+    s_keyed = mbedtls_ccm_setkey(&s_ccm, MBEDTLS_CIPHER_ID_AES, key,
+                                 (unsigned int)(MeshMsg::KEY_LEN * 8)) == 0;
+    return s_keyed;
+}
+
+bool ccmSeal(const uint8_t nonce[MeshMsg::NONCE_LEN], const uint8_t* aad, size_t aadLen,
+             const uint8_t* pt, size_t ptLen, uint8_t* ct, uint8_t tag[MeshMsg::TAG_LEN]) {
+    return s_keyed &&
+           mbedtls_ccm_encrypt_and_tag(&s_ccm, ptLen, nonce, MeshMsg::NONCE_LEN,
+                                       aad, aadLen, pt, ct, tag, MeshMsg::TAG_LEN) == 0;
+}
+
+bool ccmOpen(const uint8_t nonce[MeshMsg::NONCE_LEN], const uint8_t* aad, size_t aadLen,
+             const uint8_t* ct, size_t ctLen, const uint8_t tag[MeshMsg::TAG_LEN], uint8_t* pt) {
+    return s_keyed &&
+           mbedtls_ccm_auth_decrypt(&s_ccm, ctLen, nonce, MeshMsg::NONCE_LEN,
+                                    aad, aadLen, ct, pt, tag, MeshMsg::TAG_LEN) == 0;
+}
+
+const MeshMsg::Crypto IMPL = { pbkdf2Derive, ccmSetKey, ccmSeal, ccmOpen };
+
+} // namespace
+
+const MeshMsg::Crypto& MeshCrypto::impl() { return IMPL; }
+
+namespace {
+int hwRng(void*, unsigned char* out, size_t n) {
+    esp_fill_random(out, n);
+    return 0;
+}
+} // namespace
+
+void MeshCrypto::sha256(const uint8_t* in, size_t len, uint8_t out[32]) {
+    sqw_sha256(in, len, out, 0);
+}
+
+bool MeshCrypto::dhKeypair(uint8_t priv[DH_LEN], uint8_t pub[DH_LEN]) {
+    mbedtls_ecp_group grp;
+    mbedtls_mpi d;
+    mbedtls_ecp_point Q;
+    mbedtls_ecp_group_init(&grp);
+    mbedtls_mpi_init(&d);
+    mbedtls_ecp_point_init(&Q);
+    bool ok = mbedtls_ecp_group_load(&grp, MBEDTLS_ECP_DP_CURVE25519) == 0 &&
+              mbedtls_ecdh_gen_public(&grp, &d, &Q, hwRng, nullptr) == 0 &&
+              mbedtls_mpi_write_binary(&d, priv, DH_LEN) == 0 &&
+              mbedtls_mpi_write_binary(&SQW_ECP_X(Q), pub, DH_LEN) == 0;
+    mbedtls_ecp_point_free(&Q);
+    mbedtls_mpi_free(&d);
+    mbedtls_ecp_group_free(&grp);
+    return ok;
+}
+
+bool MeshCrypto::dhShared(const uint8_t priv[DH_LEN], const uint8_t peerPub[DH_LEN], uint8_t out[DH_LEN]) {
+    mbedtls_ecp_group grp;
+    mbedtls_mpi d, z;
+    mbedtls_ecp_point Qp;
+    mbedtls_ecp_group_init(&grp);
+    mbedtls_mpi_init(&d);
+    mbedtls_mpi_init(&z);
+    mbedtls_ecp_point_init(&Qp);
+    bool ok = mbedtls_ecp_group_load(&grp, MBEDTLS_ECP_DP_CURVE25519) == 0 &&
+              mbedtls_mpi_read_binary(&d, priv, DH_LEN) == 0 &&
+              mbedtls_mpi_read_binary(&SQW_ECP_X(Qp), peerPub, DH_LEN) == 0 &&
+              mbedtls_mpi_lset(&SQW_ECP_Z(Qp), 1) == 0 &&
+              mbedtls_ecdh_compute_shared(&grp, &z, &Qp, &d, hwRng, nullptr) == 0 &&
+              mbedtls_mpi_write_binary(&z, out, DH_LEN) == 0;
+    mbedtls_ecp_point_free(&Qp);
+    mbedtls_mpi_free(&z);
+    mbedtls_mpi_free(&d);
+    mbedtls_ecp_group_free(&grp);
+    // An all-zero secret means the other side sent a low-order point. Refused.
+    if (ok) { uint8_t acc = 0; for (size_t i = 0; i < DH_LEN; i++) acc |= out[i]; ok = acc != 0; }
+    return ok;
+}
+
+void MeshCrypto::dhSessionKey(const uint8_t shared[DH_LEN], uint8_t key[MeshMsg::KEY_LEN]) {
+    static const char LABEL[] = "MuleSkin-invite";
+    uint8_t h[32];
+    mbedtls_sha256_context c;
+    mbedtls_sha256_init(&c);
+    sqw_sha256_starts(&c, 0);
+    sqw_sha256_update(&c, (const unsigned char*)LABEL, sizeof LABEL - 1);
+    sqw_sha256_update(&c, shared, DH_LEN);
+    sqw_sha256_finish(&c, h);
+    mbedtls_sha256_free(&c);
+    memcpy(key, h, MeshMsg::KEY_LEN);
+    memset(h, 0, sizeof h);
+}
+
+uint16_t MeshCrypto::dhCode(const uint8_t pubA[DH_LEN], const uint8_t pubB[DH_LEN]) {
+    const bool aFirst = memcmp(pubA, pubB, DH_LEN) <= 0;
+    uint8_t h[32];
+    mbedtls_sha256_context c;
+    mbedtls_sha256_init(&c);
+    sqw_sha256_starts(&c, 0);
+    sqw_sha256_update(&c, aFirst ? pubA : pubB, DH_LEN);
+    sqw_sha256_update(&c, aFirst ? pubB : pubA, DH_LEN);
+    sqw_sha256_finish(&c, h);
+    mbedtls_sha256_free(&c);
+    return (uint16_t)(((uint32_t)h[0] << 24 | (uint32_t)h[1] << 16 | (uint32_t)h[2] << 8 | h[3]) % 10000u);
+}
+
+bool MeshCrypto::selfTest() {
+    namespace V = MeshMsgVec;
+    bool ok = false;
+    do {
+        // 1. Key stretching agrees.
+        uint8_t key[MeshMsg::KEY_LEN];
+        if (!pbkdf2Derive(V::PHRASE, strlen(V::PHRASE),
+                          (const uint8_t*)MeshMsg::SALT, strlen(MeshMsg::SALT),
+                          V::ITERS, key)) break;
+        if (memcmp(key, V::KEY, sizeof key) != 0) break;
+        if (!ccmSetKey(key)) break;
+
+        // 2. The whole frame agrees -- header, nonce, associated data,
+        //    ciphertext and tag, all at once.
+        uint8_t f[MeshMsg::CANNED_FRAME_LEN];
+        if (MeshMsg::sealCanned(IMPL, V::MAC, V::COUNTER, V::CANNED, f, sizeof f) != sizeof f) break;
+        if (memcmp(f, V::FRAME, sizeof f) != 0) break;
+
+        // 3. The golden frame opens, to the golden line.
+        uint32_t ctr = 0;
+        uint8_t line = 0xFF;
+        if (MeshMsg::openCanned(IMPL, V::MAC, V::FRAME, sizeof V::FRAME, ctr, line)
+                != MeshMsg::Open::OK) break;
+        if (ctr != V::COUNTER || line != V::CANNED) break;
+
+        // 4. And a tampered one does not. A cipher that accepts everything
+        //    passes the first three.
+        f[MeshMsg::HDR_LEN] ^= 0x01;
+        if (MeshMsg::openCanned(IMPL, V::MAC, f, sizeof f, ctr, line)
+                != MeshMsg::Open::BAD_TAG) break;
+
+        // 5. A typed part agrees too: the six-bit packing, the part byte and
+        //    the counter offset, against an implementation that packed the
+        //    same text independently.
+        uint8_t tf[MeshMsg::TEXT_FRAME_LEN];
+        const uint8_t total = MeshMsg::textParts(V::TEXT);
+        if (MeshMsg::sealTextPart(IMPL, V::MAC, V::COUNTER + V::TEXT_PART, V::TEXT,
+                                  V::TEXT_PART, total, tf, sizeof tf) != sizeof tf) break;
+        if (memcmp(tf, V::TEXT_FRAME, sizeof tf) != 0) break;
+        uint8_t part = 0xFF, tot = 0;
+        char chars[MeshMsg::TEXT_PART_CHARS + 1];
+        if (MeshMsg::openTextPart(IMPL, V::MAC, V::TEXT_FRAME, sizeof V::TEXT_FRAME,
+                                  ctr, part, tot, chars) != MeshMsg::Open::OK) break;
+        if (part != V::TEXT_PART || tot != total ||
+            strncmp(chars, V::TEXT + V::TEXT_PART * MeshMsg::TEXT_PART_CHARS,
+                    MeshMsg::TEXT_PART_CHARS) != 0) break;
+        ok = true;
+    } while (false);
+    s_keyed = false;            // nothing left keyed with the test key
+    return ok;
+}
+
+#endif // MULESKIN_MESH

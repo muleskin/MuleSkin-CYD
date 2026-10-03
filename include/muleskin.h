@@ -1,0 +1,575 @@
+// MuleSkin-CYD — MuleSkin, the main character
+// A small animated mascot with a speech bubble, drawn on the idle
+// (CLEAR) screen. Reacts to detections/buttons/rotation, and cracks
+// jokes on his own when nothing else is happening.
+#pragma once
+#include <TFT_eSPI.h>
+#include "state.h"
+
+namespace MuleSkin {
+    enum class Event {
+        DETECTION,    // pass the DetectionType that triggered it
+        LOG_OPENED,
+        LOG_CLEARED,
+        ROTATED,
+        BOOTED,
+        PETTED,       // a quick tap on him — see hitTest()
+        HELD,         // a stationary press-and-hold on him past a threshold
+        PETTING,      // a dragging/stroking touch on him -- fires repeatedly
+                      // (throttled) for as long as the stroke continues, not
+                      // once per gesture like PETTED/HELD
+    };
+
+    // Call once from an event site (main.cpp) to make MuleSkin react.
+    // lifetimeTotal (DETECTION only) is the engine's persisted
+    // across-reboot detection count — used to fire milestone quips.
+    // hitCount (DETECTION only) is that specific MAC+type's own total
+    // hit count from its log entry — a device that's matched several
+    // times is a real pattern (something following you, not a one-off
+    // ping), so a high count gets its own "seen you before" reaction
+    // instead of the normal fresh-detection line.
+    // rssi (DETECTION only) is the signal strength of the thing that
+    // just tripped, straight off its log entry. It scales how hard he
+    // reacts -- a weak, distant ping gets a flinch and something
+    // sitting on top of you gets a full stumble backwards, from the
+    // same pose maths. 0 means "not known", which draws a middling
+    // reaction rather than either extreme; real RSSI is always
+    // negative, so 0 can never collide with a genuine reading.
+    // conf is the matched SIGNATURE's grade, not the type's -- he reads a
+    // percentage out loud, so quoting the type's would misstate exactly the
+    // hits the per-entry split exists to be honest about.
+    // What main.cpp knows about a catch that the engine's numbers do not:
+    // set right before a DETECTION trigger, spent by it. `regular` is the
+    // device's neighbour-name or null; `newRegular` that it just earned one;
+    // `nemesis` that the type is his most-caught; `newClosest` that it came
+    // closer than any of its kind before.
+    void catchContext(const char* regular, bool newRegular, bool nemesis, bool newClosest);
+    // Somewhere to get an idle line from that knows more than he does --
+    // see notices.h. Called from the idle roll a third of the time; null
+    // means "nothing this time" and the usual pools carry on.
+    typedef const char* (*IdleProvider)();
+    void setIdleProvider(IdleProvider fn);
+    void trigger(Event evt, DetectionType dt = DetectionType::UNKNOWN,
+                 uint32_t lifetimeTotal = 0, uint32_t hitCount = 1,
+                 int8_t rssi = 0,
+                 Confidence conf = Confidence::HIGH_CONF);
+
+    // Carry him with a finger. The CLEAR screen calls this every frame
+    // of a drag that began with a successful press-and-hold on him --
+    // a stroke that never held is still petting, and still reports
+    // itself through Event::PETTING. Coordinates are raw screen space;
+    // he clamps himself into whatever band the caller gave tick().
+    void grabTo(int x, int y);
+
+    // Let go. He falls back to where he was standing and lands in a
+    // squash. Safe to call when nothing was ever grabbed.
+    void release();
+
+    // A background telling him something is about to hit him, in screen
+    // coordinates -- the reverse of lastFootprint(), which backgrounds
+    // already call to find out where he is. He decides for himself
+    // whether that is close enough to be worth ducking, and rate-limits
+    // his own reaction, so a caller can fire this every frame for every
+    // object it draws without thinking about it.
+    void toasterNear(int x, int y);
+
+    // Hit test against wherever he was actually drawn last tick() call
+    // (position/scale tracked internally) — call this before falling
+    // through to any other touch handling on the CLEAR screen, so a
+    // tap on him pets him instead of doing nothing.
+    bool hitTest(int x, int y);
+    // Where a tap landed on him, before PETTED: his head, his belly or his
+    // feet each get their own reaction. Zone 0 is "not on him".
+    void noteTapAt(int x, int y);
+    // A fast swipe across him: he slides into the wall on that side, wobbles,
+    // and walks back. dir is +1 for right, -1 for left.
+    void flick(int8_t dir);
+
+    // Where he was drawn last frame, and how wide, so a background can
+    // react to him standing in it. Returns false before he has ever been
+    // drawn. Backgrounds render BEFORE he does, so this is one frame
+    // stale -- invisible for something that ambles as slowly as he does,
+    // and far cheaper than reordering the draw.
+    bool lastFootprint(int& cx, int& halfW, int& top, int& bot);
+
+    // The scale tick() last drew him at. tick() DERIVES its scale from the
+    // height it was given and the SIZE percentage, while drawWaving() takes
+    // an absolute one -- the two are different units, and passing the same
+    // number to both draws two MuleSkins of visibly different sizes. Anything
+    // that has to stand beside him reads this instead of recomputing it.
+    float lastScale();
+
+    // Runs every pose he has, back to back, naming each one in his own
+    // speech bubble as it plays -- wired to Settings' "SHOW OFF" row.
+    // Most of what he does is gated behind a random idle roll, a real
+    // detection, a particular background or a gesture nobody is told
+    // about, so without this there is no way to see the set. Any tap
+    // ends it; it also ends on its own after the last pose.
+    void startShowOff();
+    // A percentage on every duration of his. See setTempo() in muleskin.cpp.
+    void setTempo(uint8_t pct);
+    void stopShowOff();
+    bool showOffActive();
+
+    // Re-runs the first-boot walkthrough on demand (wired to Settings'
+    // "REPLAY INTRO" row). trigger(Event::BOOTED) also starts it
+    // automatically the very first time the device ever boots — this
+    // is only for replaying it later.
+    void replayIntro();
+
+    // True while the walkthrough above is in progress. It runs on top
+    // of the normal CLEAR screen — pet-tap, the background-cycle-on-
+    // tap, and the button bar all keep working exactly as usual
+    // throughout, so the caller doesn't need to change any of its own
+    // touch handling except for the one addition below.
+    bool onboardingActive();
+
+    // Call this first, before any other CLEAR-screen touch handling,
+    // whenever onboardingActive() is true. If the tap landed on the
+    // walkthrough's speech bubble, advances (or, on the last step,
+    // ends) it and returns true — the caller should treat the tap as
+    // consumed. Returns false for a tap anywhere else, so the caller's
+    // normal hit-testing (pet, buttons, etc.) still runs untouched.
+    bool onboardingTapAdvance(int x, int y);
+
+    // ---- Companion stats -----------------------------------------
+    // All persisted, all derived from data already tracked elsewhere
+    // (or trivially added) — no wall-clock/RTC dependency, since this
+    // device doesn't have one. Shown on the Diary screen and worked
+    // into idle chatter every so often.
+    uint32_t petCount();
+    uint32_t bootCount();
+    uint32_t bestClearStreakMs();     // longest-ever gap between detections
+    uint32_t currentClearStreakMs();  // the one happening right now
+    uint32_t bestSessionCount();      // most detections seen in one boot
+    DetectionType firstDetectionType(); // UNKNOWN if nothing's been caught yet
+
+    // ---- Cosmetics --------------------------------------------------
+    // Both persisted. SHADES COLOR is a Settings row that cycles a short
+    // curated list. The nickname is the curated half of his NAME: what he
+    // is called until somebody types one on the payphone, and what the
+    // payphone's SHUFFLE key cycles. It used to be a Settings row of its
+    // own, from before there was a keyboard. Shade options unlock
+    // progressively with pet count; cycling only ever lands on ones
+    // already unlocked.
+    const char* nickname();
+    void        cycleNickname();
+    const char* shadesColorName();
+    void        cycleShadesColor();
+
+    // Outfits: NONE (no costume), RACCOON and UNICORN are free/always
+    // unlocked; the rest unlock progressively with lifetime detection
+    // count (the same stat his growth stages use), in ascending
+    // threshold order, so unlockedOutfitCount() is just "how many from
+    // the front of the list qualify". cycleOutfit() only ever lands on
+    // an unlocked one, same pattern as cycleShadesColor(). outfitCount()
+    // is the total including locked ones, for a "N/total" readout.
+    const char* outfitName();
+    void        cycleOutfit();
+    void        cyclePrevOutfit();
+    uint8_t     unlockedOutfitCount();
+    uint8_t     outfitCount();
+
+    // Hidden unlock-everything trigger: main.cpp watches for a button
+    // sequence (9x CLR, 1x SCAN, 1x CLR) and calls this when it
+    // completes. Persists immediately, same as any other cosmetic.
+    void unlockAllOutfits();
+
+    // ---- the pet -------------------------------------------------------
+    // VAPOR SHAGGY, who turns up on CLEAR and climbs him. The unlock lives
+    // here rather than in Settings because it shares ensurePrefsLoaded()
+    // and the NVS namespace with every other unlock, and because holding
+    // CLR unlocks it alongside the outfits.
+    //
+    // Note the word: "pet" here is the companion. s_petCount inside
+    // muleskin.cpp is how many times you have STROKED him, which is a
+    // different thing that unfortunately shares the English.
+    void unlockPet();          // earned: tap him on the toasters
+
+    // True once, the first time the pet is earned: main.cpp drains it and
+    // raises the PET UNLOCKED card. False forever after, including across
+    // reboots -- the fact that the card has been shown is saved.
+    bool consumePetUnlockCard();
+    bool petUnlocked();
+    // Legend stage or the master unlock, where the aura comes in -- and so
+    // where the APPEARANCE page's AURA row appears.
+    bool hasAura();
+    // Wear the Legend look before it is earned, until the next boot: the
+    // emulator, the console's LEGEND, and builds that are not a release.
+    void previewLegend(bool on);
+    bool legendPreview();
+    // The console's OUTFIT n: wear costume n until the next boot, unowned and
+    // unsaved, so one can be timed on a board. -1 takes it off.
+    void wearForBench(int8_t idx);
+    bool petEnabled();         // any companion at all: what pet.cpp asks
+    void togglePet();          // kept for callers that only want on/off
+
+    // Which one. There are two now, so the Settings row cycles rather than
+    // toggles: OFF, then each companion in turn.
+    enum class PetId : uint8_t { OFF = 0, SHAGGY, YETI, COUNT };
+    PetId       petChoice();
+    const char* petName();     // for the row's value column
+    void        cyclePet();
+
+    // True while a finger is carrying him, or he is dangling after being
+    // dropped. The pet checks it: perching on a head that is itself flying
+    // through the air reads as a bug rather than as a joke.
+    bool isHeld();
+
+    // Top of his head as actually drawn this frame, bob and squash included.
+    // lastFootprint()'s `top` is NOT this: that reports a generous, un-bobbed
+    // hit box so a tap target does not move under a finger. Anything that
+    // stands on him wants this one.
+    int crownY();
+
+    // WOLF PELT is the one outfit not earned by a detection count --
+    // main.cpp calls this when the werewolf easter egg on the FIRE
+    // background is summoned. Persists immediately; a no-op once it has
+    // already been earned, so re-summoning does not re-announce it.
+    void unlockWolfPelt();
+
+    // CHROME WING is the second outfit not earned by a detection count --
+    // main.cpp calls this when the player catches the rare gold toaster on
+    // the TOASTERS background. Persists immediately; a no-op once earned.
+    void unlockChromeWing();
+
+    // VOID EYE is the third. main.cpp calls this when the player catches two
+    // eyes in a row on the STARFIELD background -- see Theme::consumeEyeCatch().
+    // Persists immediately; a no-op once earned.
+    void unlockVoidEye();
+
+    // PARKA is the fourth event unlock. main.cpp calls this after five taps on
+    // the lodge on the SNOWFALL background -- see Theme::consumeLodgeKnock().
+    void unlockParka();
+
+    // The Aquarium shark, caught on his return pass. Unlike the four above,
+    // calling this when the costume is ALREADY unlocked is not a no-op: he
+    // reacts anyway, because the catch is the game and a silent second catch
+    // teaches you to stop playing it.
+    void unlockShark();
+    // YZZERD is the sixth. main.cpp passes on Theme::consumeXyzzy(): how many
+    // times in a row XYZZY has been tapped on the TERMINAL background. One
+    // and two get "nothing happens"; three unlocks the outfit.
+    void magicWord(uint8_t said);
+
+    // Unlock announcements. Any outfit that becomes available -- by
+    // crossing its lifetime-detection threshold, or by the werewolf
+    // summon -- is queued once, and main.cpp drains the queue by popping
+    // the OUTFIT UNLOCKED screen. Returns false when there is nothing
+    // pending. An outfit is marked as announced the moment it is handed
+    // out here, so it never repeats across a reboot.
+    bool consumeOutfitUnlock(uint8_t& outIdx);
+
+    // Name of an outfit by index, for the popup -- outfitName() only
+    // ever reports the one currently worn.
+    const char* outfitNameAt(uint8_t idx);
+
+    // Forces the whole draw path to render a given outfit regardless of
+    // which one is actually selected, so the unlock popup can show off
+    // the new costume without switching the player into it. -1 clears
+    // the override. Set it, draw, clear it -- leaving it set would
+    // silently take over every other screen.
+    void setOutfitPreview(int8_t idx);
+
+    // The same override for the shades tint, and it exists for the same
+    // reason setOutfitPreview does: a visiting MuleSkin has to arrive in his
+    // own colours. Without it a guest wears the host's shades, which reads
+    // as a reflection rather than as somebody else. -1 clears it.
+    void setShadesPreview(int8_t idx);
+
+    // A name sticker on the next body drawn, centred on the torso, moving
+    // with him. Set it, draw, clear it with nullptr -- the same contract as
+    // the two previews above. Nobody but a cameo wears one; our own
+    // MuleSkin knows who he is.
+    void setNameTag(const char* name);
+
+    // A radio headset on his head -- band, ear cups and a mic -- for the
+    // watch alert's LOCKED ON screen. Drawn as part of his head, so it bobs,
+    // talks and scales with him. Same contract as the name tag: set it, draw,
+    // clear it.
+    void setHeadset(bool on);
+
+    // A line from outside his own head, said once: the update notice. The
+    // text must outlive the bubble -- a static buffer, not a stack one.
+    void announce(const char* text);
+
+    // The clock's lines, when it is set. Once a day the first time CLEAR is
+    // up, a hello with the date in it; on the days that count (a week, a
+    // month, a hundred days, a year...) how long it has been. nullptr when
+    // there is nothing to say. main.cpp announces what comes back.
+    const char* takeDayLine();
+
+    // Hold his speech bubble off the screen (he still moves). Desk mode
+    // uses it while a message box shares the screen with him.
+    void holdBubble(bool held);
+
+#if MULESKIN_MESH
+    // Which beat of a visit a line is wanted for. The pools live in
+    // muleskin.cpp with every other pool rather than out with the visit
+    // logic -- dialogue belongs where the dialogue is.
+    enum class VisitMoment : uint8_t { MEET, HANGOUT, PART };
+
+    // Host's side of the conversation: picks a line and says it, exactly the
+    // way watchAlertReaction() and the scan reactions do. Returns how long
+    // the bubble will be up, so the caller can put the next line on screen
+    // as this one comes down instead of guessing at a fixed beat.
+    uint32_t visitReaction(VisitMoment m);
+
+    // How long a line of visit dialogue should stay up, from its length.
+    // A fixed beat gives a three-word answer the same nine seconds as a
+    // sentence, and that dead air is what made two MuleSkins reading their
+    // lines out look like two MuleSkins waiting for a bus.
+    uint32_t lineMs(const char* line);
+
+    // True for as long as somebody is visiting. While it is set, his idle
+    // chatter and his thirty-second watching beat both stand down.
+    //
+    // They share ONE speech bubble with the visit dialogue and neither knew
+    // about the other, so an idle line landing mid-conversation overwrote it
+    // and the next visit beat overwrote back -- which is what flickering
+    // looks like. It is also just wrong: he should not be muttering about
+    // the airwaves while there is somebody standing next to him.
+    void setVisiting(bool v);
+    bool visiting();
+
+    // Set around tick() while other MuleSkins share the scene (a visit, a
+    // crowd). His size then ignores what he is wearing: no shrinking so a
+    // hat, a horn, the werewolf's ears or a parka's hood stays under the top
+    // edge. Everybody in the scene is sized alike, and a costume poking past
+    // the top is the better trade than one MuleSkin -- and so all of them --
+    // coming out smaller because of a hat.
+    void setCompany(bool on);
+
+    // True while the OTHER one is the one talking. It buys a slow nod, which
+    // is the difference between a MuleSkin standing near a conversation and a
+    // MuleSkin in one. Cleared with setVisiting(false)'s caller.
+    void setListening(bool v);
+
+    // The guest's side. Returns a line to hand drawWaving() rather than
+    // saying it, because the guest has no mood machine to say it with.
+    const char* visitGuestLine(VisitMoment m, uint32_t seed);
+
+    // Standing-around banter, as matched PAIRS. Independent picks on both
+    // sides produced two MuleSkins talking past each other -- each line was
+    // fine and none of them were answers. Same seed, same exchange, so the
+    // reply actually replies.
+    // What the banter can be about, filled by the CLEAR screen at the start
+    // of each exchange. Anything it does not know stays at zero and the
+    // lines that need it stay in the drawer.
+    struct VisitContext {
+        uint8_t  background;      // Settings::Background
+        uint8_t  caught;          // DetectionType of the last catch, or UNKNOWN
+        uint8_t  guestOutfit;     // 0 for none
+        uint8_t  hostOutfit;
+        char     guestName[13];
+        uint16_t met;             // times this visitor has been met, from the roster
+        uint8_t  squad;           // roster size
+        uint8_t  hits;            // detections in the log this boot
+        uint16_t upHours;
+    };
+    void setVisitContext(const VisitContext& c);
+
+    uint32_t    visitHangHost(uint32_t seed);      // host says it himself
+    const char* visitHangGuest(uint32_t seed);     // the matching reply
+
+    // The third beat: a short something the host tosses back after the
+    // guest's reply. Not every exchange has one -- nullptr means this pair
+    // ends on the reply -- and the ones that do are the ones that read as
+    // two people enjoying themselves rather than two people exchanging
+    // information.
+    const char* visitHangTopper(uint32_t seed);
+
+    // Say an arbitrary visit line in the host's bubble. Returns its ms.
+    uint32_t visitSay(const char* line);
+
+    // The host cracks up: a short, fast bounce, the same one the idle
+    // flourish uses. Called when the OTHER one's line lands, which is what
+    // makes it read as a reaction rather than as a tic.
+    void visitLaugh(uint32_t now);
+
+    // Set pieces for two MuleSkins. Each drives the HOST through his mood
+    // machine for a while; the guest's half is a VisitPose handed to
+    // drawWaving(), because the guest has no mood machine.
+    //
+    // One arm across toward the other MuleSkin, reaching right -- he stands
+    // on the left. UP is a high five, DOWN a low five, LEVEL a fist bump or a
+    // hand held out with a rock, paper or scissors over it.
+    enum class Reach : uint8_t { UP, DOWN, LEVEL };
+    void visitReach(uint32_t now, uint32_t ms, Reach level);
+    // A fist pumping, for rock-paper-scissors.
+    void visitPump(uint32_t now, uint32_t ms);
+    // When somebody last did anything to him -- a tap, a detection, a screen
+    // change. How his solo nap knows it has been left alone.
+    //
+    // There was a visit nap here too -- the two of them dozing off together
+    // mid-conversation -- with visitNap()/visitWake()/visitWakeLine() behind
+    // it. It was removed: a visitor is the one time there is banter to be had
+    // and sleeping through it was the opposite of the point. He still naps
+    // alone, on his own timer further down this file's implementation.
+    uint32_t lastInteractionAt();
+    // His turn in a dance-off: the DANCE mood, for `ms`.
+    void visitDance(uint32_t now, uint32_t ms);
+    // When his last detection reaction started (0 if none this boot): how
+    // a visit notices a scare it did not cause, and gives the guest his half.
+    uint32_t lastShockAt();
+    // Lines for the set pieces. The host says his; the guest's are handed back.
+    uint32_t    visitDanceCall(uint32_t seed);
+    const char* visitDanceReply(uint32_t seed);
+    const char* visitScareLine(uint32_t seed);
+    uint32_t    visitFriendHello(uint32_t seed);        // host, to a returning visitor
+    uint32_t    visitRpsCall(uint32_t seed);            // host
+    uint32_t    visitRpsResult(uint8_t outcome, uint32_t seed);   // 0 tie, 1 he won, 2 he lost
+    uint32_t    visitSnowCall(uint32_t seed);           // host
+    const char* visitSnowReply(uint32_t seed);          // guest
+
+    // A nickname by index. nickname() only ever reports our own, and a guest
+    // arrives carrying somebody else's -- both devices ship the same table,
+    // which is the whole reason four bits was enough to send it.
+    const char* nicknameAt(uint8_t idx);
+
+    // The typed name, if there is one. Twelve is a RENDERING budget, not a
+    // storage one: the name has to fit a nameplate under a MuleSkin drawn at
+    // SMALL, which is tighter than the settings row it lives in.
+    // NOT called NAME_MAX: that is a POSIX macro out of <limits.h>, so the
+    // declaration expanded to `static const uint8_t 255 = 12;` and every
+    // translation unit that included this header failed at once.
+    static const uint8_t CUSTOM_NAME_MAX = 12;
+
+    // nullptr or "" clears it and the curated nickname comes back. Anything
+    // else is stored and becomes what nickname() reports.
+    // The raw indices, for the advert. Both devices ship the same tables,
+    // which is the whole reason four bits was enough to send an outfit.
+    uint8_t nicknameIndex();
+    uint8_t outfitIndex();
+    uint8_t shadesIndex();
+
+    const char* customName();
+    void        setCustomName(const char* n);
+#endif
+
+    // Draws MuleSkin and his speech bubble, and advances his idle
+    // animation/quip timers. Call every tick from the CLEAR screen.
+    // cx = horizontal center. topY = where the bubble row starts (just
+    // below the title bar). availHeight = total vertical room from topY
+    // down to wherever the caller's next element starts (e.g. the status
+    // line) — MuleSkin scales himself up to fill it, so give him
+    // everything that isn't needed for something else.
+    // advance: true = normal single-pass rendering (default, unchanged
+    // behavior). Boards that render in multiple physical bands per
+    // logical frame (no room for a full-screen sprite buffer) call
+    // tick() once per band with the SAME `now`, but must only pass
+    // true on exactly one of those calls -- state mutation (mood
+    // changes, idle-quip rolls, walk/confetti updates, the bubble's
+    // erase-tracking) only happens when advance is true; the actual
+    // pixel drawing runs every call so each band still gets painted.
+    // minScale: normally he never renders below scale 1.0 (keeps his
+    // proportions legible) -- a call site with a genuinely tiny box
+    // (e.g. the raw-scan screen's mini cameo) can lower this floor.
+    // Leave it at the default everywhere else; it changes nothing
+    // about the CLEAR screen's normal sizing.
+    // scanningFx: draws a small radiating "ping" beside his head every
+    // call while true -- purely a function of `now`, no state of its
+    // own, so the caller can flip it on/off between ticks freely (see
+    // ui_rawscan.cpp).
+    // wanderRangePx: -1 (default) leaves Mood::WALK's wander and
+    // Mood::SHOCKED's panicked jitter at their normal behavior (WALK
+    // computes its own range from the full screen width; SHOCKED
+    // doesn't move at all). A caller confined to a small box -- ALERT's
+    // corner cameo, say -- can pass a small positive px bound instead,
+    // which SHOCKED then uses to dart back and forth within that box
+    // instead of standing still while he flails. Doesn't affect WALK's
+    // own full-screen wander; that's unrelated to this screen's ask.
+    // sizePct shrinks him to a percentage of the size this screen's
+    // geometry would otherwise give him, for the SIZE row in Settings. 100
+    // is exactly the old behaviour, byte for byte, so every caller that
+    // does not pass it is unaffected -- only CLEAR does.
+    void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
+              bool advance = true, float minScale = 1.0f, bool scanningFx = false,
+              int wanderRangePx = -1, uint8_t sizePct = 100);
+
+    // Themed one-liner reactions for the raw-scan screen (see
+    // ui_rawscan.cpp), pulled from their own flavor pool instead of
+    // the normal idle-chatter rotation -- call once per actual moment,
+    // not every tick. count is the number of results so far/at finish
+    // (ignored for STARTED); DONE_FOUND with a high count also
+    // triggers his rare party-confetti flourish, the same one
+    // milestone detections and the outfit-unlock easter egg use.
+    enum class ScanMoment { STARTED, HIT, DONE_EMPTY, DONE_FOUND };
+    void scanReaction(ScanMoment moment, uint8_t count = 0);
+
+    // Same pattern as scanReaction(), for HUNT MODE's live gauge (see
+    // ui_hunt.cpp) -- call once per actual moment, not every tick.
+    // STARTED fires once on entering the screen with a fixed
+    // instructional line (same reasoning as ScanMoment::STARTED: the
+    // one place someone learns the body-fade technique, so it always
+    // says the same thing rather than rolling flavor text that might
+    // never mention it). FIRST_SIGNAL fires once the very first RSSI
+    // sample for this target comes in. WARMER/COLDER fire only on an
+    // actual trend change, not every tick the trend happens to still
+    // read that way. HOT fires once when the signal crosses into
+    // "basically on top of it" territory. STALLED fires once if a hunt
+    // runs long without ever reaching HOT -- pure flavor, no state of
+    // its own to track beyond "has this fired yet."
+    enum class HuntMoment { STARTED, FIRST_SIGNAL, WARMER, COLDER, HOT, STALLED };
+    void huntReaction(HuntMoment moment);
+
+    // Fires once when the watch-alert screen appears (see
+    // ui_watchalert.cpp) -- the target you set a WATCH on came back
+    // into range. No STARTED-style fixed line here: by the time anyone
+    // sees this screen they've already long-pressed a result and hit
+    // WATCH, so the mechanic itself was already taught upstream (the
+    // raw-scan/LOG screens' own hint lines).
+    void watchAlertReaction();
+
+    // A lightweight cameo draw for screens that just want him standing
+    // and waving (the boot splash) without the full idle/quip state
+    // machine tick() drives. cx = horizontal center, baseY = where his
+    // feet line up (e.g. just past the boot screen's horizon), scale
+    // sizes him relative to his normal full size (1.0). line, if given,
+    // shows in a static speech bubble above his head.
+    // talking: forces the open/close mouth-flap animation regardless of
+    // whether a real speech bubble is up (default false, unchanged
+    // behavior) -- for a caller drawing its own explanation text
+    // separately (LOG's MORE INFO panel) rather than through line.
+    // wanderRangePx: > 0 makes him patrol back and forth up to that many
+    // px either side of cx, forever, at the same pace tick()'s
+    // Mood::WALK uses. Default 0 leaves him standing still at cx,
+    // unchanged behavior for every existing caller.
+    // waving defaults true, which is the boot splash unchanged. Pass false
+    // for anyone who is going to be on screen long enough that a permanent
+    // wave stops reading as a greeting and starts reading as a stuck frame.
+    // laughing: a faster, taller bob for as long as it is set -- the guest's
+    // half of visitLaugh(), which the host gets through his mood machine and
+    // this cameo has no mood machine to get it through.
+    // listening: the same nod setListening() gives the host, for the same
+    // reason -- this cameo has no mood machine either.
+    // bubbleTail: hang a little pointer off the bubble aimed at him. Off by
+    // default because a lone MuleSkin's bubble can only be his; it earns its
+    // keep when there are two of them and two bubbles taking turns.
+    // The guest's half of a two-MuleSkin set piece -- see visitHighFive() and
+    // friends. NONE is the ordinary cameo. Declared out here rather than with
+    // them because drawWaving() is also the boot splash's, in every build.
+    enum class VisitPose : uint8_t { NONE, HIGH_FIVE, LOW_FIVE, FIST, STARTLED, DANCE,
+                                     PUMP, SLEEPY, STRETCH,
+                                     // The emotes' (see emote_script.h). The last
+                                     // three borrow his detection reactions.
+                                     LAUGH, SALUTE, BOW, HUG, SAD, GRR, CROUCH, PULL,
+                                     WIGGLE, CHEER, SELFIE, HOWL, POINT, STRAIN,
+                                     COVER, LOOK_AROUND, HANDS_UP };
+#if MULESKIN_MESH
+    // The host's half of an emote's beat: any VisitPose, held for `ms`. The
+    // older ones go through the same moods visitReach() and friends use.
+    void visitPose(uint32_t now, uint32_t ms, VisitPose p);
+    // Restart the yawn-and-stretch clock, for a guest told to stretch -- his
+    // cameo has no clock of its own and borrows the host's.
+    void visitStretchClock(uint32_t now);
+    // What he caught last, or UNKNOWN: the "did you see that?" emote's subject.
+    DetectionType lastCaught();
+#endif
+
+    void drawWaving(TFT_eSPI& t, int cx, int baseY, uint32_t now, float scale = 1.0f,
+                    const char* line = nullptr, bool talking = false, int wanderRangePx = 0,
+                    bool waving = true, int bubbleGap = 34, bool laughing = false,
+                    bool listening = false, bool bubbleTail = false,
+                    VisitPose pose = VisitPose::NONE);
+}

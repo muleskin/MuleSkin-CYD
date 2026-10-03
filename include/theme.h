@@ -1,0 +1,677 @@
+// MuleSkin-CYD — MuleSkinWare theme tokens + draw helpers
+// RGB565 values mapped from the user's MuleSkinWare CSS variables
+// (see docs/MULESKINWARE-AESTHETIC.md for the full mapping).
+#pragma once
+#include <TFT_eSPI.h>
+#include "state.h"
+
+class DetectionEngine;
+
+namespace Theme {
+    // Background and chrome — NOT constexpr. These are runtime
+    // variables (default-initialized to the original MuleSkinWare
+    // vaporwave values in theme.cpp) so a theme preset can overwrite
+    // them from the settings menu. Every draw call across the project
+    // already just reads e.g. Theme::BG by name, so swapping the
+    // value here reaches everywhere without touching another file.
+    // See Palette/kPalettes/applyPalette below.
+    extern uint16_t BG;            // #0a000f
+    extern uint16_t TASKBAR;       // #0d001a
+    extern uint16_t PURPLE;        // #b400ff
+    extern uint16_t CYAN;          // #00fff5
+    extern uint16_t PINK;          // #ff2d78
+    extern uint16_t VAPOR_PINK;    // #ff71ce
+    extern uint16_t VAPOR_PURPLE;  // #b967ff
+    extern uint16_t VAPOR_BLUE;    // #01cdfe
+    extern uint16_t VAPOR_YELLOW;  // #fffb96
+    extern uint16_t GREEN;         // #00ff88
+    extern uint16_t AMBER;
+    extern uint16_t RED;
+    // Fixed regardless of theme — raw black/white contrast, not part
+    // of any preset's "personality" colors.
+    constexpr uint16_t WHITE        = 0xFFFF;
+    constexpr uint16_t BLACK        = 0x0000;
+
+    // MuleSkin's fur — real MuleSkin brown, matching the original
+    // talkingsasquach.com drawMuleSkin() palette (not the neon set
+    // above). Deliberately NOT part of the swappable palette — he
+    // should look like MuleSkin no matter which UI theme is active.
+    constexpr uint16_t FUR_DARK     = 0x38C0;  // #3d1800 shadow only
+    constexpr uint16_t FUR_MAIN     = 0x5941;  // #5a2808 body/head fill
+    constexpr uint16_t FUR_LIGHT    = 0x9326;  // #965a32 highlight/outline
+    constexpr uint16_t SKIN_TAN     = 0xF60F;  // #f4c07a face patch
+    constexpr uint16_t SKIN_DARK    = 0xCB88;  // #c87040 ear inner
+
+    // Windows 95/98 system chrome.
+    //
+    // These are NOT the authentic hex values, and that is the whole point.
+    // Written first as the real ones (#c0c0c0 face, #dfdfdf inner lit edge)
+    // the bevel came out lavender with its inner lit ring missing entirely,
+    // because the panel does not round 565 down to RGB332, it TRUNCATES:
+    // R332 = R565 >> 2, G332 = G565 >> 3, B332 = B565 >> 3. #c0c0c0 and
+    // #dfdfdf both truncate to level (6,6,3) -- the same colour -- and (6,6,3)
+    // with only four blue levels is (219,219,255), which is a pale lilac.
+    //
+    // So the ramp is built from levels the framebuffer can actually reach,
+    // and each constant is the 565 value that truncates onto the one wanted:
+    //   HILITE   (7,7,3) = 255,255,255
+    //   LIGHT    (6,6,3) = 219,219,255
+    //   FACE     (5,5,2) = 182,182,170  <- the closest thing to silver here
+    //   SHADOW   (4,4,2) = 146,146,170
+    //   DKSHADOW (0,0,0) = black
+    // Five distinct steps, so all four bevel edges survive the downconvert.
+    //
+    // Fixed like the fur above rather than part of the swappable palette:
+    // silver is silver in every theme, and the whole point of a system
+    // button is that it looks borrowed from a different operating system
+    // than the one it is sitting on.
+    constexpr uint16_t W95_FACE     = 0xB5B6;  // (5,5,2) button face
+    constexpr uint16_t W95_HILITE   = 0xFFFF;  // (7,7,3) outer lit edge
+    constexpr uint16_t W95_LIGHT    = 0xDEFB;  // (6,6,3) inner lit edge
+    constexpr uint16_t W95_SHADOW   = 0x8410;  // (4,4,2) inner shaded edge
+    constexpr uint16_t W95_DKSHADOW = 0x0000;  // (0,0,0) outer shaded edge
+
+    // A full color-theme preset. name is shown in the settings menu.
+    struct Palette {
+        const char* name;
+        uint16_t bg, taskbar, purple, cyan, pink,
+                 vaporPink, vaporPurple, vaporBlue, vaporYellow,
+                 green, amber, red;
+    };
+    static const uint8_t PALETTE_COUNT = 6;
+    extern const Palette kPalettes[PALETTE_COUNT];
+
+    // Overwrites BG/PURPLE/etc. from kPalettes[idx] (clamped). Call
+    // once at boot with the persisted choice, and again whenever the
+    // settings menu changes it.
+    void applyPalette(uint8_t idx);
+
+    // Blends every swappable accent color toward BG by `t` (0..256,
+    // same convention as blend() below -- 0 leaves colors alone, 256
+    // replaces them entirely with BG). Used to show one of the
+    // CLEAR-screen background effects at reduced visual strength
+    // behind another screen's own content (Settings, specifically)
+    // without needing true per-pixel alpha blending, which TFT_eSPI
+    // has no cheap way to do. Returns the ORIGINAL colors (reusing the
+    // Palette struct purely as a save-slot, not as a real preset) so a
+    // matching restorePalette() call can put them back -- nesting
+    // isn't supported, don't call this twice without restoring first.
+    // BG/name aren't touched -- blending BG toward BG is a no-op.
+    Palette dimPaletteForOverlay(uint16_t t);
+    void restorePalette(const Palette& saved);
+
+    // Threat-tinted color for a detection type
+    uint16_t colorFor(DetectionType t);
+
+    // MuleSkinWare titlebar gradient: cyan -> magenta across the bar
+    uint16_t titlebarColor(int x, int w);
+
+    // Linear blend between two RGB565 colors. t is 0..256 (8.8 fixed).
+    uint16_t blend(uint16_t a, uint16_t b, uint16_t t);
+    // Black or white, whichever reads on `fill`. A selected button or tab is
+    // filled with PURPLE and used to keep a white label whatever the theme;
+    // GH0ST's PURPLE is near white, and three other themes' are pale enough
+    // that white on them measured under 2.5:1.
+    uint16_t labelOn(uint16_t fill);
+
+    // Draws the gradient titlebar across the full width, with a 1-px
+    // purple bottom border, centered white text, the settings (hamburger)
+    // button in the top-left corner, and the rotate button in the
+    // top-right corner (unless hidden, see setRotateIconVisible()).
+    void drawTitleBar(TFT_eSPI& t, const char* title);
+    // Where the title bar's right-hand icons begin: the rotate button
+    // and the padlock, whichever are showing right now. The screen width
+    // when neither is. The watch's corner clock stands just left of it.
+    int  titleBarRightIconsX(int w);
+
+    // The chrome every list screen BELOW Settings shares, so they read as
+    // one family with it: a small heading at the top in the colour of the
+    // Settings row that opened them, the same row panels, and a BACK strip
+    // pinned to the bottom edge. Before this each of them had a title that
+    // drawTitleBar() no longer draws, no way back but the gear, and rows
+    // in whatever colour the file happened to use.
+    // The title bar's corner icons: each blanks a box this wide and this
+    // high at its end of the top edge, painted after the screen below.
+    static const int TITLE_ICON_W      = 28;
+    static const int TITLE_ICON_BAND_H = 20;
+    static const int LIST_TOP       = 16;   // under the corner icons
+    static const int LIST_HEADING_H = 14;   // the Settings group header's height
+    static const int PINNED_BACK_H  = 26;
+    // ...and how tall it actually is on THIS panel. The strip is the bottom
+    // button on every menu screen, and those rows draw a size bigger on a
+    // wide panel -- a size-2 BACK under size-3 rows is the one small thing
+    // left on the screen. Size 3 is 24 px of glyph, which 26 cannot hold.
+    // Takes a width rather than a display because two of its callers are hit
+    // tests that are handed a screen size and nothing else.
+    int pinnedBackH(int panelW);
+    void drawListHeading(TFT_eSPI& t, const char* text, uint16_t color);
+
+    // The face speech bubbles are set in. Chosen at compile time by
+    // BUBBLE_FONT: 2 is TFT_eSPI's built-in 16-row font, anything else is a
+    // GFX face named by BUBBLE_GFX_FONT. The GFX faces print from the
+    // baseline, so a caller adds bubbleAscent() to the cursor's y; font 2
+    // prints from the top and reports 0. Every bubble goes through these
+    // four so the face is one decision, made in one place.
+    void bubbleFontOn(TFT_eSPI& t);
+    void bubbleFontOff(TFT_eSPI& t);
+    int  bubbleTextH();      // ascent + descent, the rows a line occupies
+    int  bubbleAscent();
+    void drawListRowPanel(TFT_eSPI& t, int w, int y, int hgt);
+    void drawPinnedBack(TFT_eSPI& t, const char* label);
+    bool pinnedBackHit(int x, int y, int screenW, int screenH);
+
+    // Hides (or restores) the rotate icon drawTitleBar() would
+    // otherwise always draw -- AWOK calls this once at boot with
+    // false, since that board has no rotate button at all (see
+    // main.cpp's rotate handler in loop(), which isn't even compiled
+    // in on that board). Defaults to true (icon shown) for every other
+    // board, unchanged from before this existed.
+    void setRotateIconVisible(bool visible);
+
+    // Hit test for the rotate button drawn by drawTitleBar (top-right
+    // corner of the title bar). The tap target is deliberately bigger
+    // than the visual icon (extends below the title bar) so it's easy
+    // to hit with a finger, not just a stylus.
+    bool rotateButtonHit(int x, int y, int w);
+
+    // Hit test for the settings button drawn by drawTitleBar (top-left
+    // corner — mirrors rotateButtonHit's oversized tap target).
+    bool settingsButtonHit(int x, int y);
+
+    // The padlock, drawn by drawTitleBar only while a PIN is set: it locks the
+    // device on a tap. It sits just left of the rotate icon, or in the rotate
+    // icon's own top-right corner when that one is hidden (AWOK, rotation
+    // locked). lockButtonHit is false when no PIN is set, so the two corner
+    // controls never fight for the same tap. Its oversized target matches the
+    // others'.
+    bool lockButtonHit(int x, int y, int w);
+
+    // MuleSkinWare-style soft button: cyan label, 1-px purple border,
+    // BG fill; pressed = filled purple with white label. textSize
+    // defaults to 1 (every existing caller's original look); a screen
+    // with just one standalone button and room to spare (LOG's MORE
+    // INFO panel's GOT IT) can pass 2 for a more prominent label --
+    // caller's responsibility to size w/h generously enough to fit it.
+    // A short-lived confirmation panel, centred over whatever is beneath it.
+    // For actions that change state without changing screen: tapping IGNORE on
+    // the log's long-press menu closes the menu and otherwise looks exactly
+    // like tapping CANCEL, so without this there is no evidence the tap did
+    // anything at all. `sub` may be nullptr.
+    void showToast(const char* head, const char* sub, uint16_t accent, uint32_t ms = 1500);
+
+    // No-op unless a toast is live. Call last, after the screen has drawn.
+    void drawToast(TFT_eSPI& t, uint32_t now);
+
+    // How big to draw the built-in font on THIS panel.
+    //
+    // The layout is already responsive -- every box, bar and row is sized
+    // from t.width()/t.height() -- but the text inside was not, so on the
+    // 3.5" the boxes grew and the letters did not. It is worse than it
+    // sounds: that panel is 165 pixels to the inch against the 2.8"'s 143,
+    // so the same 8-pixel glyph is physically SMALLER on the bigger screen,
+    // 1.23 mm against 1.42.
+    //
+    // The built-in font scales in whole numbers only, so a 480-wide row is
+    // 80 characters at size 1 or 40 at size 2 -- the 2.8"'s comfortable 53
+    // is not reachable. So this steps up only the smallest text, and only
+    // where a short label has the room: headings, buttons, status. Dense
+    // lists keep size 1 and their row counts with it.
+    //
+    // Keyed on the WIDTH a line actually has, not on which board it is: the
+    // 3.5" in portrait is 320 wide, the same as the 2.8" in landscape, and
+    // should read the same there. Every narrower panel gets `base` back and
+    // nothing about it changes.
+    uint8_t uiTextSize(TFT_eSPI& t, uint8_t base);
+
+    // Menu and list rows. These are already drawn at size 2 everywhere, and
+    // on the 3.5" that is still physically SMALLER than size 2 on the 2.8" --
+    // 165 pixels to the inch against 143 -- so a wide panel steps them to 3.
+    // Every list in this codebase takes its row height from fontHeight(), by
+    // long-standing habit so drawing and hit-testing cannot drift, which
+    // means the rows get taller by themselves and the targets grow with the
+    // letters. Narrow panels get 2 back and nothing about them moves.
+    uint8_t uiMenuTextSize(TFT_eSPI& t);
+
+    void drawButton(TFT_eSPI& t, int x, int y, int w, int h,
+                    const char* label, bool pressed, uint8_t textSize = 1);
+
+    // A real Windows 95/98 push button: silver face, two-pixel bevel, black
+    // system-font label. `sunken` inverts the bevel and nudges the label a
+    // pixel down and right, which is what Win95 itself did and is the whole
+    // reason a pressed button reads as pressed rather than as recoloured.
+    //
+    // Distinct from drawButton() above, which is the vaporwave chrome the
+    // rest of the device uses. Both exist on purpose: this one is for the
+    // controls that are meant to feel like they came out of a system dialog.
+    // The Win95 raised/sunken edge, on its own so everything that wants a
+    // panel draws the SAME one. Two rings: an outer hard edge and an inner
+    // soft one, swapped when `sunk`. Lives here rather than in whichever
+    // screen needed it first -- the payphone had it privately, which is why
+    // the WiFi password board could not have a chassis at all.
+    void drawBevel(TFT_eSPI& t, int x, int y, int w, int h, uint16_t face,
+                   uint16_t lit, uint16_t litSoft, uint16_t shd, uint16_t shdSoft,
+                   bool sunk);
+
+    // drawBevel with the Win95 steel ramp already filled in: the payphone
+    // body, the keyboard chassis, the sunken bezel around a readout. The
+    // ramp is chosen because the authentic #c0c0c0/#dfdfdf pair collapses
+    // into one colour in RGB332 and this one does not.
+    void drawSteelPanel(TFT_eSPI& t, int x, int y, int w, int h, bool sunk = false);
+
+    // A keyboard key in the payphone's steel: the message board and the
+    // WiFi password board share it. `lit` is the key under the finger.
+    void drawSteelKey(TFT_eSPI& t, int x, int y, int w, int h, bool lit);
+    void drawWin95Button(TFT_eSPI& t, int x, int y, int w, int h,
+                         const char* label, bool sunken);
+
+    // Bottom [SCAN][LOG][DESK] button bar, laid out from the current
+    // screen width/height so it adapts to any rotation (landscape or
+    // portrait). Button height is a fixed finger-sized touch target,
+    // independent of screen size. Settings lives in the title bar (see
+    // settingsButtonHit above), not this bar.
+    struct ButtonBarGeom {
+        int y, h;
+        int x[3], w[3];
+    };
+    ButtonBarGeom computeButtonBar(int screenW, int screenH);
+
+    // MAIN is the normal [SCAN][LOG][DESK] bar. SCAN_PICKER relabels the
+    // exact same three slots as [BLE][WIFI][BACK] -- CLEAR's SCAN
+    // button opens this in place rather than switching screens, so the
+    // slot positions (and hitTestButtonBar's ButtonId::SCAN/LOG/CLR
+    // return values) stay identical; only the caller's interpretation
+    // of a hit changes based on which mode it asked to draw.
+    // LOG is the log screen's own bar: [SCAN][LOG][CLR]. The main screen's
+    // third slot is DESK, and clearing the log is only offered where the log
+    // is actually on screen.
+    enum class ButtonBarMode { MAIN, SCAN_PICKER, LOG };
+    void drawButtonBar(TFT_eSPI& t, ButtonId highlighted, ButtonBarMode mode = ButtonBarMode::MAIN);
+    ButtonId hitTestButtonBar(int x, int y, int screenW, int screenH);
+
+    // 1-pixel horizontal scanline (used on the boot screen).
+    void drawScanline(TFT_eSPI& t, int y, uint16_t color = VAPOR_PURPLE);
+
+    // Scroll-position indicator for a scrollable list -- a thin track
+    // spanning the content area's full height plus a brighter "thumb"
+    // sized and positioned proportionally to how much is visible vs.
+    // total, so a user can actually tell there's more content below
+    // (previously nothing on-screen ever hinted a list could scroll).
+    // x is the right-hand edge column it's drawn at; reserve ~10px of
+    // width there in the caller's own row layout so this doesn't
+    // overlap right-aligned row content. Draws nothing at all when
+    // totalItems <= visibleItems -- no indicator when everything
+    // already fits on one screen.
+    void drawScrollbar(TFT_eSPI& t, int x, int y, int h,
+                       int totalItems, int visibleItems, int scrollOffset);
+
+    // The detected thing, drawn at any centre and size. Replaces
+    // drawAlertFx, which anchored its art at a fixed (w/2, h-46) and
+    // repainted the whole panel -- fine when the icon was scenery at the
+    // bottom of the ALERT screen, useless once it had to sit inside a
+    // gauge.
+    //
+    // `s` is a half-size: the art occupies roughly 2s by 2s around
+    // (cx, cy). It is drawn opaquely over whatever is already there and
+    // erases nothing, so the caller owns the background.
+    void drawTypeIcon(TFT_eSPI& t, DetectionType type, int cx, int cy, int s);
+
+    // Animated pulsing border (call once per frame from a ui tick).
+    void drawPulsingBorder(TFT_eSPI& t, uint32_t now, uint16_t a, uint16_t b,
+                           uint8_t thick = 4);
+
+    // Boot-screen vaporwave sunset scene (dusk purple -> magenta ->
+    // sunset orange sky, twinkling stars, a sinking retrowave sun,
+    // drifting seagull silhouettes, and a dark synthwave floor with a
+    // perspective grid) — same visual language as the CSI radar's 3-D
+    // view. yTop/yHoriz/yBottom carve the screen into sky and floor.
+    void drawSunsetSky(TFT_eSPI& t, uint32_t now, int yTop, int yHoriz);
+    void drawSunsetSun(TFT_eSPI& t, int cx, int cy, int r, int yTop, int yHoriz);
+    void drawSeagulls(TFT_eSPI& t, uint32_t now, int yTop, int yHoriz);
+    void drawRetroFloor(TFT_eSPI& t, uint32_t now, int yHoriz, int yBottom);
+    // The boot splash's sunset scene as a full background: sky, sun,
+    // parallax ridgeline, reflective water and the neon grid, composed
+    // into one band-filling effect. See its comment in theme.cpp for
+    // why the reflection is recomputed rather than sampled.
+    // horizonFrac places the waterline within the band. The default
+    // suits a background; the boot splash passes its own so the gulls
+    // and MuleSkin, which are positioned against that line, stay where
+    // they were.
+    void drawSynthwave(TFT_eSPI& t, uint32_t now, int yTop, int yBottom,
+                       float horizonFrac = 0.44f);
+
+
+    // Idle-screen background styles, picked from the settings menu
+    // (see Settings::Background). All four share the same signature —
+    // draw into the band between yStart/yEnd, self-seed static state
+    // on first call, and are safe to call every frame.
+
+    // 20-column digital rain tick. Columns fall at independent
+    // speeds, heads cycle pink/cyan/green, trails fade to BG.
+    // advance: gates state mutation (column position/speed, the rare
+    // glitch-message trigger) to once per logical frame -- see the
+    // matching comment on MuleSkin::tick(). Boards that render in a
+    // single pass never need to touch this (defaults to true).
+    void drawDigitalRain(TFT_eSPI& t, uint32_t now, int yStart, int yEnd, bool advance = true);
+
+    // Classic "flying through space" starfield: points radiate outward
+    // from the band's center, accelerating and brightening as they
+    // approach, then wrap back to the center once they exit the band.
+    void drawStarfield(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
+
+    // After Dark-style flying toasters: a handful of pixel-art toasters
+    // with flapping wings drift up-and-right across the band, wrapping
+    // around when they exit.
+    void drawFlyingToasters(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
+
+    // A handful of simple fish silhouettes drifting side to side at
+    // different depths, with slow rising bubbles.
+    void drawAquarium(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
+
+    // Scrolling fake system log — hacker-movie-style boot chatter,
+    // freshly assembled each line from small word banks, fading out
+    // as it scrolls up and off.
+    void drawTerminalLog(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
+
+    // Fireflies: a meadow at dusk. Dithered sky that swings from sunset to
+    // night, a moon with a per-row halo, a black treeline, fog over the
+    // far field, and fireflies at three depths -- far ones are single
+    // points, near ones are soft blooms that light the grass under them.
+    void drawFireflies(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
+
+    // A run down a corridor of mainframe towers, with a live trace over
+    // the top: x maps across WiFi channels 1-13 and the trace height is
+    // that channel's real activity, so ambient traffic deforms it. A new
+    // entry at the front of the detection log locks onto one building --
+    // it floods with that detection's colour, takes a reticle, and the
+    // feed line names it. The corridor keeps flying either way, which is
+    // the point: the old waterfall showed nothing at all when nothing was
+    // on the air, which is nearly always.
+    void drawGibson(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
+                    const DetectionEngine& eng);
+
+
+    // Classic Doom-style ASCII fire: a coarse heat grid seeded at the
+    // bottom, propagated upward with random decay/drift, rendered
+    // through a black -> red -> orange -> yellow -> white palette.
+    void drawFire(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
+
+    // A tap that landed on the idle background, in screen coordinates.
+    // Backgrounds with something tappable in them consume it and return
+    // true, in which case the caller must NOT also treat the tap as one
+    // of the CLEAR screen gestures. Everything else returns false and
+    // nothing changes.
+    //
+    // Only FIRE uses this today: ten taps on its moon summon a
+    // werewolf. The moon waxes from crescent toward full as the taps
+    // land, which is the only feedback that the count is going up --
+    // without it the egg is unfindable and, worse, unconfirmable when
+    // you are halfway through it.
+    // Draws whichever background Settings::background() currently
+    // selects, into the band yStart..yEnd. CLEAR had this switch inline
+    // for a long time because it was the only screen with an animated
+    // backdrop; ALERT now wants the same one behind it, and a second
+    // copy of an 11-case switch is a second place to forget a new
+    // background. `eng` is only read by SPECTRUM (it needs live RSSI);
+    // `advance` is DIGITAL's once-per-logical-frame guard -- see
+    // drawDigitalRain().
+    // Where the usable bottom of the background band actually is, for
+    // props that need to stand on something. The band runs BEHIND the
+    // detection counters -- CLEAR draws them on top of it afterwards -- so
+    // anything placed at yEnd ends up underneath them. CLEAR sets this to
+    // the top of its counter block; a screen that never calls it gets yEnd,
+    // which is the old behaviour.
+    //
+    // Reset it rather than leaving it set: the value is only right for the
+    // screen that computed it, and the layout changes with rotation.
+    // Two different lines, which used to be one number.
+    //
+    // `y` is what things STAND on -- the row a walking cameo's feet land
+    // on, level with MuleSkin's own. `textTop` is the first row of unoutlined
+    // text below the band, which is how far down a background may keep
+    // painting before it starts eating characters. On CLEAR these were the
+    // same row until the counters were dropped into the footer; they are 9px
+    // apart now. Omit textTop and it follows y, which is what every caller
+    // outside CLEAR wants.
+    void setBackgroundFloor(int y, int textTop = -1);
+    void clearBackgroundFloor();
+
+    // Draws whatever the active background needs placed ON TOP of the
+    // mascot -- currently the werewolf's speech bubble, which drawFire
+    // computes but must not paint, because the background runs before
+    // MuleSkin does. Call it after the mascot and the idle-event
+    // flourishes. Cheap and safe to call on every background: it does
+    // nothing unless something published itself this frame.
+    void drawBackgroundOverlay(TFT_eSPI& t, uint32_t now);
+
+    // VAPOR SHAGGY, drawn with his feet at baseY. `scale` is device pixels
+    // per art pixel: 2 for the cameo that crosses the toasters, 4 for the
+    // pet, which has to be big enough to look like the one talking.
+    // `flip` mirrors him left-to-right. The art faces RIGHT -- his hair
+    // trails behind him, off to the left -- so anything travelling left has
+    // to pass true or he moonwalks.
+    void drawLilGuy(TFT_eSPI& t, int x, int baseY, uint32_t now, uint8_t scale,
+                    bool flip = false);
+
+    // True once, after the lil guy has been tapped mid-stroll on the flying
+    // toasters. main.cpp polls it and unlocks the pet -- same shape as
+    // consumeLodgeKnock() and consumeEyeCatch().
+    bool consumePetUnlock();
+
+    // Microseconds spent in the last drawActiveBackground() call,
+    // exponentially smoothed. Held across screen changes so DIAGNOSTICS
+    // -- which draws no background of its own -- reports the cost of
+    // the animation rather than the cost of itself.
+    uint32_t backgroundUs();
+
+    void drawActiveBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
+                              const DetectionEngine& eng, bool advance = true);
+
+    // Knocks an already-drawn region back so foreground text reads over
+    // it, by blanking evenly spaced rows to BG -- CRT scanlines, not a
+    // true alpha dim. amount is 0 (untouched) to 255 (every row blanked);
+    // in between it picks the row spacing.
+    //
+    // Deliberately NOT a per-pixel readPixel/blend/drawPixel pass. That
+    // version is ~77k round trips for a 320x240 screen every frame, the
+    // same order of cost as the anti-aliased line routine that once ate
+    // three quarters of the starfield's frame budget. Row fills are a
+    // handful of spans per row and land in the same visual place.
+    void dimRegion(TFT_eSPI& t, int x, int y, int w, int h, uint8_t amount);
+
+    bool backgroundTap(int x, int y, uint32_t now);
+
+    // True exactly once after the werewolf has been summoned, then
+    // false again -- the same consume-on-read shape as the detection
+    // engine's watchHitPending(). Lets main.cpp hand the unlock to
+    // MuleSkin without theme.cpp needing to know that outfits exist.
+    bool consumeWerewolfSummon();
+
+    // True once, after the player has tapped the rare gold toaster on the
+    // TOASTERS background. Same consume-once contract as the werewolf
+    // summon above; main.cpp turns it into an outfit unlock.
+    bool consumeToasterCatch();
+
+    // The Aquarium shark, caught on the SECOND touch: the first one only
+    // turns him round. True once per catch, and true again on a catch after
+    // the costume is already yours -- muleskin.cpp decides what that means.
+    bool consumeSharkCatch();
+
+    // True once, after the player has caught TWO eyes in a row on the
+    // STARFIELD background -- the eyeball is one of the eight junk objects
+    // that fly out of the vanishing point, and it only counts while it is
+    // close. Letting a close one leave the screen untapped puts the streak
+    // back to zero. Same consume-once contract as the two above; main.cpp
+    // turns it into the VOID EYE unlock.
+    bool consumeEyeCatch();
+
+    // True once, after five taps on the lodge on the SNOWFALL background --
+    // the same count and the same 2.5 s window the moon uses. Same
+    // consume-once contract as the three above; main.cpp turns it into the
+    // PARKA unlock.
+    bool consumeLodgeKnock();
+    // XYZZY, on the TERMINAL background: the terminal types the word now and
+    // then, and each tap on it is reported here once -- 1, 2, then 3, which is
+    // the YZZERD unlock, then round again. 0 when nothing new was tapped.
+    uint8_t consumeXyzzy();
+    // Bring the word up now instead of on its own clock (console, emulator).
+    void summonXyzzy();
+
+    // The flock's wing, exposed so the CHROME WING outfit can wear the
+    // exact same shape rather than an approximation of it: a curved lobe
+    // with a blunt tip and feather divisions drawn back onto the mass.
+    // Mirror a wing by passing (180 - angDeg) with a negated curl.
+    // `shade` fills the lower half; it defaults to the flock's own grey.
+    void drawWing(TFT_eSPI& t, float sx, float sy, float len, float angDeg,
+                  float flap, float width, uint8_t ndiv,
+                  uint16_t body, uint16_t edge, float curl, float lift,
+                  uint16_t shade = 0xD6DB);
+
+    // Falling snow with a gentle sideways sway, a few larger bright
+    // flakes mixed into a field of smaller dim ones.
+    void drawSnowfall(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
+
+    // Glitchy wordmark renderer for the ALERT screen bottom strip.
+    // Horizontal jitter of +/-2 px every ~150 ms.
+    void drawGlitchText(TFT_eSPI& t, int y, const char* text,
+                        uint16_t color, uint32_t now);
+
+    // Brief CRT-tear overlay drawn on top of an already-fully-drawn
+    // frame right after a screen/rotation change — a few rows get
+    // pixel-shifted sideways, fading out over totalMs. Call every
+    // frame while elapsedMs < totalMs; a no-op once it's expired.
+    void drawTransitionGlitch(TFT_eSPI& t, uint32_t elapsedMs, uint32_t totalMs);
+
+    // Small rotating radar widget for the ALERT screen: a few range
+    // rings, a continuously-rotating sweep, and a blip whose distance
+    // from center reflects signal strength (closer = stronger) at a
+    // bearing that's stable for a given MAC (so it doesn't jump around
+    // between frames of the same alert).
+    void drawSignalRadar(TFT_eSPI& t, int cx, int cy, int r, uint32_t now,
+                        int8_t rssi, float bearingRad);
+
+    // Bangers (SIL OFL) comic-impact display font, baked in as a 1bpp
+    // bitmap glyph set (see include/bangers_font.h) — used for
+    // headline text where the built-in monospace font is too flat.
+    // Covers A-Z, 0-9, space, '!'; anything else is silently skipped.
+    // LG is sized for the boot splash title, MD for the ALERT screen's
+    // "!! DETECTION !!" — pick whichever fits the string in question.
+    enum class BangersSize { LG, MD };
+
+    // x,y is the top-left of the font's ascender box, same convention
+    // as TFT_eSPI's setCursor for the built-in font.
+    void drawBangersText(TFT_eSPI& t, int x, int y, const char* s,
+                        uint16_t color, BangersSize size);
+    // The solid outline behind a headline: the 24-offset trick in ONE pass,
+    // pixel for pixel the same. Draw this in the outline colour, then the
+    // text itself with drawBangersText() on top. See theme.cpp for the why.
+    void drawBangersOutline(TFT_eSPI& t, int x, int y, const char* s, uint16_t color,
+                            BangersSize size, uint8_t radius);
+
+    // Total advance width of s at the given size, for centering —
+    // same role as TFT_eSPI's textWidth().
+    int bangersTextWidth(const char* s, BangersSize size);
+
+    // One LG glyph drawn at any scale, for the desk clock. Sampled rather
+    // than pixel-doubled, so a digit at x1.6 keeps its curves instead of
+    // turning to steps; and never glitched -- a clock that tears is a clock
+    // you cannot read. (x, yTop) is the top-left of the glyph's ascender box,
+    // as for drawBangersText.
+    // `outline` > 0 first draws a keyline that many pixels wide in
+    // `outlineColor`, from the same sampling: the glyph is sampled once and
+    // the outline built from its rows, rather than the whole glyph being
+    // sampled again at every offset.
+    void drawBangersGlyphScaled(TFT_eSPI& t, int x, int yTop, char c, uint16_t color, float scale,
+                                int outline = 0, uint16_t outlineColor = 0);
+    int  bangersGlyphAdvance(char c);    // LG, unscaled
+    int  bangersGlyphInkLeft(char c);    // LG, unscaled: where its ink starts past the pen
+    // The digits' ink, unscaled: its top row inside the ascender box and its
+    // height, so a caller can size a digit by what actually shows.
+    void bangersDigitInk(int& top, int& height);
+
+    // What plays inside the desk clock's plate: 1 digital rain, 2 snow,
+    // 3 flying toasters, 4 fire, 5 starfield, 6 fireflies (0 is nothing). Small, self-contained cousins of the
+    // backgrounds, not the backgrounds themselves -- those keep state for the
+    // whole screen and would scramble if drawn twice a frame. Everything here
+    // is worked out from `now`, so it keeps nothing and can be drawn anywhere.
+    // Clipped to the rectangle it is given.
+    // Fire is the one that has to remember something -- its heat, about 2 KB
+    // at most. It is allocated when fire is picked and let go the moment the
+    // clock draws anything else, or when this is called on leaving the desk.
+    void drawClockBackdrop(TFT_eSPI& t, uint32_t now, int x, int y, int w, int h, uint8_t kind);
+    void releaseClockBackdrop();
+
+    // True during the shared random glitch burst drawBangersText()
+    // already rolls every ~5-10s (see its own comment) -- exposed so
+    // other draw code can layer a coordinated effect onto the exact
+    // same burst instead of running its own independent timer.
+    bool glitchActive();
+
+    // Force-starts a burst right now instead of waiting for the
+    // ambient 5-10s roll, and reschedules the next ambient one from
+    // this point -- lets a screen that wants its own more deliberate
+    // cadence (e.g. ALERT firing one immediately, then again at fixed
+    // offsets) drive the exact same shared burst everything else reads
+    // from, rather than needing a second parallel glitch system.
+    // intensity (0..4, clamped) scales how aggressive THIS burst reads
+    // across every glitch-aware draw call -- jitter range, scanline
+    // dropout rate, static speckle density, burst length, and (level 3+)
+    // a full-screen pixel-shift tear layered on top. Ambient
+    // auto-triggered bursts (nobody called this) always run at a fixed
+    // mild level so idle screens stay consistent; only an explicit
+    // caller can ask for something louder.
+    void triggerGlitchBurst(uint8_t intensity = 1);
+
+    // Scatters a light dusting of bright speckle marks across the
+    // given region -- real TV-static snow, not the deterministic
+    // per-bucket jitter drawBangersText() uses, since this has no
+    // multi-pass outline to stay in sync with (it's meant to be called
+    // once per frame, layered on top of whatever's already drawn).
+    // A no-op whenever glitchActive() is false, so it's safe to call
+    // unconditionally every tick.
+    void drawGlitchStatic(TFT_eSPI& t, int x0, int y0, int x1, int y1);
+
+    // Greedy word-wrap using the currently-set font's real measured
+    // widths (not an assumed char width), so it stays correct even if
+    // the font ever changes. No dynamic allocation -- lines[][48] is a
+    // caller-owned fixed buffer, fine for the short-to-medium strings
+    // this runs on (speech bubbles, the onboarding walkthrough, LOG's
+    // MORE INFO panel) -- a line is force-broken the moment it would
+    // fill that buffer, independent of maxW, so a generous maxW on a
+    // wide panel can't silently truncate a line mid-word. Returns how
+    // many of the up-to-maxLines rows it actually filled; text that
+    // doesn't fit even at maxLines is silently truncated rather than
+    // dropped entirely -- the last row just runs long instead of
+    // losing the rest of the sentence.
+    uint8_t wrapText(TFT_eSPI& t, const char* text, int maxW,
+                     char lines[][48], uint8_t maxLines);
+
+    // Modal "MORE INFO" explanation panel -- shared by LOG's confirm
+    // panel and ALERT's own MORE INFO button (the two screens are never
+    // showing it at the same time, so one implementation is enough).
+    // MuleSkin explains via a lightweight drawWaving() cameo, forced
+    // into his talking-mouth animation and patrolling back and forth
+    // across the panel, rather than standing still -- a one-shot
+    // explanation still reads better with some life in it than a
+    // static pose. typeName is a Bangers-font heading (e.g. "RING") --
+    // pass nullptr to skip it, which the one-time RSSI/confidence
+    // primer page does since it isn't about any one detection type.
+    // w/h are the caller's own screen dimensions (not necessarily
+    // t.width()/height() -- CYD35's two-pass half-height rendering
+    // temporarily changes what those report via setViewport()).
+    void drawInfoPanel(TFT_eSPI& t, int w, int h, uint32_t now,
+                       const char* typeName, const char* text);
+    bool infoPanelHitDismiss(int x, int y, int screenW, int screenH);
+
+    // Which of the ski hill's yeti poses to draw. The sprite has had five
+    // since the hill shipped; the pet could only ever ask for two of them,
+    // which is why he only ever walked and stood.
+    enum class YetiPose : uint8_t { WALK, STAND, NAP, FLINCH };
+
+    // The ski hill's yeti, for anyone who wants him off the hill -- the pet
+    // (pet.h) does. `baseY` is the ground his feet stand on. He is drawn at
+    // the size the hill draws him: no new art, and nothing to scale.
+    void drawYeti(TFT_eSPI& t, int x, int baseY, uint32_t now, YetiPose pose);
+    // How wide and tall he is, so a caller can place him without knowing
+    // how he is built.
+    static const int YETI_W = 36, YETI_H = 42;
+}

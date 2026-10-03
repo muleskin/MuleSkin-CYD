@@ -1,0 +1,32 @@
+# MuleSkin — two-slot partition table for the 16 MB NM-CYD-C5.
+#
+# Same shape and the same reasoning as partitions_ota.csv, which this does not
+# replace: that table is correct for the 4 MB classic CYD and every Xtensa board
+# keeps using it. This one exists only because the C5 carries 16 MB, and a 4 MB
+# table on a 16 MB part wastes three quarters of the flash while still forcing
+# the app to fit in 1.9 MB.
+#
+# nvs and otadata keep the EXACT offsets and sizes the 4 MB table uses
+# (0x9000/0x5000 and 0xe000/0x2000). That is deliberate and it is the whole
+# reason a board's settings, PIN, duress PIN, mesh pairings and MuleSkin stats
+# survive a table change: the bootloader and NVS find them in the same place
+# either way. Do not "tidy" these two lines.
+#
+# App slots are 6 MB each against a ~1.5 MB image, which is far more headroom
+# than the Xtensa boards get. That is not generosity, it is that the C5 build
+# links bigger (Arduino core 3 / IDF 5.5 pull in more than core 2 did) and the
+# space costs nothing here.
+#
+#   0x009000   20 KB  nvs
+#   0x00E000    8 KB  otadata     which slot the bootloader should run
+#   0x010000    6 MB  app0
+#   0x610000    6 MB  app1
+#   0xC10000   64 KB  coredump
+#   0xC20000  ~3.9 MB (free)      unassigned, room for a filesystem later
+#
+# Name,   Type, SubType, Offset,    Size,     Flags
+nvs,      data, nvs,     0x9000,    0x5000,
+otadata,  data, ota,     0xe000,    0x2000,
+app0,     app,  ota_0,   0x10000,   0x600000,
+app1,     app,  ota_1,   0x610000,  0x600000,
+coredump, data, coredump,0xC10000,  0x10000,

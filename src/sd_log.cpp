@@ -1,0 +1,259 @@
+// MuleSkin-CYD — SD log implementation
+#include "sd_log.h"
+#include <SD.h>
+#if defined(FREENOVE_S3)
+// The Freenove S3's slot is wired for SDMMC, not SPI: every card call in this
+// file goes through CARD, which is SD_MMC there and SD everywhere else. Both
+// are an fs::FS, so open/remove/cardSize read the same either way.
+#include <SD_MMC.h>
+#define CARD SD_MMC
+#else
+#define CARD SD
+#endif
+#include <stdio.h>
+// The Phantoms define CYD (they ARE a CYD) but still need this reference,
+// because their touch shares the display's bus and SdLog::begin() has to hand
+// SD the display's own SPI instance -- see the comment on that branch below.
+#if !defined(CYD) || defined(RLPHANTOM) || defined(RLPHANTOM_R)
+#include <TFT_eSPI.h>
+#include <esp_heap_caps.h>
+// The single TFT_eSPI instance main.cpp already owns and has already
+// init()'d by the time SdLog::begin() runs (see the comment below for
+// why AWOK/cyd35 specifically need this reference).
+extern TFT_eSPI tft;
+#endif
+
+// CYD SD card CS — see docs/PINOUT.md. AWOK: CS=14 on the on-board
+// slot, sharing the DISPLAY'S VSPI bus (18/23/19). GPIO5 on this board
+// is TFT_RST — reusing the CYD's CS=5 would fight the display. cyd35
+// shares its display's VSPI bus too (14/13/12, not 18/19/23) but its
+// real SD-slot CS is unconfirmed -- 5 is a placeholder guess (SD has
+// failed to mount on every real unit tested so far regardless).
+//
+// NM-CYD-C5: CS=10, on the DISPLAY's bus (SCK 6, MISO 2, MOSI 7), from
+// RockBase's connections.md. Not 5 -- GPIO5 on this board is the GPS header's
+// UART, and the card simply never answers.
+#if defined(AWOK)
+    #define SD_CS_PIN 14
+#elif defined(NM_CYD_C5)
+    #define SD_CS_PIN 10
+#else
+    #define SD_CS_PIN 5
+#endif
+
+// Room for two open files, not the library's default five. The FAT driver
+// reserves a 4 KB sector buffer per file slot up front, so five slots want a
+// 25 KB block -- more than is left once both radios are up (largest block
+// measured at 18 KB on the RL Phantom). This log has one file open at a time,
+// plus a directory handle while it prunes old days.
+static const uint8_t SD_MAX_FILES = 2;
+
+bool SdLog::begin() {
+    if (_ready) return true;
+#if defined(TWATCH_S3)
+    return false;   // no card slot; GPIO19/20 are the S3's USB pins
+#endif
+#if defined(CROWPANEL7)
+    // A slot, but not brought up in this port: it shares GPIO 4/5/6 with the
+    // I2S amplifier behind a switch on the board (K1), and the tested unit
+    // sits on the amplifier. So no log and no wipe of it here.
+    return false;
+#endif
+    Serial.printf("[sd] mounting: heap %lu, largest block %lu\n", (unsigned long)ESP.getFreeHeap(), (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+#if defined(FREENOVE_S3)
+    // SDMMC on the S3's GPIO matrix. Pins from Freenove's own SDMMC sketch and
+    // the schematic: CLK 38, CMD 40, D0 39, D1 41, D2 48, D3 47, each with a
+    // 10K pull-up on the board. 4-bit first; if a card will not start that
+    // way, 1-bit (CLK/CMD/D0 only) before giving up, and the log says which.
+    SD_MMC.setPins(38, 40, 39, 41, 48, 47);
+    bool mounted = SD_MMC.begin("/sd", false, false, SDMMC_FREQ_DEFAULT, SD_MAX_FILES);
+    if (!mounted) {
+        SD_MMC.end();
+        SD_MMC.setPins(38, 40, 39);
+        mounted = SD_MMC.begin("/sd", true, false, SDMMC_FREQ_DEFAULT, SD_MAX_FILES);
+        if (mounted) Serial.println("[sd] 4-bit did not start; mounted 1-bit");
+    }
+    if (!mounted) {
+#elif defined(CYD35)
+    // (The RL Phantom used to land here too, and its SD card never worked as
+    // a result: the card is on 18/19/23, and the display's SPI engine never
+    // clocked those pins. Its display now runs on HSPI -- see its user setup
+    // -- so it takes the original board's branch below with a bus of its own.)
+    // The RL Phantom landed here for the same reason cyd35 does, and it cost a
+    // tester an evening: its resistive touch chip sits on the DISPLAY's bus, so
+    // the extra pins this attaches corrupt MISO for every touch read afterwards.
+    // The symptom is precise and was reported exactly as described below --
+    // the 4-corner calibration works (it runs BEFORE engine.init() brings SD up)
+    // and touch is dead on the very next screen. Not a bad calibration blob: a
+    // corrupted bus underneath a perfectly good one.
+    //
+    // SD.begin(csPin) defaults its SPIClass& parameter to the Arduino
+    // *global* `SPI` object -- a separate, never-begun C++ instance
+    // from TFT_eSPI's own internal one, even though both ultimately
+    // target the same VSPI hardware. SDFS::begin() (ESP32 core's
+    // SD.cpp) unconditionally calls that object's own spi.begin() with
+    // NO arguments; for a never-begun SPIClass, SPIClass::begin() falls
+    // back to the compiled-in esp32dev board defaults -- SCK=18,
+    // MISO=19, MOSI=23 -- regardless of this board's real shared-bus
+    // pins (14/13/12 here). Root-caused on real cyd35 hardware: those
+    // extra pins get ADDITIONALLY attached to VSPI's signals via the
+    // GPIO matrix (spiAttachSCK() etc. are additive, not exclusive),
+    // corrupting MISO for every touch read afterward even though the
+    // display's write-only path looked completely fine.
+    //
+    // Passing TFT_eSPI's own already-init()'d SPI instance instead
+    // makes SDFS::begin()'s internal spi.begin() call a genuine no-op
+    // (SPIClass::begin() returns immediately if already begun -- see
+    // its own guard), so nothing extra ever gets attached to the bus.
+    //
+    // AWOK deliberately does NOT get this treatment despite sharing
+    // the same VSPI-bus shape: real hardware regression testing showed
+    // its touch stops responding once SD.begin() runs with the shared
+    // instance passed in (SD.begin() still attempts real transactions
+    // over that peripheral even though `begin()` itself becomes a
+    // no-op, and AWOK's touch chip is apparently more sensitive to
+    // that than cyd35's) -- so it keeps the plain no-args SD.begin()
+    // below, same as before this fix existed.
+    if (!SD.begin(SD_CS_PIN, tft.getSPIinstance(), 4000000, "/sd", SD_MAX_FILES)) {
+#elif defined(NM_CYD_C5)
+    // Same shape as cyd35 above, and for the same reason: the card is on the
+    // DISPLAY's SPI bus here (SCK 6, MISO 2, MOSI 7), so it gets TFT_eSPI's
+    // already-begun instance and nothing extra is ever attached to the bus.
+    //
+    // It matters more on this board than the comment above suggests, because
+    // -DRLPHANTOM_R sends it to the #else branch otherwise, and that branch
+    // runs SPI.begin(18, 19, 23, 5) -- pins chosen for the original CYD's
+    // dedicated SD bus. Two separate faults on a C5: those are not this
+    // board's SD pins, so the card never answers (observed:
+    // "Card Failed! cmd: 0x00" and then "no card, or it did not answer"
+    // with a working card inserted); and GPIO23 is this board's TFT_CS, so
+    // the additive GPIO-matrix attach the comment above warns about lands on
+    // the display's own chip select.
+    if (!SD.begin(SD_CS_PIN, tft.getSPIinstance(), 4000000, "/sd", SD_MAX_FILES)) {
+#elif defined(AWOK)
+    if (!SD.begin(SD_CS_PIN, SPI, 4000000, "/sd", SD_MAX_FILES)) {
+#else
+    // Original board only: a genuinely separate, dedicated SD bus (not
+    // shared with the display), so it does need its own explicit begin()
+    // -- SD.begin()'s internal default-pin fallback happens to match
+    // this board's real wiring too, but stay explicit for clarity.
+    SPI.begin(18, 19, 23, SD_CS_PIN);  // SCK, MISO, MOSI, CS
+    if (!SD.begin(SD_CS_PIN, SPI, 4000000, "/sd", SD_MAX_FILES)) {
+#endif
+        // Said out loud either way: a board with no card, or a card on the
+        // wrong pins, ran exactly like one that was logging, and the only
+        // way to tell was to pull the card and look.
+        Serial.println("[sd] no card, or it did not answer: nothing will be logged");
+        _ready = false;
+        return false;
+    }
+    Serial.printf("[sd] card mounted: %llu MB\n", (unsigned long long)(CARD.cardSize() >> 20));
+    _ready = true;
+    openDaily();
+    return true;
+}
+
+void SdLog::openDaily() {
+    if (!_ready) return;
+    uint32_t t = millis();
+    uint32_t day = t / (24UL * 60UL * 60UL * 1000UL);
+    snprintf(_filename, sizeof(_filename), "/MuleSkin-%lu.log", (unsigned long)day);
+#if defined(NM_CYD_C5)
+    // Say what is already on the card for today. Mounting proves the card
+    // answers; it does not prove a single row ever reached it, and until this
+    // line existed the only way to tell the two apart was to pull the card.
+    // Board-gated for the same reason as the branch in logEvent() below.
+    File f = CARD.open(_filename, FILE_READ);
+    if (f) { Serial.printf("[sd] %s: %lu bytes already\n", _filename, (unsigned long)f.size()); f.close(); }
+    else   { Serial.printf("[sd] %s: new file\n", _filename); }
+#endif
+}
+
+void SdLog::logEvent(const Detection& d) {
+    if (!_ready) return;
+    File f = CARD.open(_filename, FILE_APPEND);
+    if (!f) {
+#if defined(NM_CYD_C5)
+        // Once, not once per detection: a card that mounts but cannot be
+        // opened for append reads exactly like a card that was logging, and
+        // begin()'s own comment two screens up says that is the thing to
+        // avoid. A write-protected card, a full one, or a filesystem the
+        // driver mounted but cannot write all land here.
+        //
+        // Board-gated ON PURPOSE. It is worth having on every board and costs
+        // ~288 bytes of flash, but this is a board-port PR: no existing board
+        // should change by a byte on account of it. Lift the guard if you want
+        // it everywhere -- see the note in the PR description.
+        static bool said = false;
+        if (!said) {
+            said = true;
+            Serial.printf("[sd] cannot open %s for append: mounted, but nothing is being logged\n",
+                          _filename);
+        }
+#endif
+        return;
+    }
+    char line[96];
+    char mac[18];
+    snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
+             d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
+    // Sanitize any commas in vendor / name
+    char vendorSafe[12], nameSafe[20];
+    strncpy(vendorSafe, vendorText(d), sizeof(vendorSafe) - 1); vendorSafe[sizeof(vendorSafe)-1] = 0;
+    strncpy(nameSafe,   d.name,   sizeof(nameSafe)   - 1); nameSafe[sizeof(nameSafe)-1]   = 0;
+    for (char* p = vendorSafe; *p; p++) if (*p == ',') *p = '.';
+    for (char* p = nameSafe;   *p; p++) if (*p == ',') *p = '.';
+    snprintf(line, sizeof(line),
+             "%lu,%s,%d,%s,%u,%s,%s\n",
+             (unsigned long)millis(),
+             detectionTypeName(d.type),
+             d.rssi,
+             mac,
+             d.channel,
+             vendorSafe,
+             nameSafe);
+    f.print(line);
+    f.close();
+}
+
+void SdLog::wipe() {
+    if (!_ready) return;
+    // Walk the root and remove every file this firmware writes. Names are
+    // /MuleSkin-YYYYMMDD.log; matching on the prefix takes them all rather
+    // than only today's, which is the whole point of a wipe.
+    File dir = CARD.open("/");
+    if (!dir) return;
+    // Collect first, then remove: deleting while iterating openNextFile() is
+    // not something the FAT driver promises to survive.
+    char victims[16][32];
+    int  n = 0;
+    for (File f = dir.openNextFile(); f && n < 16; f = dir.openNextFile()) {
+        const char* nm = f.name();
+        // name() is with or without a leading slash depending on core version;
+        // match the basename either way.
+        const char* base = nm;
+        for (const char* p = nm; *p; p++) if (*p == '/') base = p + 1;
+        if (strncmp(base, "MuleSkin-", 12) == 0) {
+            snprintf(victims[n], sizeof victims[n], "/%s", base);
+            n++;
+        }
+        f.close();
+    }
+    dir.close();
+    for (int i = 0; i < n; i++) CARD.remove(victims[i]);
+    _filename[0] = '\0';       // force a fresh openDaily() on the next event
+}
+
+void SdLog::tick() {
+    if (!_ready) return;
+    uint32_t now = millis();
+    if (now - _lastFlush > 5000) {
+        _lastFlush = now;
+        // Reopen daily file once an hour (or on day change)
+        static uint32_t lastDayCheck = 0;
+        if (now - lastDayCheck > 3600000) {
+            lastDayCheck = now;
+            openDaily();
+        }
+    }
+}
