@@ -2552,10 +2552,19 @@ static const uint8_t FIXED_COUNTER_TYPES_N =
 // without anybody having to remember it. Twelve is what this row has
 // always drawn, so the layout never grows.
 static const uint8_t MAX_COUNTER_TYPES = FIXED_COUNTER_TYPES_N + 1;
+// Alphabetical by the label the row shows (ALPR, AXON, ... TRACKER), sorted
+// here rather than written in that order above so the beacon column, when
+// it is on, lands in its place among them instead of tacked on the end.
 static uint8_t activeCounterTypes(DetectionType* out) {
     uint8_t n = 0;
     for (; n < FIXED_COUNTER_TYPES_N; n++) out[n] = FIXED_COUNTER_TYPES[n];
     if (Settings::typeEnabled(DetectionType::IBEACON)) out[n++] = DetectionType::IBEACON;
+    for (uint8_t i = 1; i < n; i++) {
+        const DetectionType v = out[i];
+        uint8_t j = i;
+        for (; j > 0 && strcmp(counterLabel(out[j - 1]), counterLabel(v)) > 0; j--) out[j] = out[j - 1];
+        out[j] = v;
+    }
     return n;
 }
 // Portrait (narrow) caps at 4 per row -- see the comment above. Landscape
