@@ -23,7 +23,7 @@ OUT  = os.path.join(HERE, "out", "readmedemo")
 GIF  = os.path.join(HERE, "..", "docs", "demo1.gif")   # docs/demo.gif is the hand-made artwork
 ZOOM = 2
 MS   = 60
-BG   = 10            # SYNTHWAVE
+BG   = 13            # RADAR, the default background
 OUTFIT_VOIDEYE = 12  # OutfitId::VOIDEYE
 RING_FRAMES = 6
 

@@ -31,14 +31,20 @@ namespace Settings {
         // not strip the backdrop, so "boring" still meant a screen full of
         // falling glyphs; this is the rest of that thought.
         BLACK = 11,
-        // The hooded MuleSkin at his computer -- docs/demo.gif's artwork,
-        // ears twitching -- covering the screen. The default on a fresh board.
-        MULESKIN = 12
+        // RETIRED as a main-screen background (replaced by RADAR; load()
+        // moves anyone saved on it): the hooded MuleSkin at his computer,
+        // ears twitching. The artwork lives on as the boot splash.
+        MULESKIN = 12,
+        // docs/radar.gif: a cyan scope, the arm sweeping round once every six
+        // seconds and the weather it finds fading out behind it. Drawn from a
+        // model of the GIF (tools/make_radar.py), not its frames. The default
+        // on a fresh board.
+        RADAR = 13
     };
-    static const uint8_t BACKGROUND_COUNT = 13;
+    static const uint8_t BACKGROUND_COUNT = 14;
 
-    // Whether a background can be reached from the BACKGROUND row right
-    // now. Everything except BLACK always can.
+    // Whether a background can be reached from the BACKGROUND row. Only
+    // RADAR; load() moves a board saved on any other to it.
     bool backgroundSelectable(Background b);
     const char* backgroundName(Background b);
 

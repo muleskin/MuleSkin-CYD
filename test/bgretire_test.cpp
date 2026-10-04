@@ -50,12 +50,19 @@ int main() {
     ck("two laps back never reach it",    !seenBack);
     ck("and it says so when asked",       !Settings::backgroundSelectable(Background::TUNNEL));
 
-    suite("The ring still turns");
-    // The skip is a `continue` in a bounded loop, so the failure mode to
-    // rule out is not "it shows the tunnel" but "it stopped moving".
-    Background before = Settings::background();
+    suite("RADAR is the only background on offer");
+    // The skip is a `continue` in a bounded loop: with one entry left the
+    // failure mode to rule out is a spin or a step off it, not a stuck ring.
     Settings::cycleBackground();
-    ck("cycling still changes the background", Settings::background() != before);
+    ck("cycling forward stays on RADAR", Settings::background() == Background::RADAR);
+    Settings::cyclePrevBackground();
+    ck("and so does cycling back", Settings::background() == Background::RADAR);
+    {
+        int offered = 0;
+        for (uint8_t v = 0; v < Settings::BACKGROUND_COUNT; v++)
+            if (Settings::backgroundSelectable((Background)v)) offered++;
+        ck("exactly one is selectable", offered == 1 && Settings::backgroundSelectable(Background::RADAR));
+    }
 
     suite("A board that had it saved");
     // Written the way an older firmware wrote it -- straight to the key,
@@ -71,23 +78,32 @@ int main() {
     ck("and it lands on something the picker offers",
        Settings::backgroundSelectable(Settings::background()));
 
-    suite("Everything else still loads as saved");
-    // The coercion is a single equality test; a stray >= or a switch on
-    // the wrong value would quietly move the neighbours too.
-    for (uint8_t v = 0; v < Settings::BACKGROUND_COUNT; v++) {
-        if (v == (uint8_t)Background::TUNNEL) continue;
-        if (v == (uint8_t)Background::BLACK)  continue;   // gated on boring mode
+    suite("Every saved background boots to RADAR");
+    // Whatever an older firmware saved -- any of the old choices, or a byte
+    // past the end of the enum -- the board comes up on the one there is.
+    for (uint8_t v = 0; v <= Settings::BACKGROUND_COUNT; v++) {
         Preferences p;
         p.begin("settings", false);
         p.putUChar("bg", v);
         p.end();
         Settings::load();
-        if ((uint8_t)Settings::background() != v) {
-            ck("a neighbouring background was moved", false);
+        if (Settings::background() != Background::RADAR) {
+            ck("a saved background did not move to RADAR", false);
             break;
         }
     }
-    ck("every other saved background survives a reboot", true);
+    ck("all of them land on RADAR", true);
+
+    suite("MULESKIN gave the main screen to RADAR");
+    {
+        Preferences p;
+        p.begin("settings", false);
+        p.putUChar("bg", (uint8_t)Background::MULESKIN);
+        p.end();
+        Settings::load();
+        ck("a board saved on MULESKIN boots to RADAR", Settings::background() == Background::RADAR);
+        ck("and it is not offered any more", !Settings::backgroundSelectable(Background::MULESKIN));
+    }
 
     return report();
 }

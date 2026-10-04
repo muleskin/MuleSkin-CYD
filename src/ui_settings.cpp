@@ -117,7 +117,9 @@ static const SettingsRow APPEARANCE_ROWS[] = {
     SettingsRow::MULESKIN_SIZE, SettingsRow::OUTFIT, SettingsRow::PET,
     SettingsRow::SHADES_COLOR, SettingsRow::BANTER, SettingsRow::AURA,
     // Then how the SCREEN looks.
-    SettingsRow::THEME, SettingsRow::BACKGROUND, SettingsRow::BACKGROUND_LOCK, SettingsRow::BRIGHTNESS,
+    // No LOCK BACKGROUND: with RADAR the only background there is nothing to
+    // cycle away from by accident.
+    SettingsRow::THEME, SettingsRow::BACKGROUND, SettingsRow::BRIGHTNESS,
     SettingsRow::INVERT, SettingsRow::RGB_SWAP, SettingsRow::ROTATION_LOCK,
     // And the one light that is not on the screen at all.
     SettingsRow::STATUS_LIGHT,

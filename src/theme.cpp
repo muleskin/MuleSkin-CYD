@@ -3,6 +3,7 @@
 #include "draw_band.h"
 #include "fast_sprite.h"
 #include "muleskin_art.h"
+#include "radar_art.h"
 #include "frame_prof.h"
 #include "caustic_tile.h"
 #include "lil_guy.h"
@@ -4558,6 +4559,77 @@ void drawArtworkBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd) {
     drawArtwork(t, 0, 0, W, H, (SIZE - sw) / 2, 0, sw, sh, yStart, yEnd, now);
 }
 
+// ---- the RADAR background ------------------------------------------------------
+// docs/radar.gif as a model (include/radar_art.h, tools/make_radar.py): each
+// pixel of the scope is RING (never changes) + LEVEL[BLOB][d], where d is how
+// far behind the sweep arm it lies -- the arm's brightness and the weather's
+// afterglow, both measured from the GIF. Only the scope's box is computed; the
+// rest of the screen is black. Laid out in 320x240 and scaled to cover any
+// other panel, as the GIF itself would be.
+void drawRadarBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd) {
+    using namespace RadarArt;
+    static const int MAXW = 1024;
+    const int W = t.width(), H = t.height();
+    if (W <= 0 || W > MAXW) return;
+    static uint8_t line[MAXW];
+    static int16_t colRx[MAXW];
+    static uint8_t colAx[MAXW];
+    static bool    colRight[MAXW];
+
+    // Cover: the larger scale wins, the excess is cropped equally.
+    const int coverW = (W * REF_H >= H * REF_W) ? W : H * REF_W / REF_H;
+    const int coverH = (W * REF_H >= H * REF_W) ? W * REF_H / REF_W : H;
+    const int ox = (W - coverW) / 2, oy = (H - coverH) / 2;
+    int dx0 = W, dx1 = 0;
+    for (int x = 0; x < W; x++) {
+        const int rx = (x - ox) * REF_W / coverW;
+        colRx[x] = (int16_t)rx;
+        const float fx = (float)rx - CX;
+        int ax = (int)(fx < 0 ? -fx : fx);
+        colAx[x] = (uint8_t)(ax < QUAD_N ? ax : QUAD_N - 1);
+        colRight[x] = fx >= 0;
+        if (rx >= BOX_X && rx < BOX_X + BOX_W) { if (x < dx0) dx0 = x; dx1 = x + 1; }
+    }
+    const uint8_t sweep = (uint8_t)(PHASE + (uint32_t)((uint64_t)(now % PERIOD_MS) * 256u / PERIOD_MS));
+
+    FastSprite* const fs = (s_frameSprite && (TFT_eSPI*)s_frameSprite == &t) ? s_frameSprite : nullptr;
+    for (int y = yStart; y < yEnd; y++) {
+        if (!DrawBand::has(y, y + 1)) continue;
+        const int ry = (y - oy) * REF_H / coverH;
+        if (ry < BOX_Y || ry >= BOX_Y + BOX_H || dx0 >= dx1) {
+            t.drawFastHLine(0, y, W, BLACK);
+            continue;
+        }
+        if (dx0 > 0) t.drawFastHLine(0, y, dx0, BLACK);
+        if (dx1 < W) t.drawFastHLine(dx1, y, W - dx1, BLACK);
+        const float fy = (float)ry - CY;
+        int ay = (int)(fy < 0 ? -fy : fy);
+        if (ay >= QUAD_N) ay = QUAD_N - 1;
+        const bool up = fy < 0;
+        const uint8_t* qrow = QUAD + ay * QUAD_N;
+        const uint8_t* prow = PIXELS + (ry - BOX_Y) * BOX_W - BOX_X;
+        for (int x = dx0; x < dx1; x++) {
+            // atan2 by the quadrant table, mirrored into the other three.
+            const uint8_t q = qrow[colAx[x]];
+            uint8_t a;
+            if (colRight[x]) a = up ? q : (uint8_t)(128 - q);
+            else             a = up ? (uint8_t)(256 - q) : (uint8_t)(128 + q);
+            const uint8_t px = prow[colRx[x]];
+            int lv = (px >> 4) + LEVEL[(px & 0x0F) * 256 + (uint8_t)(sweep - a)];
+            line[x - dx0] = PALETTE[lv > 15 ? 15 : lv];
+        }
+        const int n = dx1 - dx0;
+        if (fs && fs->pushRow332(dx0, y, n, line)) continue;
+        int run = 0;
+        for (int c = 1; c <= n; c++) {
+            if (c == n || line[c] != line[run]) {
+                t.drawFastHLine(dx0 + run, y, c - run, art565(line[run]));
+                run = c;
+            }
+        }
+    }
+}
+
 void drawActiveBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
                           const DetectionEngine& eng, bool advance) {
     const uint32_t bgT0 = micros();
@@ -4593,6 +4665,7 @@ void drawActiveBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
         case Settings::Background::SPECTRUM:   drawGibson(t, now, yStart, yEnd, eng); break;
         case Settings::Background::SYNTHWAVE:  drawSynthwave(t, now, yStart, yEnd); break;
         case Settings::Background::MULESKIN:   drawArtworkBackground(t, now, yStart, yEnd); break;
+        case Settings::Background::RADAR:      drawRadarBackground(t, now, yStart, yEnd); break;
         // Still a fill, not a skip. Every screen that draws a backdrop
         // relies on it to erase the previous frame -- MuleSkin, the pet and
         // the counters all stopped clearing their own footprints once the

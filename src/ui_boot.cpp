@@ -42,21 +42,13 @@ void uiBootTick(TFT_eSPI& t, uint32_t now) {
 
     int w = t.width();
     int h = t.height();
-    int yHoriz = (h * 5) / 8;
 
-    // The same composed scene the SYNTHWAVE background uses -- sky,
-    // sun, ridgeline, reflective water and rungs -- rather than the
-    // four separate calls this used to make. That version predated the
-    // reflection, so the splash was showing a strictly worse sunset
-    // than the background did; this keeps the two from drifting apart
-    // again. Gulls stay layered on top, since they belong to the splash
-    // and not to the background. Redrawn from scratch every frame
-    // (cheap at boot-screen size, and simpler than dirty-rect tracking
-    // for a screen that is only up for 3s). Text below is drawn with a
-    // transparent background so the scene shows through around every
-    // glyph instead of sitting in solid boxes.
-    Theme::drawSynthwave(t, now, 0, h, 5.0f / 8.0f);   // same waterline this screen always had
-    Theme::drawSeagulls(t, now, 0, yHoriz);
+    // The MULESKIN background -- the hooded MuleSkin at his computer, ears
+    // twitching -- behind the whole splash, the same picture the main screen
+    // opens onto. Redrawn every frame (the twitch moves); the text below is
+    // drawn with a transparent background so the picture shows around every
+    // glyph.
+    Theme::drawArtworkBackground(t, now, 0, h);
 
     // Big title, Bangers comic-impact font — landscape-only screen
     // (boot always starts at rotation 1) so the width is never tight.
@@ -65,9 +57,8 @@ void uiBootTick(TFT_eSPI& t, uint32_t now) {
     const char* title = "MULESKIN";
     int tw = Theme::bangersTextWidth(title, Theme::BangersSize::LG);
     int tx = (w - tw) / 2;
-    // 3px black outline. The title sits over a bright sunset now, and
-    // pink-on-orange had almost no separation where the sun passed
-    // behind it. Drawn as a dilation -- the same glyphs at every offset
+    // 3px black outline. The title sits over a picture, and pink needs
+    // separating from whatever is behind it. Drawn as a dilation -- the same glyphs at every offset
     // inside a radius-3 disc -- rather than a rectangular halo, so the
     // stroke follows the letterforms instead of boxing them.
     for (int dy = -3; dy <= 3; dy++) {
@@ -84,8 +75,7 @@ void uiBootTick(TFT_eSPI& t, uint32_t now) {
         t.drawFastHLine(x, 46, 1, Theme::titlebarColor(x, w));
     }
 
-    // TALKING MULESKIN subtitle -- the brand line under the product
-    // name, not just the product name again.
+    // V.03.01 subtitle -- the release, under the MULESKIN wordmark.
     //
     // Chromatic: a white core with cyan and magenta copies split either
     // side, over a hard black drop shadow. The shadow replaces the old
@@ -107,7 +97,7 @@ void uiBootTick(TFT_eSPI& t, uint32_t now) {
     // rectangle. Anything built on it would look correct in one and
     // wrong on the other, and the emulator is where this gets checked.
     t.setTextSize(2);
-    const char* sub = "TALKING MULESKIN";
+    const char* sub = "V.03.01";
     const int sw = t.textWidth(sub);
     const int sx = (w - sw) / 2;
     const int sy = 54;
@@ -150,21 +140,6 @@ void uiBootTick(TFT_eSPI& t, uint32_t now) {
     // Snow over the subtitle's own box. A no-op while glitchActive() is
     // false, so this is safe to call every frame.
     Theme::drawGlitchStatic(t, sx - 4, sy - 2, sx + sw + 4, sy + 18);
-
-    // The artwork, framed, in the band between the subtitle and the
-    // INITIALIZING line -- where the mascot's cameo used to stand. Square,
-    // as big as the band allows, so a taller panel gets a bigger picture.
-    // Skipped in "boring mode", like the cameo it replaced.
-    if (!Settings::boringMode()) {
-        const int top = sy + 16 + 4, bottom = h - 16 - 4;
-        int size = bottom - top;
-        if (size > w - 16) size = w - 16;
-        const int ax = (w - size) / 2;
-        const int ay = top + ((bottom - top) - size) / 2;
-        t.drawRect(ax - 1, ay - 1, size + 2, size + 2, Theme::VAPOR_PURPLE);
-        // The ears twitch: docs/twich.py's, see Theme::drawArtwork().
-        Theme::drawArtworkSquare(t, ax, ay, size, bootEl);
-    }
 
     // INITIALIZING...  vX.Y.Z -- version tacked onto this line rather
     // than given its own row. Everything from the subtitle down to

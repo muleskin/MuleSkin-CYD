@@ -9,7 +9,7 @@ namespace Settings {
 
 static Preferences s_prefs;
 static uint8_t     s_palette    = 0;
-static Background  s_background = Background::DIGITAL;
+static Background  s_background = Background::RADAR;
 static uint16_t    s_mascotPace   = 120;   // PACE: ms between the mascot's steps
 static uint8_t     s_mascotTempo  = 70;    // TEMPO: percent on his durations
 static bool        s_inverted   = false;
@@ -206,6 +206,7 @@ const char* backgroundName(Background b) {
         case Background::SYNTHWAVE: return "SYNTHWAVE";
         case Background::BLACK:     return "BLACK";
         case Background::MULESKIN:  return "MULESKIN";
+        case Background::RADAR:     return "RADAR";
         default:                    return "?";
     }
 }
@@ -414,8 +415,8 @@ void load() {
     // the splash into the same sunset instead of switching to something
     // else the moment onboarding ends. Only affects installs with no
     // saved value; anyone who has ever picked a background keeps theirs.
-    s_background = (Background)s_prefs.getUChar("bg", (uint8_t)Background::MULESKIN);
-    if ((uint8_t)s_background >= BACKGROUND_COUNT) s_background = Background::DIGITAL;
+    s_background = (Background)s_prefs.getUChar("bg", (uint8_t)Background::RADAR);
+    if ((uint8_t)s_background >= BACKGROUND_COUNT) s_background = Background::RADAR;
     s_inverted   = s_prefs.getBool("inv", false);
     s_rgbSwapped = s_prefs.getBool("rgbswap", false);
     s_colorChecked = s_prefs.getBool("colorchk", false);
@@ -459,14 +460,11 @@ void load() {
     // then had boring mode turned off -- or one restored from someone
     // else's settings -- would otherwise boot to a flat screen with the
     // option missing from the ring, and no way to cycle out of it.
-    if (!s_boringMode && s_background == Background::BLACK) {
-        s_background = Background::DIGITAL;
-    }
-    // Same problem, permanent version: TUNNEL is gone from the ring, so a
-    // board that saved it would boot to an unpainted band with no way to
-    // cycle out. Moved to the default rather than to DIGITAL -- it is what a
-    // fresh device shows, and the two look nothing alike.
-    if (s_background == Background::TUNNEL) s_background = Background::SYNTHWAVE;
+    // Only RADAR is offered now (see backgroundSelectable()). A board saved on
+    // anything else -- an older choice, the retired TUNNEL or MULESKIN, BLACK
+    // from boring mode -- comes up on RADAR rather than on a background the
+    // picker can no longer reach or leave.
+    if (!backgroundSelectable(s_background)) s_background = Background::RADAR;
     s_powerSaver   = s_prefs.getBool("pwrOn", DEFAULT_POWER_SAVER);
 #if defined(TWATCH_S3)
     // Once per watch: POWER SAVER on. The default only reaches a watch that
@@ -587,15 +585,11 @@ void cyclePalette() {
 Background background() { return s_background; }
 
 bool backgroundSelectable(Background b) {
-    // TUNNEL is retired and never selectable again -- see the note on the
-    // enum. Everything else about it is deleted; only the number survives,
-    // so that saved bytes keep meaning what they meant.
-    if (b == Background::TUNNEL) return false;
-    // BLACK is the only conditional one, and it is gated on boring mode
-    // rather than hidden behind a second setting: somebody who has already
-    // turned the mascot off is exactly the person who wants the option, and
-    // nobody else would go looking for it.
-    return (b != Background::BLACK) || s_boringMode;
+    // RADAR is the one background on offer. The others keep their numbers --
+    // the choice is saved to NVS as a raw byte -- and their drawing code, but
+    // the BACKGROUND row and the edge taps can only land here, and load()
+    // moves a board saved on any of them to it.
+    return b == Background::RADAR;
 }
 
 // Both directions skip anything not currently selectable, so BLACK simply
@@ -744,7 +738,7 @@ void toggleBoringMode() {
     // is gone from the ring, and without this they would be looking at a
     // flat screen with no way to cycle out of it.
     if (!s_boringMode && s_background == Background::BLACK) {
-        s_background = Background::DIGITAL;
+        s_background = Background::RADAR;
         s_prefs.putUChar("bg", (uint8_t)s_background);
     }
 }

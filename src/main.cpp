@@ -2806,7 +2806,7 @@ static void printBootBanner() {
     // "v1.5.16-dirty" and a commit past a tag as "v1.5.16-3-g554330d", both
     // of which walk the border off the end of the line. Truncated here only;
     // the boot screen and the diary still show the version in full.
-    Serial.printf ("║  |   -   |     TALKING MULESKIN  .  %-13.13s║\n", FIRMWARE_VERSION);
+    Serial.printf ("║  |   -   |     MULESKIN  .  %-13.13s        ║\n", FIRMWARE_VERSION);
     // Same %-34s trick as the version line above: the reason is variable
     // length ("interrupt watchdog" is the longest at eighteen characters)
     // and the right border has to stay put.

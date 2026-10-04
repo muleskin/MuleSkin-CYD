@@ -584,6 +584,9 @@ namespace Theme {
     // The MULESKIN background: the artwork covering the screen, cropped from
     // the top down so the ears stay in, drawn over rows [yStart, yEnd).
     void drawArtworkBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
+    // The RADAR background (include/radar_art.h, from docs/radar.gif via
+    // tools/make_radar.py): the scope covering the screen, arm sweeping.
+    void drawRadarBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
     // The frame buffer drawArtwork() may write into directly. main.cpp's.
     void setFrameSprite(FastSprite* f);
 

@@ -1285,6 +1285,7 @@ static const char* const BG_LINES[][3] = {
     // is how the last set of stale lines got in.
     /* BLACK     */ { "Nothing on the walls today.", "Just us and the dark. Suits me.", "Minimalist phase. It happens." },
     /* MULESKIN  */ { "That's me. My good side, apparently.", "Nice hoodie, right? Mine's better.", "Portrait of the artist at work." },
+    /* RADAR     */ { "Sweep's clean. For now.", "Weather's moving in. Or is it?", "Round and round. Nothing gets past." },
 };
 static_assert(sizeof(BG_LINES) / sizeof(BG_LINES[0]) == Settings::BACKGROUND_COUNT,
               "BG_LINES must have exactly one row per Settings::Background value -- "
