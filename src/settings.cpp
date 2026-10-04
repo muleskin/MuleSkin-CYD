@@ -205,6 +205,7 @@ const char* backgroundName(Background b) {
         case Background::TUNNEL:    return "WIREFRAME TUNNEL";
         case Background::SYNTHWAVE: return "SYNTHWAVE";
         case Background::BLACK:     return "BLACK";
+        case Background::MULESKIN:  return "MULESKIN";
         default:                    return "?";
     }
 }
@@ -413,7 +414,7 @@ void load() {
     // the splash into the same sunset instead of switching to something
     // else the moment onboarding ends. Only affects installs with no
     // saved value; anyone who has ever picked a background keeps theirs.
-    s_background = (Background)s_prefs.getUChar("bg", (uint8_t)Background::SYNTHWAVE);
+    s_background = (Background)s_prefs.getUChar("bg", (uint8_t)Background::MULESKIN);
     if ((uint8_t)s_background >= BACKGROUND_COUNT) s_background = Background::DIGITAL;
     s_inverted   = s_prefs.getBool("inv", false);
     s_rgbSwapped = s_prefs.getBool("rgbswap", false);

@@ -9,6 +9,19 @@ static inline uint8_t to8(uint32_t color) {
     return (uint8_t)((color & 0xE000) >> 8 | (color & 0x0700) >> 6 | (color & 0x0018) >> 3);
 }
 
+bool FastSprite::pushRow332(int32_t x, int32_t y, int32_t w, const uint8_t* px) {
+    if (_bpp != 8 || !s_fast) return false;
+    if (!_created || _vpOoB) return true;
+    x += _xDatum;
+    y += _yDatum;
+    if (y < _vpY || x >= _vpW || y >= _vpH) return true;
+    if (x < _vpX) { px += _vpX - x; w -= _vpX - x; x = _vpX; }
+    if (x + w > _vpW) w = _vpW - x;
+    if (w < 1) return true;
+    memcpy(_img8 + _iwidth * y + x, px, (size_t)w);
+    return true;
+}
+
 void FastSprite::drawPixel(int32_t x, int32_t y, uint32_t color) {
     if (!s_fast || _bpp != 8) { TFT_eSprite::drawPixel(x, y, color); return; }
     if (!_created || _vpOoB) return;

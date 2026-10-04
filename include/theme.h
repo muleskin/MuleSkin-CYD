@@ -7,6 +7,8 @@
 
 class DetectionEngine;
 
+class FastSprite;   // fast_sprite.h -- see Theme::setFrameSprite()
+
 namespace Theme {
     // Background and chrome — NOT constexpr. These are runtime
     // variables (default-initialized to the original MuleSkinWare
@@ -277,9 +279,9 @@ namespace Theme {
 
     // Three slots; hitTestButtonBar answers ButtonId::SCAN/LOG/CLR by slot
     // position whatever is drawn in them (the DEX screen pages with the
-    // outer two). MAIN draws only [LOG] in the middle. LOG is the log
-    // screen's own bar, [LOG][CLR]: clearing the log is only offered where
-    // the log is actually on screen.
+    // outer two). MAIN draws [LOG][IN MEETING] in the middle and right. LOG
+    // is the log screen's own bar, [LOG][CLR]: clearing the log is only
+    // offered where the log is actually on screen.
     enum class ButtonBarMode { MAIN, LOG };
     void drawButtonBar(TFT_eSPI& t, ButtonId highlighted, ButtonBarMode mode = ButtonBarMode::MAIN);
     ButtonId hitTestButtonBar(int x, int y, int screenW, int screenH);
@@ -551,10 +553,13 @@ namespace Theme {
     // Covers A-Z, 0-9, space, '!'; anything else is silently skipped.
     // LG is sized for the boot splash title, MD for the ALERT screen's
     // "!! DETECTION !!" — pick whichever fits the string in question.
-    enum class BangersSize { LG, MD };
+    enum class BangersSize { LG, MD, XL };   // XL: capitals only, for the meeting sign
 
     // x,y is the top-left of the font's ascender box, same convention
     // as TFT_eSPI's setCursor for the built-in font.
+    // drawBangersText() without the glitch bursts, for text that must read
+    // steady -- the IN A MEETING sign.
+    void drawBangersSteady(TFT_eSPI& t, int x, int y, const char* s, uint16_t color, BangersSize size);
     void drawBangersText(TFT_eSPI& t, int x, int y, const char* s,
                         uint16_t color, BangersSize size);
     // The solid outline behind a headline: the 24-offset trick in ONE pass,
@@ -566,6 +571,21 @@ namespace Theme {
     // Total advance width of s at the given size, for centering —
     // same role as TFT_eSPI's textWidth().
     int bangersTextWidth(const char* s, BangersSize size);
+
+    // The MuleSkin artwork (include/muleskin_art.h): source rectangle
+    // (sx, sy, sw, sh) of its square drawn into (x, y, w, h), nearest
+    // neighbour, rows outside [clipY0, clipY1) skipped, the ears twitching on
+    // `el`'s clock (docs/twich.py's cycle). Rows go straight into the frame
+    // buffer when `t` is the sprite registered below, line by line otherwise.
+    void drawArtwork(TFT_eSPI& t, int x, int y, int w, int h, int sx, int sy, int sw, int sh,
+                     int clipY0, int clipY1, uint32_t el);
+    // The whole square at (x, y), `size` px -- the boot splash's picture.
+    void drawArtworkSquare(TFT_eSPI& t, int x, int y, int size, uint32_t el);
+    // The MULESKIN background: the artwork covering the screen, cropped from
+    // the top down so the ears stay in, drawn over rows [yStart, yEnd).
+    void drawArtworkBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
+    // The frame buffer drawArtwork() may write into directly. main.cpp's.
+    void setFrameSprite(FastSprite* f);
 
     // True during the shared random glitch burst drawBangersText()
     // already rolls every ~5-10s (see its own comment) -- exposed so

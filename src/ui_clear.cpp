@@ -1784,8 +1784,13 @@ bool uiClearWatchPillHit(int x, int y) {
            x >= s_wpX && x < s_wpX + s_wpW && y >= s_wpY && y < s_wpY + s_wpH;
 }
 
+bool uiClearMascotShown() {
+    if (!MuleSkin::MASCOT_SHOWN || Settings::boringMode()) return false;
+    return Settings::background() != Settings::Background::MULESKIN || MuleSkin::onboardingActive();
+}
+
 bool uiClearSquadHit(int x, int y) {
-    return s_badgeOn && !Settings::boringMode() &&
+    return s_badgeOn && uiClearMascotShown() &&
            x >= s_badX && x < s_badX + s_badW && y >= s_badY && y < s_badY + s_badH;
 }
 
@@ -2116,7 +2121,7 @@ void uiClearDrawCrowd(TFT_eSPI& t, uint32_t now, const Mesh::SquadMember* crowd,
 // on him has always done, and asking a MuleSkin you own who he is is not a
 // question anybody has.
 bool uiClearCrowdTap(int x, int y, uint32_t now) {
-    if (Settings::boringMode()) return false;
+    if (!uiClearMascotShown()) return false;
     // Newest drawn first: where two overlap, the one in front is the one
     // the finger is on.
     for (int i = (int)s_crowdN - 1; i >= 0; i--) {
@@ -2159,7 +2164,7 @@ static void drawMessageUi(TFT_eSPI& t, uint32_t now, int titleBottom, int mulesk
 }
 
 bool uiClearBubbleHit(int x, int y) {
-    return s_bubbleOn && !Settings::boringMode() &&
+    return s_bubbleOn && uiClearMascotShown() &&
            x >= s_bubX && x < s_bubX + s_bubW && y >= s_bubY && y < s_bubY + s_bubH;
 }
 
@@ -2876,11 +2881,11 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
 #if CROWD_BENCH
     // A test build: the crowd benchmark stands in for the MuleSkins while it
     // runs, and the visit machine sits it out.
-    if (CrowdBench::active() && !Settings::boringMode())
+    if (CrowdBench::active() && uiClearMascotShown())
         CrowdBench::draw(t, now, titleBottom, muleskinBottom);
     else
 #endif
-    if (!Settings::boringMode()) {
+    if (uiClearMascotShown()) {
         // The last argument is the SIZE row in Settings. CLEAR is the only
         // screen that passes it: everywhere else he is a cameo in a box
         // somebody sized deliberately, and shrinking him there would just
@@ -3125,7 +3130,7 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     // depth rather than as an obstruction.
     //
     // Still before the counters, which he never reaches.
-    if (!Settings::boringMode()) Pet::tick(t, now, w, titleBottom, muleskinBottom);
+    if (uiClearMascotShown()) Pet::tick(t, now, w, titleBottom, muleskinBottom);
 
     // Counter lines above the buttons — all 13 detection types, split
     // across counterRows (2 in landscape, capped at 4/row in portrait

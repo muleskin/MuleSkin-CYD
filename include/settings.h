@@ -30,9 +30,12 @@ namespace Settings {
         // already strips MuleSkin, the pet and the idle flourishes. It did
         // not strip the backdrop, so "boring" still meant a screen full of
         // falling glyphs; this is the rest of that thought.
-        BLACK = 11
+        BLACK = 11,
+        // The hooded MuleSkin at his computer -- docs/demo.gif's artwork,
+        // ears twitching -- covering the screen. The default on a fresh board.
+        MULESKIN = 12
     };
-    static const uint8_t BACKGROUND_COUNT = 12;
+    static const uint8_t BACKGROUND_COUNT = 13;
 
     // Whether a background can be reached from the BACKGROUND row right
     // now. Everything except BLACK always can.

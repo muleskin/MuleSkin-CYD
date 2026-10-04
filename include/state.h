@@ -193,7 +193,8 @@ enum class AppState : uint8_t {
     BINGO            = 36, // the detection bingo card, from Settings' BINGO
                             // row. See ui_bingo.h.
     DEX              = 37, // the MULESKIN-DEX, from Settings' row. See ui_dex.h.
-    LORA_CHAT        = 38  // LORA CHATS, from WATCH SETTINGS (MULESKIN_LORA builds). See ui_lorachat.h.
+    LORA_CHAT        = 38, // LORA CHATS, from WATCH SETTINGS (MULESKIN_LORA builds). See ui_lorachat.h.
+    MEETING          = 39  // IN A MEETING: the red sign, from the main screen's bar. See ui_meeting.h.
 };
 
 enum class ButtonId : uint8_t {

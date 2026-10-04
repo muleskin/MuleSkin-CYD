@@ -1,6 +1,8 @@
 // MuleSkin-CYD — theme implementation
 #include "theme.h"
 #include "draw_band.h"
+#include "fast_sprite.h"
+#include "muleskin_art.h"
 #include "frame_prof.h"
 #include "caustic_tile.h"
 #include "lil_guy.h"
@@ -531,8 +533,15 @@ ButtonBarGeom computeButtonBar(int screenW, int screenH) {
 void drawButtonBar(TFT_eSPI& t, ButtonId highlighted, ButtonBarMode mode) {
     ButtonBarGeom g = computeButtonBar(t.width(), t.height());
     drawButton(t, g.x[1], g.y, g.w[1], g.h, "[ LOG ]",  highlighted == ButtonId::LOG);
-    if (mode == ButtonBarMode::LOG)
+    if (mode == ButtonBarMode::LOG) {
         drawButton(t, g.x[2], g.y, g.w[2], g.h, "[ CLR ]", highlighted == ButtonId::CLR);
+    } else {
+        // The bracketed label is 84 px; the 240-wide rotation's slots are
+        // 69, so there it goes without the brackets.
+        t.setTextSize(1);
+        const char* m = (t.textWidth("[ IN MEETING ]") + 6 <= g.w[2]) ? "[ IN MEETING ]" : "IN MEETING";
+        drawButton(t, g.x[2], g.y, g.w[2], g.h, m, highlighted == ButtonId::CLR);
+    }
 }
 
 ButtonId hitTestButtonBar(int x, int y, int screenW, int screenH) {
@@ -4447,6 +4456,108 @@ static void releaseFire() {
     if (s_fireHeat) { free(s_fireHeat); s_fireHeat = nullptr; s_fireInited = false; }
 }
 
+// ---- the MuleSkin artwork -----------------------------------------------------
+// One 320 px RGB332 square (include/muleskin_art.h, from tools/make_boot_art.py)
+// serves the boot splash and the MULESKIN background. Rows are sampled into a
+// line buffer and handed to the frame sprite whole -- 77k pixels a frame for
+// the background, which pixel by pixel would cost more than the rest of the
+// frame put together.
+static FastSprite* s_frameSprite = nullptr;
+void setFrameSprite(FastSprite* f) { s_frameSprite = f; }
+
+// The library's own RGB332 -> RGB565 expansion (TFT_eSPI::color8to16), so a
+// row drawn as lines lands on exactly the bytes a copied one would.
+static inline uint16_t art565(uint8_t c) {
+    static const uint8_t B2TO5[4] = { 0, 10, 21, 31 };
+    return (uint16_t)(((c & 0xE0) << 8) | ((c & 0xC0) << 5) | ((c & 0x1C) << 6) |
+                      ((c & 0x1C) << 3) | B2TO5[c & 0x03]);
+}
+
+static inline int artWrap(int v, int n) { v %= n; return v < 0 ? v + n : v; }
+
+void drawArtwork(TFT_eSPI& t, int x, int y, int w, int h, int sx, int sy, int sw, int sh,
+                 int clipY0, int clipY1, uint32_t el) {
+    using MuleSkinArt::SIZE;
+    static const int MAXW = 1024;
+    if (w <= 0 || h <= 0 || w > MAXW || sw <= 0 || sh <= 0) return;
+    static uint8_t line[MAXW];
+    static int16_t colOf[MAXW];
+    for (int c = 0; c < w; c++) colOf[c] = (int16_t)(sx + c * sw / w);
+
+    // docs/twich.py's ear twitch: a 24-step cycle at 41 ms -- the left ear
+    // flicks out and back, then the right ear in, back and a smaller second
+    // flick. Each ear is a vertical slice of the picture rolled sideways,
+    // fully at the tips and fading to nothing 55% of the way down, so the hood
+    // and shoulders stay put. Shifts are twich.py's, in its 460 px source,
+    // scaled to this 320 px one and rounded rather than truncated, so the
+    // right ear's smaller flicks survive a small picture.
+    const int step = (int)((el / 41) % 24);
+    int left = 0, right = 0;
+    if      (step >= 5  && step <= 7)  left  = -7;
+    else if (step >= 8  && step <= 9)  left  =  3;
+    if      (step >= 14 && step <= 15) right = -5;
+    else if (step >= 16 && step <= 17) right =  5;
+    else if (step >= 18 && step <= 19) right = -3;
+    const int earRows = SIZE * 55 / 100;
+    const int lx0 = SIZE * 20 / 100, mid = SIZE / 2, rx1 = SIZE * 80 / 100;
+    const float k = (float)SIZE / 460.0f;
+
+    FastSprite* const fs = (s_frameSprite && (TFT_eSPI*)s_frameSprite == &t) ? s_frameSprite : nullptr;
+    for (int r = 0; r < h; r++) {
+        const int dy = y + r;
+        if (dy < clipY0 || dy >= clipY1 || !DrawBand::has(dy, dy + 1)) continue;
+        int srow = sy + r * sh / h;
+        if (srow >= SIZE) srow = SIZE - 1;
+        int amtL = 0, amtR = 0;
+        if ((left || right) && srow < earRows) {
+            const float f = (float)(earRows - srow) / (float)earRows;
+            amtL = (int)lroundf((float)left  * k * f * f);
+            amtR = (int)lroundf((float)right * k * f * f);
+        }
+        const uint8_t* src = MuleSkinArt::PIXELS + srow * SIZE;
+        // 1:1 across with nothing rolled -- every background row on a
+        // 320-wide panel outside a twitch -- is a straight copy out of flash.
+        // The sampling loop below cost the background 24 ms a frame on the
+        // CYD; this is the case that needs to be cheap.
+        if (fs && sw == w && amtL == 0 && amtR == 0 && sx >= 0 && sx + w <= SIZE &&
+            fs->pushRow332(x, dy, w, src + sx)) continue;
+        for (int c = 0; c < w; c++) {
+            int sc = colOf[c];
+            // np.roll: what lands here came from `amt` back, wrapped in its slice.
+            if (amtL && sc >= lx0 && sc < mid)      sc = lx0 + artWrap(sc - lx0 - amtL, mid - lx0);
+            else if (amtR && sc >= mid && sc < rx1) sc = mid + artWrap(sc - mid - amtR, rx1 - mid);
+            line[c] = src[sc < 0 ? 0 : sc >= SIZE ? SIZE - 1 : sc];
+        }
+        if (fs && fs->pushRow332(x, dy, w, line)) continue;
+        // Anywhere else (the emulator, a board drawing straight to the panel):
+        // one line per run of a colour.
+        int run = 0;
+        for (int c = 1; c <= w; c++) {
+            if (c == w || line[c] != line[run]) {
+                t.drawFastHLine(x + run, dy, c - run, art565(line[run]));
+                run = c;
+            }
+        }
+    }
+}
+
+void drawArtworkSquare(TFT_eSPI& t, int x, int y, int size, uint32_t el) {
+    drawArtwork(t, x, y, size, size, 0, 0, MuleSkinArt::SIZE, MuleSkinArt::SIZE, y, y + size, el);
+}
+
+void drawArtworkBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd) {
+    using MuleSkinArt::SIZE;
+    const int W = t.width(), H = t.height();
+    // Cover the screen, keeping the aspect: the long side takes the square's
+    // full width, the short side a crop. Cropped from the top down rather
+    // than the middle -- the ears are the top of the picture, and the desk is
+    // what can go.
+    int sw = SIZE, sh = SIZE;
+    if (W >= H) sh = SIZE * H / W;
+    else        sw = SIZE * W / H;
+    drawArtwork(t, 0, 0, W, H, (SIZE - sw) / 2, 0, sw, sh, yStart, yEnd, now);
+}
+
 void drawActiveBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
                           const DetectionEngine& eng, bool advance) {
     const uint32_t bgT0 = micros();
@@ -4481,6 +4592,7 @@ void drawActiveBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
         case Settings::Background::SNOWFALL:   drawSnowfall(t, now, yStart, yEnd); break;
         case Settings::Background::SPECTRUM:   drawGibson(t, now, yStart, yEnd, eng); break;
         case Settings::Background::SYNTHWAVE:  drawSynthwave(t, now, yStart, yEnd); break;
+        case Settings::Background::MULESKIN:   drawArtworkBackground(t, now, yStart, yEnd); break;
         // Still a fill, not a skip. Every screen that draws a backdrop
         // relies on it to erase the previous frame -- MuleSkin, the pet and
         // the counters all stopped clearing their own footprints once the
@@ -8844,8 +8956,10 @@ void drawSignalRadar(TFT_eSPI& t, int cx, int cy, int r, uint32_t now,
 }
 
 static const BangersFont::Glyph* bangersFind(char c, BangersSize size) {
-    const BangersFont::Glyph* table = (size == BangersSize::LG) ? BangersFont::LG_GLYPHS : BangersFont::MD_GLYPHS;
-    uint8_t count = (size == BangersSize::LG) ? BangersFont::LG_GLYPH_COUNT : BangersFont::MD_GLYPH_COUNT;
+    const BangersFont::Glyph* table = (size == BangersSize::LG) ? BangersFont::LG_GLYPHS
+                                    : (size == BangersSize::XL) ? BangersFont::XL_GLYPHS : BangersFont::MD_GLYPHS;
+    uint8_t count = (size == BangersSize::LG) ? BangersFont::LG_GLYPH_COUNT
+                  : (size == BangersSize::XL) ? BangersFont::XL_GLYPH_COUNT : BangersFont::MD_GLYPH_COUNT;
     for (uint8_t i = 0; i < count; i++) {
         if (table[i].ch == c) return &table[i];
     }
@@ -8990,6 +9104,10 @@ static void drawBangersPass(TFT_eSPI& t, const char* s, int x, int y, uint16_t c
         }
         cursorX += g->advance;
     }
+}
+
+void drawBangersSteady(TFT_eSPI& t, int x, int y, const char* s, uint16_t color, BangersSize size) {
+    drawBangersPass(t, s, x, y, color, size, false, 0, 0);
 }
 
 void drawBangersText(TFT_eSPI& t, int x, int y, const char* s, uint16_t color, BangersSize size) {

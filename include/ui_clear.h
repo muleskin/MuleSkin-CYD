@@ -27,6 +27,12 @@ bool     uiMascotStep(uint32_t now, bool advance);
 void     uiMascotStepSet(uint32_t ms);
 uint32_t uiMascotStepMs();
 
+// Whether MuleSkin -- and his pet, his bubble and any visiting MuleSkins --
+// is on the main screen. Never while MuleSkin::MASCOT_SHOWN is off; otherwise
+// not in boring mode, and not over the MULESKIN background, which is a
+// picture of him already, except while the first-boot walkthrough runs.
+bool uiClearMascotShown();
+
 void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
                   bool advance = true);
 

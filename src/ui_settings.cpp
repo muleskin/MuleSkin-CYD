@@ -312,6 +312,13 @@ static uint8_t buildDisplayList(DisplayItem* out) {
         // mode. Showing a permanently-off row for something you have never
         // seen would give the secret away -- and a switch for an aura he
         // does not have yet would be a switch that does nothing.
+        // How he looks and what he does on screen: nothing to set while he is
+        // never drawn (MuleSkin::MASCOT_SHOWN). His NAME stays -- it is what
+        // the squad and messages call this board.
+        if (!MuleSkin::MASCOT_SHOWN &&
+            (r == SettingsRow::MULESKIN_SIZE || r == SettingsRow::OUTFIT || r == SettingsRow::PET ||
+             r == SettingsRow::SHADES_COLOR || r == SettingsRow::AURA || r == SettingsRow::BANTER ||
+             r == SettingsRow::REPLAY_INTRO || r == SettingsRow::SHOW_OFF)) continue;
         if (r == SettingsRow::PET && !MuleSkin::petUnlocked()) continue;
         if (r == SettingsRow::AURA && !MuleSkin::hasAura()) continue;
         // Not a secret, just impossible: a board without a second app slot or

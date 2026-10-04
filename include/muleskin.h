@@ -117,6 +117,15 @@ namespace MuleSkin {
     // is only for replaying it later.
     void replayIntro();
 
+    // Whether the mascot is ever drawn. Off: the hooded-MuleSkin artwork
+    // (the boot splash and the MULESKIN background) is the face of the device
+    // now, and the cartoon is not shown anywhere -- tick() and drawWaving()
+    // draw nothing, hitTest() never hits, the walkthrough and the show-off
+    // parade never start, and main.cpp skips the outfit and pet reward cards.
+    // His state (outfits, counts, diary) is still kept, so turning this back
+    // on brings him back as he was.
+    constexpr bool MASCOT_SHOWN = false;
+
     // True while the walkthrough above is in progress. It runs on top
     // of the normal CLEAR screen — pet-tap, the background-cycle-on-
     // tap, and the button bar all keep working exactly as usual

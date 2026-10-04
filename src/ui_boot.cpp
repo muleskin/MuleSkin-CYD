@@ -2,8 +2,6 @@
 #include "ui_boot.h"
 #include "theme.h"
 #include "settings.h"
-#include "boot_art.h"
-#include "draw_band.h"
 
 // Stamped in by extra_script.py from `git describe` at build time --
 // same macro the Diary screen already reads (see its own guard
@@ -30,59 +28,6 @@ void uiBootInit(TFT_eSPI& t) {
     t.fillRect(0, 0, t.width(), t.height(), Theme::BG);
     s_bootAt      = 0;
     s_glitchStage = 0;
-}
-
-// ---- the artwork ------------------------------------------------------------
-// The hooded MuleSkin at his computer (include/boot_art.h, packed by
-// tools/make_boot_art.py), drawn `size` px square at (x0, y0) with its ears
-// twitching. The twitch is docs/twich.py's, redone per row at draw time rather
-// than stored as frames: a 24-step cycle at 41 ms, the left ear flicking out
-// and back, then the right ear in, back and a smaller second flick. Each ear
-// is a vertical slice of the picture rolled sideways, fully at the tips and
-// fading to nothing 55% of the way down, so the hood and shoulders stay put.
-// Shifts are twich.py's, in its 460 px source, scaled to `size`.
-static void drawBootArt(TFT_eSPI& t, int x0, int y0, int size, uint32_t el) {
-    const int step = (int)((el / 41) % 24);
-    int left = 0, right = 0;
-    if      (step >= 5  && step <= 7)  left  = -7;
-    else if (step >= 8  && step <= 9)  left  =  3;
-    if      (step >= 14 && step <= 15) right = -5;
-    else if (step >= 16 && step <= 17) right =  5;
-    else if (step >= 18 && step <= 19) right = -3;
-
-    const int earRows = (size * 55) / 100;
-    const int lx0 = size * 20 / 100, mid = size / 2, rx1 = size * 80 / 100;
-    const float k = (float)size / 460.0f;
-    for (int y = 0; y < size; y++) {
-        if (!DrawBand::has(y0 + y, y0 + y + 1)) continue;
-        int amtL = 0, amtR = 0;
-        if (y < earRows) {
-            const float f = (float)(earRows - y) / (float)earRows;
-            // Rounded, not truncated as twich.py's int() does: at a third of
-            // its size the right ear's flicks would truncate to nothing.
-            amtL = (int)lroundf((float)left  * k * f * f);
-            amtR = (int)lroundf((float)right * k * f * f);
-        }
-        const uint8_t* row = BootArt::PIXELS + (y * BootArt::SIZE / size) * BootArt::SIZE;
-        int runX = 0;
-        uint16_t runC = 0;
-        for (int x = 0; x <= size; x++) {
-            uint16_t c = 0;
-            if (x < size) {
-                // np.roll: what lands at x came from x - amt, wrapped inside its slice.
-                int sx = x;
-                if (amtL && x >= lx0 && x < mid) sx = lx0 + ((x - lx0 - amtL) % (mid - lx0) + (mid - lx0)) % (mid - lx0);
-                if (amtR && x >= mid && x < rx1) sx = mid + ((x - mid - amtR) % (rx1 - mid) + (rx1 - mid)) % (rx1 - mid);
-                c = BootArt::PALETTE[row[sx * BootArt::SIZE / size]];
-            }
-            // Runs of one colour go out as a single line, not pixel by pixel.
-            if (x == size || (x > runX && c != runC)) {
-                t.drawFastHLine(x0 + runX, y0 + y, x - runX, runC);
-                runX = x;
-            }
-            runC = c;
-        }
-    }
 }
 
 void uiBootTick(TFT_eSPI& t, uint32_t now) {
@@ -217,7 +162,8 @@ void uiBootTick(TFT_eSPI& t, uint32_t now) {
         const int ax = (w - size) / 2;
         const int ay = top + ((bottom - top) - size) / 2;
         t.drawRect(ax - 1, ay - 1, size + 2, size + 2, Theme::VAPOR_PURPLE);
-        drawBootArt(t, ax, ay, size, bootEl);
+        // The ears twitch: docs/twich.py's, see Theme::drawArtwork().
+        Theme::drawArtworkSquare(t, ax, ay, size, bootEl);
     }
 
     // INITIALIZING...  vX.Y.Z -- version tacked onto this line rather

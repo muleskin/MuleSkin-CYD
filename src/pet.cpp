@@ -296,6 +296,7 @@ static void yetiTick(TFT_eSPI& t, uint32_t now, int screenW, int cx, int halfW, 
 }
 
 void tick(TFT_eSPI& t, uint32_t now, int screenW, int bandTop, int bandBottom) {
+    if (!MuleSkin::MASCOT_SHOWN) return;   // his companion goes with him
     const MuleSkin::PetId which = MuleSkin::petChoice();
     if (!MuleSkin::petUnlocked() || which == MuleSkin::PetId::OFF) {
         s_phase  = Phase::AWAY;

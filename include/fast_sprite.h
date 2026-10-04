@@ -98,6 +98,16 @@ public:
 #endif
 
 #if defined(ARDUINO_ARCH_ESP32)
+    // A row of RGB332 bytes -- the buffer's own format -- copied in: the
+    // library's drawFastHLine clipping and viewport datum, a memcpy where it
+    // has a memset. False when this is not the plain 8-bit case (or FAST is
+    // off), so the caller draws the row another way.
+    bool pushRow332(int32_t x, int32_t y, int32_t w, const uint8_t* px);
+#else
+    bool pushRow332(int32_t, int32_t, int32_t, const uint8_t*) { return false; }
+#endif
+
+#if defined(ARDUINO_ARCH_ESP32)
     // FAST OFF on the console: every override hands straight to the library,
     // so the two can be compared on one boot.
     static void setFast(bool on) { s_fast = on; }

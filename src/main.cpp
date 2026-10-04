@@ -62,6 +62,7 @@
 #include "bingo.h"
 #include "dex.h"
 #include "ui_dex.h"
+#include "ui_meeting.h"
 #include "regulars.h"
 #include "notices.h"
 #include "theme.h"            // the crash card on the splash
@@ -574,9 +575,6 @@ const uint16_t      TOUCH_DEBOUNCE_MS = 200;
 // LOG row's WATCH/HUNT) are timed separately and unaffected.
 static const uint32_t TAP_MAX_MS = 500;
 
-// Hidden "unlock every MuleSkin outfit" gesture: hold the bar's empty right
-// slot (where DESK, and before it CLR, used to be) for CLR_UNLOCK_HOLD_MS on
-// the CLEAR screen (see the CLEAR case's touch handling in loop()).
 // The ALERT screen carries real information (type, confidence, MAC,
 // RSSI) — tapping it away is the expected dismiss, but the automatic
 // fallback still needs to actually clear itself in a reasonable time
@@ -1354,12 +1352,22 @@ static void enterPetUnlock() {
 // paths land back on. Returns true if the screen changed.
 static bool maybeEnterOutfitUnlock() {
     uint8_t idx;
-    if (MuleSkin::consumeOutfitUnlock(idx)) { enterOutfitUnlock(idx); return true; }
+    // With the mascot never shown the cards are consumed and dropped: they
+    // are a picture of him in the new outfit, or of him with his pet.
+    if (MuleSkin::consumeOutfitUnlock(idx)) {
+        if (!MuleSkin::MASCOT_SHOWN) return false;
+        enterOutfitUnlock(idx);
+        return true;
+    }
     // The pet after the outfits, not before: catching the lil guy can only
     // earn the companion, but a detection that crosses a threshold at the
     // same moment would have its costume pushed behind a card it has nothing
     // to do with. Whichever is left is picked up on the next poll.
-    if (MuleSkin::consumePetUnlockCard()) { enterPetUnlock(); return true; }
+    if (MuleSkin::consumePetUnlockCard()) {
+        if (!MuleSkin::MASCOT_SHOWN) return false;
+        enterPetUnlock();
+        return true;
+    }
     return false;
 }
 
@@ -1462,6 +1470,13 @@ static void enterWatchAlert() {
 #if defined(CYD35)
     clearSharedFrameBuffer();
 #endif
+}
+
+// IN A MEETING, from the main screen's bar. BACK goes home.
+static void enterMeeting() {
+    state = AppState::MEETING;
+    transitionStart = millis();
+    uiMeetingInit(*canvas);
 }
 
 static void enterLog() {
@@ -2839,6 +2854,7 @@ static void printBootBanner() {
 static void wardriveBegin();
 #endif
 void setup() {
+    Theme::setFrameSprite(&frame);   // see Theme::drawArtwork()
     // Before anything else can allocate: the breadcrumb has to be read out
     // while it is still the previous life's, not this one's.
     crashReportInit();
@@ -4667,6 +4683,22 @@ void loop() {
             }
             break;
         }
+        case AppState::MEETING: {
+            // Nothing takes the sign over: detection runs and logs behind it,
+            // but no ALERT, update window or late news replaces it.
+            drawTwoBand([&](TFT_eSPI& t, bool) { uiMeetingTick(t, now); });
+            // BACK acts on the finger lifting, so the touch that ends here
+            // cannot carry on into the main screen's LOG, which sits in the
+            // same slot.
+            static bool backArmed = false;
+            if (touchJustDown) backArmed = uiMeetingHitBack(tp.x, tp.y, tft.width(), tft.height());
+            if (touchJustUp && backArmed) {
+                backArmed = false;
+                lastTouch = now;
+                enterClear();
+            }
+            break;
+        }
         case AppState::DEX: {
             drawTwoBand([&](TFT_eSPI& t, bool advance) { uiDexTick(t, now, engine, advance); });
             if (touchJustDown) {
@@ -4915,16 +4947,6 @@ void loop() {
             constexpr int32_t  SQ_MOVE_PX = 12;
             constexpr int32_t  SQ_MOVE_PX_SQ = SQ_MOVE_PX * SQ_MOVE_PX;
 
-            // Hidden outfit-unlock gesture: hold the bar's right slot -- an
-            // empty one now, CLR and then DESK before it -- for
-            // CLR_UNLOCK_HOLD_MS. Same tracked-across-frames shape as
-            // MuleSkin's own HELD/PETTED just below: a touch that starts
-            // there is armed for that touch's whole lifetime. Not LOG: its
-            // 1.5 s hold is the touch recalibration, which would win.
-            static bool     clrHoldActive = false;
-            static bool     clrHoldFired  = false;
-            static uint32_t clrHoldStart  = 0;
-            constexpr uint32_t CLR_UNLOCK_HOLD_MS = 4000;
 
             // Long-press NEARBY: open the closest live device. The headline
             // sits on top of MuleSkin, so the same touch is also tracked as a
@@ -4944,16 +4966,15 @@ void loop() {
             // in the branch below -- MuleSkin is drawn well clear of the
             // button row, so the two never really compete in practice.)
             if (touchJustDown) {
-                sqActive = !boring && MuleSkin::hitTest(tp.x, tp.y);
+                // Not where he is not drawn: boring mode, or the MULESKIN
+                // background (see uiClearMascotShown()).
+                sqActive = uiClearMascotShown() && MuleSkin::hitTest(tp.x, tp.y);
                 sqHeld = false;
                 sqPetting = false;
                 sqStartMs = now;
                 sqStartX = tp.x;
                 sqStartY = tp.y;
                 sqLastDx = 0;
-                clrHoldActive = barBtn == ButtonId::CLR;
-                clrHoldFired  = false;
-                clrHoldStart  = now;
                 nbActive = uiClearNearbyHit(tp.x, tp.y);
                 nbStart  = now;
             }
@@ -4970,9 +4991,8 @@ void loop() {
                 // The messages tutorial owns the screen while it runs: every
                 // touch goes to it, so nobody pets MuleSkin, cycles the scene
                 // or clears the log halfway through a sentence. The whole
-                // gesture is claimed, and the bar's long-press disarmed with it.
+                // gesture is claimed.
                 sqActive      = false;
-                clrHoldActive = false;
                 if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
                     lastTouch = now;
                     if (MeshTutor::cardTap(tp.x, tp.y) == MeshTutor::Tap::SKIP) {
@@ -5084,7 +5104,7 @@ void loop() {
                         Theme::showToast("NOTHING NEARBY", "It just left", Theme::CYAN);
                     }
                 }
-            } else if (!boring && tp.valid && sqActive) {
+            } else if (uiClearMascotShown() && tp.valid && sqActive) {
                 int32_t dx = tp.x - sqStartX;
                 int32_t dy = tp.y - sqStartY;
                 // Moving BEFORE the hold threshold is a stroke; moving
@@ -5103,15 +5123,12 @@ void loop() {
                     sqHeld = true;
                     MuleSkin::trigger(MuleSkin::Event::HELD);
                 }
-            } else if (tp.valid && clrHoldActive) {
-                if (!clrHoldFired && (now - clrHoldStart) >= CLR_UNLOCK_HOLD_MS) {
-                    clrHoldFired = true;
-                    MuleSkin::unlockAllOutfits();
-                }
             } else if (tp.valid && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
                 lastTouch = now;
-                // The bar's outer slots are empty on this screen.
+                // The bar's left slot is empty on this screen; the right one is
+                // IN MEETING (ButtonId::CLR is the slot, not the label).
                 if (barBtn == ButtonId::LOG) { MuleSkin::trigger(MuleSkin::Event::LOG_OPENED); enterLog(); }
+                else if (barBtn == ButtonId::CLR) enterMeeting();
                 else if (barBtn == ButtonId::NONE && boring && tp.y >= 20 && !Settings::backgroundLocked()) {
                     // No MuleSkin to tap for this in boring mode — any tap
                     // on the main content area (below the title bar, not
@@ -5138,7 +5155,6 @@ void loop() {
                 }
                 sqActive = false;
             }
-            if (touchJustUp) clrHoldActive = false;
             break;
         }
         case AppState::ALERT: {
@@ -6898,8 +6914,9 @@ void loop() {
         // hides the thing it just found is worse than one with no saver at all.
         const bool alerting = (state == AppState::ALERT || state == AppState::WATCH_ALERT);
         const uint16_t timeoutSec = Settings::screenTimeoutSec();
+        // The meeting sign is there to be read; it never dims.
         bool wantDim = timeoutSec && idleMs > (uint32_t)timeoutSec * 1000UL &&
-                       !(Settings::wakeOnAlert() && alerting);
+                       !(Settings::wakeOnAlert() && alerting) && state != AppState::MEETING;
 #if defined(TWATCH_S3)
         // On the cable the watch stays lit; on battery the timeout always runs
         // (see Settings::screenTimeoutSec), unless it is set to NEVER.

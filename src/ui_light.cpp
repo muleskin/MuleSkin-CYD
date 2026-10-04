@@ -113,6 +113,7 @@ void uiLightTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
         case Settings::Background::SNOWFALL:  Theme::drawSnowfall(t, now, bgTop, bodyBottom); break;
         case Settings::Background::SPECTRUM:  Theme::drawGibson(t, now, bgTop, bodyBottom, eng); break;
         case Settings::Background::SYNTHWAVE: Theme::drawSynthwave(t, now, bgTop, bodyBottom); break;
+        case Settings::Background::MULESKIN:  Theme::drawArtworkBackground(t, now, bgTop, bodyBottom); break;
         case Settings::Background::BLACK:      t.fillRect(0, bgTop, t.width(), bodyBottom - bgTop, Theme::BG); break;
         default:                              Theme::drawDigitalRain(t, now, bgTop, bodyBottom, true); break;
     }

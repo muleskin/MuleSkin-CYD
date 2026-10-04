@@ -1284,6 +1284,7 @@ static const char* const BG_LINES[][3] = {
     // Written anyway: the assert below wants a row, and a placeholder row
     // is how the last set of stale lines got in.
     /* BLACK     */ { "Nothing on the walls today.", "Just us and the dark. Suits me.", "Minimalist phase. It happens." },
+    /* MULESKIN  */ { "That's me. My good side, apparently.", "Nice hoodie, right? Mine's better.", "Portrait of the artist at work." },
 };
 static_assert(sizeof(BG_LINES) / sizeof(BG_LINES[0]) == Settings::BACKGROUND_COUNT,
               "BG_LINES must have exactly one row per Settings::Background value -- "
@@ -1787,6 +1788,7 @@ void setTempo(uint8_t pct) {
 }
 
 void startShowOff() {
+    if (!MASCOT_SHOWN) return;
     s_showOff   = true;
     s_showStart = millis();
     s_showIdx   = 0xFF;          // no step armed yet, so the first one arms
@@ -1811,6 +1813,7 @@ void stopShowOff() {
 bool showOffActive() { return s_showOff; }
 
 bool hitTest(int x, int y) {
+    if (!MASCOT_SHOWN) return false;
     // Generous fixed bounding box (not a pixel-perfect silhouette
     // test) sized off his last known position/scale — good enough for
     // a fingertip, and matches how forgiving every other tap target in
@@ -2153,6 +2156,9 @@ static void advanceOnboarding() {
 
 static void startOnboardingInternal() {
     ensurePrefsLoaded();
+    // The walkthrough is him talking; with him never shown it is marked done
+    // rather than left running invisibly over the main screen.
+    if (!MASCOT_SHOWN) { s_onboardActive = false; s_petPrefs.putBool("onboarded", true); return; }
     s_onboardActive = true;
     s_onboardStep   = 0;
     mood            = Mood::IDLE;
@@ -6891,6 +6897,7 @@ static void drawBody(TFT_eSPI& t, int cx, int hy, int headTopY, uint32_t now, Mo
 void drawWaving(TFT_eSPI& t, int cx, int baseY, uint32_t now, float scale, const char* line,
                 bool talking, int wanderRangePx, bool waving, int bubbleGap, bool laughing,
                 bool listening, bool bubbleTail, VisitPose pose) {
+    if (!MASCOT_SHOWN) return;
     // This cameo is placed by callers that have already reserved room, so
     // there is no region to clamp against.
     s_cameo = true;
@@ -7084,6 +7091,7 @@ static void drawPartyFx(TFT_eSPI& t, uint32_t now, int topY, int availHeight, bo
 void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
           bool advance, float minScale, bool scanningFx, int wanderRangePx,
           uint8_t sizePct) {
+    if (!MASCOT_SHOWN) return;
     s_topLimit = topY;
     scouterTick(now);
     // A property of the caller's screen, not of his mood -- see the arm
