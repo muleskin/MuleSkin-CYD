@@ -177,6 +177,23 @@ Once it is set, the LOG shows the real time of each catch (or the date, for
 one from another day), and the alert card says **AT NIGHT** for anything
 caught between eleven and five.
 
+### Detection pauses while it's on WiFi
+
+Nothing is detected while the board is joined to a network, attacks
+included. To stay associated the radio has to sit on the access point's
+channel, so WIFI TIME, the boot-time update check and UPDATE OVER WIFI turn
+the WiFi sniffer off first (no DEAUTH, EVIL TWIN, pentest-gear or other WiFi
+catches) and stop BLE scanning too (no trackers). The board never stays
+connected: WIFI TIME gives the join 20 seconds and the time server about 6,
+then lets go, and detection resumes the moment the radio is free, so the
+blind spot is a few seconds and at most about 26. An update over WiFi is
+blind for as long as the download and flash take.
+
+One consequence: an evil twin or a deauth flood aimed at the board's own
+join isn't flagged while it happens. A flood still shows up as a join that
+fails ("Could not join" on the WIFI TIME screen), and it's caught as soon as
+scanning resumes if it's still going.
+
 ## The status light
 
 The RGB LED on the back of the 2.8" CYD (on the front of the RL Phantom, and
