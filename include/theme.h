@@ -279,7 +279,7 @@ namespace Theme {
 
     // Three slots; hitTestButtonBar answers ButtonId::SCAN/LOG/CLR by slot
     // position whatever is drawn in them (the DEX screen pages with the
-    // outer two). MAIN draws [LOG][IN MEETING] in the middle and right. LOG
+    // outer two). MAIN draws [WIFI TIME][LOG][IN MEETING]. LOG
     // is the log screen's own bar, [LOG][CLR]: clearing the log is only
     // offered where the log is actually on screen.
     enum class ButtonBarMode { MAIN, LOG };

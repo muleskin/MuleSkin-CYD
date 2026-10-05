@@ -533,14 +533,20 @@ ButtonBarGeom computeButtonBar(int screenW, int screenH) {
 
 void drawButtonBar(TFT_eSPI& t, ButtonId highlighted, ButtonBarMode mode) {
     ButtonBarGeom g = computeButtonBar(t.width(), t.height());
-    drawButton(t, g.x[1], g.y, g.w[1], g.h, "[ LOG ]",  highlighted == ButtonId::LOG);
+    drawButton(t, g.x[1], g.y, g.w[1], g.h, "< LOG >",  highlighted == ButtonId::LOG);
+    if (mode == ButtonBarMode::MAIN) {
+        // Left of LOG: join a saved WiFi network and set the clock.
+        t.setTextSize(1);
+        const char* wt = (t.textWidth("< WIFI TIME >") + 6 <= g.w[0]) ? "< WIFI TIME >" : "WIFI TIME";
+        drawButton(t, g.x[0], g.y, g.w[0], g.h, wt, highlighted == ButtonId::SCAN);
+    }
     if (mode == ButtonBarMode::LOG) {
         drawButton(t, g.x[2], g.y, g.w[2], g.h, "[ CLR ]", highlighted == ButtonId::CLR);
     } else {
         // The bracketed label is 84 px; the 240-wide rotation's slots are
-        // 69, so there it goes without the brackets.
+        // 69, so there it goes without the < >.
         t.setTextSize(1);
-        const char* m = (t.textWidth("[ IN MEETING ]") + 6 <= g.w[2]) ? "[ IN MEETING ]" : "IN MEETING";
+        const char* m = (t.textWidth("< IN MEETING >") + 6 <= g.w[2]) ? "< IN MEETING >" : "IN MEETING";
         drawButton(t, g.x[2], g.y, g.w[2], g.h, m, highlighted == ButtonId::CLR);
     }
 }

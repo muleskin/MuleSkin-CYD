@@ -14,6 +14,8 @@
 #include "ota_wifi.h"
 #include <Arduino.h>
 #include <string.h>
+#include <time.h>
+#include "clock.h"
 
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "sim"
@@ -164,6 +166,20 @@ static SimSaved s_list[SAVED_MAX] = {
 static uint8_t s_n = 3, s_use = 0;
 bool        hasSaved()  { return s_saved && s_n > 0; }
 bool        bootCheck(uint32_t) { return false; }
+// WIFI TIME: done at once, with the host's clock. MULESKINSIM_TIMESYNC=N
+// leaves it in state N instead (1 joining, 2 asking, 5 no join, 6 no answer),
+// for rendering the screen part way.
+static TimeSync s_ts = TimeSync::IDLE;
+bool timeSyncStart() {
+    if (!savedCount()) { s_ts = TimeSync::NO_SAVED; return false; }
+    s_ts = TimeSync::DONE;
+    if (const char* e = getenv("MULESKINSIM_TIMESYNC")) s_ts = (TimeSync)atoi(e);
+    if (s_ts == TimeSync::DONE) Clock::setEpoch((uint32_t)time(nullptr));
+    return true;
+}
+bool        timeSyncBusy()    { return s_ts == TimeSync::JOINING || s_ts == TimeSync::ASKING; }
+TimeSync    timeSyncState()   { return s_ts; }
+const char* timeSyncNetwork() { return s_ts == TimeSync::JOINING ? "" : "MuleSkinNet"; }
 bool        savedPassAt(uint8_t i, char* out, size_t cap) { if (i >= savedCount() || !cap) return false; snprintf(out, cap, "hunter2"); return true; }
 void        forget()    { s_saved = false; s_n = 0; }
 uint8_t     savedCount()           { return s_saved ? s_n : 0; }

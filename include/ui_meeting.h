@@ -1,5 +1,5 @@
 // MuleSkin-CYD — IN A MEETING: a red do-not-disturb sign, from the main
-// screen's [ IN MEETING ] button. BACK at the bottom returns to it.
+// screen's < IN MEETING > button. BACK at the bottom returns to it.
 #pragma once
 #include <TFT_eSPI.h>
 

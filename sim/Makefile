@@ -95,6 +95,7 @@ UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/notices.cpp \
             $(SRC)/ui_dex.cpp \
             $(SRC)/ui_meeting.cpp \
+            $(SRC)/ui_timesync.cpp \
             $(SRC)/detection_info.cpp \
             $(SRC)/device_info.cpp \
             $(SRC)/idle_events.cpp \

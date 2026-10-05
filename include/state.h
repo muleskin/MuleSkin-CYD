@@ -194,7 +194,8 @@ enum class AppState : uint8_t {
                             // row. See ui_bingo.h.
     DEX              = 37, // the MULESKIN-DEX, from Settings' row. See ui_dex.h.
     LORA_CHAT        = 38, // LORA CHATS, from WATCH SETTINGS (MULESKIN_LORA builds). See ui_lorachat.h.
-    MEETING          = 39  // IN A MEETING: the red sign, from the main screen's bar. See ui_meeting.h.
+    MEETING          = 39, // IN A MEETING: the red sign, from the main screen's bar. See ui_meeting.h.
+    TIME_SYNC        = 40  // WIFI TIME: join a saved network, set the clock. See ui_timesync.h.
 };
 
 enum class ButtonId : uint8_t {

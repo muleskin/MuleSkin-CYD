@@ -63,6 +63,7 @@
 #include "dex.h"
 #include "ui_dex.h"
 #include "ui_meeting.h"
+#include "ui_timesync.h"
 #include "regulars.h"
 #include "notices.h"
 #include "theme.h"            // the crash card on the splash
@@ -1752,6 +1753,29 @@ static void enterWifiAdd() {
     transitionStart = millis();
     engine.startRawWifiScan();
     uiWifiAddInit(*canvas);
+}
+
+// WIFI TIME, from the main screen's bar: join a saved network just long
+// enough to set the clock. Detection is paused for it (the radio is shared)
+// and resumed in the TIME_SYNC case the moment the job lets the radio go.
+// With nothing saved it goes to WIFI NETWORKS to add one instead.
+static bool s_timeSyncRadio = false;
+static void enterTimeSync() {
+    if (!OtaWifi::savedCount()) {
+        Theme::showToast("NO WIFI SAVED", "Add yours, then tap WIFI TIME again", Theme::AMBER);
+        enterWifiNets();
+        return;
+    }
+    engine.startUpdateRadio();
+    if (!OtaWifi::timeSyncStart()) {
+        engine.stopUpdateRadio();
+        Theme::showToast("CAN'T START", "The radio is busy -- try again", Theme::AMBER);
+        return;
+    }
+    s_timeSyncRadio = true;
+    state = AppState::TIME_SYNC;
+    transitionStart = millis();
+    uiTimeSyncInit(*canvas);
 }
 
 static void enterHunt() {
@@ -4683,6 +4707,25 @@ void loop() {
             }
             break;
         }
+        case AppState::TIME_SYNC: {
+            drawTwoBand([&](TFT_eSPI& t, bool) { uiTimeSyncTick(t, now); });
+            // Detection back the moment the radio is free.
+            if (s_timeSyncRadio && !OtaWifi::timeSyncBusy()) {
+                engine.stopUpdateRadio();
+                s_timeSyncRadio = false;
+            }
+            // BACK only once the job is over (it is not drawn before), and on
+            // the finger lifting, so the touch cannot carry on into LOG.
+            static bool backArmed = false;
+            if (touchJustDown) backArmed = !OtaWifi::timeSyncBusy() &&
+                                           uiTimeSyncHitBack(tp.x, tp.y, tft.width(), tft.height());
+            if (touchJustUp && backArmed) {
+                backArmed = false;
+                lastTouch = now;
+                enterClear();
+            }
+            break;
+        }
         case AppState::MEETING: {
             // Nothing takes the sign over: detection runs and logs behind it,
             // but no ALERT, update window or late news replaces it.
@@ -5125,10 +5168,11 @@ void loop() {
                 }
             } else if (tp.valid && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
                 lastTouch = now;
-                // The bar's left slot is empty on this screen; the right one is
-                // IN MEETING (ButtonId::CLR is the slot, not the label).
+                // Left WIFI TIME, middle LOG, right IN MEETING (ButtonId names
+                // the slot, not the label).
                 if (barBtn == ButtonId::LOG) { MuleSkin::trigger(MuleSkin::Event::LOG_OPENED); enterLog(); }
                 else if (barBtn == ButtonId::CLR) enterMeeting();
+                else if (barBtn == ButtonId::SCAN) enterTimeSync();
                 else if (barBtn == ButtonId::NONE && boring && tp.y >= 20 && !Settings::backgroundLocked()) {
                     // No MuleSkin to tap for this in boring mode — any tap
                     // on the main content area (below the title bar, not

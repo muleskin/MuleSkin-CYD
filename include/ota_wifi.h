@@ -106,6 +106,19 @@ void connectSaved();
 // False when there is no saved network, or nothing came back in time.
 bool bootCheck(uint32_t budgetMs);
 
+// ---- WIFI TIME: the main screen's button ------------------------------
+// Joins a saved network only long enough to set the clock -- the one marked
+// USE, or with several saved, the best of them in a quick scan -- on a task
+// of its own so the screen keeps drawing, then lets go of the network. The
+// caller pauses detection first (DetectionEngine::startUpdateRadio) and
+// resumes it once timeSyncBusy() is false. Refuses while an update owns the
+// radio, and with nothing saved (state NO_SAVED).
+enum class TimeSync : uint8_t { IDLE, JOINING, ASKING, DONE, NO_SAVED, NO_JOIN, NO_ANSWER, NO_MEMORY };
+bool        timeSyncStart();
+bool        timeSyncBusy();
+TimeSync    timeSyncState();
+const char* timeSyncNetwork();   // empty until it has picked one
+
 const char* network();          // the one being joined or used
 const char* latestVersion();    // meaningful from READY on
 bool        upToDate();

@@ -64,6 +64,8 @@
 #include "ui_squad.h"
 #include "ui_invite.h"
 #include "ui_meeting.h"
+#include "ui_timesync.h"
+#include "ota_wifi.h"
 #include "ui_update.h"
 #include "ui_wifipass.h"
 #include "ui_outfit_unlock.h"
@@ -681,6 +683,7 @@ int main(int argc, char** argv) {
         else if (screen == "squadupdate") uiSquadUpdateTick(frame, t, engine);
         else if (screen == "invite")   uiInviteTick(frame, t, engine);
         else if (screen == "meeting")  uiMeetingTick(frame, t);
+        else if (screen == "timesync") uiTimeSyncTick(frame, t);
         else if (screen == "wifipass") uiWifiPassTick(frame, t);
         else if (screen == "petunlock" || screen == "unlock") uiOutfitUnlockTick(frame, t, engine);
         else if (screen == "sysprops") uiSysPropsTick(frame, t, engine);
@@ -793,6 +796,7 @@ int main(int argc, char** argv) {
     else if (screen == "nudge")      { const uint8_t v[3] = { 1, 7, 6 }; uiNudgeInit(frame, "BIGFOOT", v, 30, 0); }
     else if (screen == "squadupdate") uiSquadUpdateInit(frame);
     else if (screen == "meeting")    uiMeetingInit(frame);
+    else if (screen == "timesync")   { OtaWifi::timeSyncStart(); uiTimeSyncInit(frame); }
     else if (screen == "invite") {
         // --pose N picks the page: 0 offering, 1 asked, 2 code, 3 sending, 4 joined,
         // 5 failed, 6 waiting, 7 done, 8 done with the other board's answer.

@@ -1733,6 +1733,26 @@ static int16_t drawCornerClock(TFT_eSPI& t, int w) {
     return (int16_t)(x - 3 - 4);
 }
 #endif
+#if !defined(TWATCH_S3)
+// Every other board: the same clock, at the top centre, once the time is real
+// (WIFI TIME on the bar sets it). Returns where the WATCH pill's free span
+// must end, so a pill sits left of the clock rather than under it.
+static int16_t drawCornerClock(TFT_eSPI& t, int w) {
+    if (!Clock::trusted()) return -1;
+    char hm[8], tm[12];
+    bool pm = false;
+    Clock::formatTime(hm, sizeof hm, true, &pm);
+    snprintf(tm, sizeof tm, "%s %s", hm, pm ? "PM" : "AM");
+    t.setTextSize(2);
+    const int tw = t.textWidth(tm) - 2;   // no spacing column after the last glyph
+    const int x = (w - tw) / 2;
+    t.fillRect(x - 3, 0, tw + 6, 20, TFT_BLACK);
+    t.setTextColor(Theme::CYAN, TFT_BLACK);
+    t.setCursor(x, 3);
+    t.print(tm);
+    return (int16_t)(x - 3 - 4);
+}
+#endif
 static int16_t s_wpX = 0, s_wpY = 0, s_wpW = 0, s_wpH = 0;
 
 // spanR: the right end of the free span. -1 keeps the old fixed reserve for
@@ -2855,9 +2875,9 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     Theme::drawActiveBackground(t, now, 0, h, eng, advance);
     Theme::clearBackgroundFloor();
     FrameProf::lap(FrameProf::BG);
-#if defined(TWATCH_S3)
     // Under everything that moves: see drawCornerClock().
     if (DrawBand::has(0, titleBottom)) s_cornerClockPillR = drawCornerClock(t, w);
+#if defined(TWATCH_S3)
     twatchGpsBadge(t);   // under the bubbles too
 #if MULESKIN_LORA
     twatchLoraBadge(t);

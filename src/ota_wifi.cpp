@@ -878,6 +878,83 @@ void connectSaved() {
     connectSavedAt(k >= 0 ? (uint8_t)k : s_use);
 }
 
+// ---- WIFI TIME ---------------------------------------------------------------
+namespace {
+volatile TimeSync s_ts     = TimeSync::IDLE;
+TaskHandle_t      s_tsTask = nullptr;
+char              s_tsSsid[33] = "";
+
+void tsRun(void*) {
+    const uint32_t t0 = millis();
+    // Which network: the boot check's rule -- with one saved, that one; with
+    // several, a quick passive scan, the one marked USE if it is in range,
+    // else the strongest of the rest.
+    uint8_t pick = s_use;
+    if (s_n > 1) {
+        const int found = WiFi.scanNetworks(false, false, true, 130);
+        int8_t best = -1, bestRssi = -127;
+        for (int j = 0; j < found; j++) {
+            const int8_t k = savedIndexOf(WiFi.SSID(j).c_str());
+            if (k < 0) continue;
+            if (k == (int8_t)s_use) { best = k; bestRssi = 127; }
+            else if (WiFi.RSSI(j) > bestRssi) { bestRssi = (int8_t)WiFi.RSSI(j); best = k; }
+        }
+        WiFi.scanDelete();
+        if (best >= 0) pick = (uint8_t)best;
+    }
+    strncpy(s_tsSsid, s_list[pick].ssid, sizeof s_tsSsid - 1);
+    s_tsSsid[sizeof s_tsSsid - 1] = '\0';
+    char pass[65] = "";
+    passAt(pick, pass, sizeof pass);
+    Serial.printf("[time] joining %s\n", s_tsSsid);
+    WiFi.begin(s_tsSsid, pass[0] ? pass : nullptr);
+    memset(pass, 0, sizeof pass);
+    const uint32_t tj = millis();
+    wl_status_t st = WiFi.status();
+    while (st != WL_CONNECTED && millis() - tj < JOIN_TIMEOUT_MS) {
+        if (st == WL_CONNECT_FAILED) break;
+        delay(100);
+        st = WiFi.status();
+    }
+    if (st != WL_CONNECTED) {
+        setResult((int8_t)pick, st == WL_NO_SSID_AVAIL ? SavedResult::NOT_FOUND : SavedResult::BAD_PASSWORD);
+        s_ts = TimeSync::NO_JOIN;
+    } else {
+        setResult((int8_t)pick, SavedResult::JOINED);
+        s_ts = TimeSync::ASKING;
+        Clock::syncStart();
+        s_ts = Clock::syncWait(6000) ? TimeSync::DONE : TimeSync::NO_ANSWER;
+    }
+    Clock::syncStop();
+    // Off the network, but the station mode stays up: detection sniffs on it.
+    WiFi.disconnect(false, false);
+    char clk[24];
+    Clock::formatClock(clk, sizeof clk);
+    Serial.printf("[time] %s in %lu ms (%s)\n",
+                  s_ts == TimeSync::DONE ? "set" : s_ts == TimeSync::NO_JOIN ? "no join" : "no answer",
+                  (unsigned long)(millis() - t0), clk);
+    s_tsTask = nullptr;
+    vTaskDelete(nullptr);
+}
+}  // namespace
+
+bool timeSyncStart() {
+    if (s_tsTask || s_task || s_state != State::OFF) return false;
+    readSaved();
+    if (!s_n) { s_ts = TimeSync::NO_SAVED; return false; }
+    s_ts = TimeSync::JOINING;
+    s_tsSsid[0] = '\0';
+    if (xTaskCreatePinnedToCore(tsRun, "wifitime", 6144, nullptr, 1, &s_tsTask, 1) != pdPASS) {
+        s_tsTask = nullptr;
+        s_ts = TimeSync::NO_MEMORY;
+        return false;
+    }
+    return true;
+}
+bool        timeSyncBusy()    { return s_tsTask != nullptr; }
+TimeSync    timeSyncState()   { return s_ts; }
+const char* timeSyncNetwork() { return s_tsSsid; }
+
 const char* network()       { return s_ssid; }
 const char* latestVersion() { return s_latest; }
 bool        upToDate()      { return s_latest[0] && strcmp(s_latest, FIRMWARE_VERSION) == 0; }
