@@ -24,48 +24,16 @@
 #include <string>
 #include <vector>
 
-#ifdef __EMSCRIPTEN__
-// Browser backing store. localStorage rather than IDBFS on purpose:
-// save() is called from inside every put*(), synchronously, and
-// localStorage is synchronous too -- so the file-backed logic below
-// keeps its exact shape and only swaps where the bytes land. IDBFS is
-// the more "correct" Emscripten answer, but FS.syncfs is async: it
-// would need a debounce plus a visibilitychange handler and would still
-// drop the last write if the tab were killed.
-//
-// The blob is the same "<type> <key> <value>" text the native path
-// writes, which is already plain ASCII, so nothing needs encoding.
-//
-// DECLARED here, DEFINED once in main_wasm.cpp. EM_JS emits its symbols
-// into every translation unit that sees it, so putting the bodies in
-// this header makes the link fail with a duplicate symbol for every
-// .cpp that includes it.
-extern "C" {
-int  muleskinsim_nvs_read(const char* key, char* buf, int cap);
-void muleskinsim_nvs_write(const char* key, const char* val);
-}
-#endif
-
 class Preferences {
 public:
     bool begin(const char* ns, bool) {
         _ns = ns ? ns : "";
         _path.clear();
-#ifdef __EMSCRIPTEN__
-        // Always on in the browser: there is no shell to set the env var
-        // from, and a demo that replays the colour check and the whole
-        // walkthrough on every page load is a worse demo. _path is a
-        // localStorage key here, not a filesystem path. Scoped per
-        // namespace, same as the one-file-per-namespace native layout.
-        _path = "muleskinsim.nvs." + _ns;
-        load();
-#else
         const char* dir = getenv("MULESKINSIM_NVS");
         if (dir && *dir) {
             _path = std::string(dir) + "/" + _ns + ".nvs";
             load();
         }
-#endif
         return true;
     }
     void end() {}
@@ -171,9 +139,6 @@ private:
     // identifiers with no spaces, and only string values can contain
     // anything interesting -- they're last on the line, so splitting on
     // the first two spaces is enough and nothing needs escaping.
-    // Serialising to a string first is what lets the browser and the
-    // native path share one format -- the only thing that differs below
-    // is where the blob is put.
     std::string serialize() const {
         std::string out;
         char line[576];
@@ -188,14 +153,10 @@ private:
     void save() const {
         if (_path.empty()) return;
         const std::string blob = serialize();
-#ifdef __EMSCRIPTEN__
-        muleskinsim_nvs_write(_path.c_str(), blob.c_str());
-#else
         FILE* f = fopen(_path.c_str(), "wb");
         if (!f) return;
         fwrite(blob.data(), 1, blob.size(), f);
         fclose(f);
-#endif
     }
 
     void deserialize(const std::string& blob) {
@@ -228,16 +189,6 @@ private:
 
     void load() {
         _b.clear(); _u.clear(); _ui.clear(); _s.clear(); _sh.clear();
-#ifdef __EMSCRIPTEN__
-        std::vector<char> buf(1024);
-        int n = muleskinsim_nvs_read(_path.c_str(), buf.data(), (int)buf.size());
-        if (n < 0) return;                       // key absent -- first run
-        if (n + 1 > (int)buf.size()) {           // outgrew the initial guess
-            buf.assign(n + 1, 0);
-            if (muleskinsim_nvs_read(_path.c_str(), buf.data(), (int)buf.size()) < 0) return;
-        }
-        deserialize(std::string(buf.data()));
-#else
         FILE* f = fopen(_path.c_str(), "rb");
         if (!f) return;
         std::string blob;
@@ -246,7 +197,6 @@ private:
         while ((got = fread(chunk, 1, sizeof(chunk), f)) > 0) blob.append(chunk, got);
         fclose(f);
         deserialize(blob);
-#endif
     }
 
     std::string _ns, _path;

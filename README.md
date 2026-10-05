@@ -12,14 +12,8 @@ sweeping radar scope behind the main screen, full-screen ALERT cards, and
 headlines in Orbitron.
 
 <p align="center">
-  <a href="https://MuleSkin.com/emulator/" title="Drive it in your browser">
-    <img src="docs/demo.gif" width="280"
-         alt="MuleSkin seen from behind: a hooded figure with mule ears sitting at a computer in a dark room, ears twitching">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://MuleSkin.com/emulator/"><b>Drive the real firmware in your browser &rarr;</b></a>
+  <img src="docs/demo.gif" width="280"
+       alt="MuleSkin seen from behind: a hooded figure with mule ears sitting at a computer in a dark room, ears twitching">
 </p>
 
 ## What it detects
@@ -109,7 +103,7 @@ Three steps:
 1. Install [PlatformIO](https://platformio.org/) (CLI or VS Code extension).
 2. Clone the repo:
    ```sh
-   git clone https://github.com/skizzophrenic/MuleSkin-CYD
+   git clone https://github.com/muleskin/MuleSkin-CYD
    cd MuleSkin-CYD
    ```
 3. Build and flash:
@@ -411,13 +405,12 @@ MuleSkin-CYD/
 │   ├── make_radar.py             (docs/radar.gif -> radar_art.h)
 │   └── gen_headline_font.py      (Orbitron -> bangers_font.h)
 ├── test/                         (host tests -- `make -C test`, no framework)
-└── sim/                          (PC emulator — compiles src/ natively)
-    ├── Makefile                  (`make` for the CLI, `make wasm` for the web build)
+└── sim/                          (PC simulator — compiles src/ natively)
+    ├── Makefile                  (`make` builds the simulator)
     ├── *.h                       (Arduino/TFT_eSPI/NVS shims)
-    ├── make_readme_demo.py       (renders an emulator clip, docs/demo1.gif)
+    ├── make_readme_demo.py       (renders a simulator clip, docs/demo1.gif)
     ├── make_invite_demo.py       (renders the ADD TO SQUAD clip above)
-    ├── make_social.py            (renders the repo's social preview card)
-    └── web/                      (the browser build)
+    └── make_social.py            (renders the repo's social preview card)
 ```
 
 ## License
@@ -448,7 +441,7 @@ generic ALPR and the Google tracker network are best-effort — see
 [docs/DETECTIONS.md](docs/DETECTIONS.md) for per-signature provenance and
 the confidence each one earns.
 
-Verified on real hardware. There is also a PC emulator in `sim/` that
+Verified on real hardware. There is also a PC simulator in `sim/` that
 compiles the actual `src/` against shims, and a host test suite in `test/`
 (`make -C test`) covering the decoders, the signature tables and the
-emulator's own fidelity to the display library.
+simulator's own fidelity to the display library.

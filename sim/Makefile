@@ -154,46 +154,6 @@ LIVE_SRCS := $(SRC)/main.cpp \
 # without including it themselves and rely on that being implicit.
 LIVE_FLAGS := -include $(SIM_DIR)/Arduino.h -include $(INC)/cyd_user_setup.h
 
-# ---- WebAssembly ----------------------------------------------------
-# The same sources as muleskinsim-live, compiled for the browser. The port
-# is small only because every platform dependency already lives behind a
-# shim header here: no threads, no sockets, no filesystem, and the
-# framebuffer was already a plain array. main_wasm.cpp swaps the native
-# harness's stdin/stdout protocol for exported functions.
-#
-# Needs emsdk on PATH:  source ~/emsdk/emsdk_env.sh
-WASM_SRCS := $(UI_SRCS) \
-             $(SRC)/main.cpp \
-             $(SRC)/cap_touch.cpp \
-             $(SRC)/touch_cal.cpp \
-             $(SIM_DIR)/main_wasm.cpp \
-             $(SIM_DIR)/detection_sim.cpp
-WASM_DIR  := web
-WASM_OUT  := $(WASM_DIR)/muleskinsim.js
-# -Os over -O2: this ships over the wire, and the emulator spends its
-# time waiting on requestAnimationFrame rather than on compute.
-# ALLOW_MEMORY_GROWTH because the frame sprite is allocated at runtime.
-#
-# NOTE: no -sEXPORT_ES6 here, so the output is a CLASSIC script that
-# assigns a global (var MuleSkinSim = ...) and has no ES exports. web/
-# index.html must therefore load it with a plain <script src>, not an
-# `import` -- an import of a file with no exports fails at module link
-# time, so nothing in the page runs and it silently sits on its
-# "booting" placeholder with a black canvas. If you add -sEXPORT_ES6=1,
-# change index.html back to an import in the same commit.
-# -DMULESKIN_MESH=1 as the native build has it. It was missing, so the web
-# emulator compiled every MuleSkinMesh screen out and never showed the feature
-# that every shipping board has had since v1.5.23.
-WASM_FLAGS := -std=c++17 -Os -I$(SIM_DIR) -I$(INC) -DMULESKIN_MESH=1 \
-              -Wno-unused-parameter \
-              -include $(SIM_DIR)/Arduino.h \
-              -include $(INC)/cyd_user_setup.h \
-              -sALLOW_MEMORY_GROWTH=1 \
-              -sMODULARIZE=1 -sEXPORT_NAME=MuleSkinSim \
-              -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPU8,UTF8ToString,stringToUTF8,lengthBytesUTF8 \
-              -sENVIRONMENT=web,node \
-              --closure 0
-
 BIN      := muleskinsim
 LIVE_BIN := muleskinsim-live
 
@@ -221,12 +181,6 @@ endif
 
 all: $(BIN) $(LIVE_BIN)
 live: $(LIVE_BIN)
-wasm: $(WASM_OUT)
-
-$(WASM_OUT): $(WASM_SRCS) $(wildcard $(SIM_DIR)/*.h) $(wildcard $(INC)/*.h)
-	@command -v em++ >/dev/null || { echo "em++ not found -- run: source ~/emsdk/emsdk_env.sh"; exit 1; }
-	@mkdir -p $(WASM_DIR)
-	em++ $(WASM_FLAGS) -o $@ $(WASM_SRCS)
 
 $(OBJ_DIR)/ui/%.o: %.cpp Makefile
 	@mkdir -p $(dir $@)
@@ -261,6 +215,6 @@ clean:
 	# Leftovers from the old single-shot build, which Apple clang gave
 	# debug bundles; the object build never makes them.
 	rm -rf $(BIN).dSYM $(LIVE_BIN).dSYM
-	rm -rf out .nvs $(WASM_DIR)/muleskinsim.js $(WASM_DIR)/muleskinsim.wasm
+	rm -rf out .nvs
 
-.PHONY: all live wasm shots clean
+.PHONY: all live shots clean

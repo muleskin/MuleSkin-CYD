@@ -68,7 +68,7 @@ Rotation lives in the top-right corner of the title bar — tap to cycle through
 
 ## Something's broken. Where do I yell about it?
 
-[Open an issue](https://github.com/skizzophrenic/MuleSkin-CYD/issues). Tell me what board you've got, what you expected, what actually happened, and ideally a screenshot or the serial log if you can grab one. I read these. I fix things. Usually within the same session, if we're being honest, because I have the attention span of a golden retriever and apparently unlimited caffeine.
+[Open an issue](https://github.com/muleskin/MuleSkin-CYD/issues). Tell me what board you've got, what you expected, what actually happened, and ideally a screenshot or the serial log if you can grab one. I read these. I fix things. Usually within the same session, if we're being honest, because I have the attention span of a golden retriever and apparently unlimited caffeine.
 
 ## Can I contribute?
 

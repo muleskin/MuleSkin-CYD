@@ -38,7 +38,7 @@ pipx install platformio
 ## Get the code
 
 ```sh
-git clone https://github.com/skizzophrenic/MuleSkin-CYD
+git clone https://github.com/muleskin/MuleSkin-CYD
 cd MuleSkin-CYD
 ```
 
