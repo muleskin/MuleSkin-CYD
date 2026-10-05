@@ -8,18 +8,18 @@
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0a000f;
-    --taskbar:#0d001a;
-    --panel:rgba(13,0,26,0.85);
-    --cyan:#00fff5;
-    --pink:#ff2d78;
-    --purple:#b400ff;
-    --vapor-pink:#ff71ce;
-    --vapor-purple:#b967ff;
-    --vapor-blue:#01cdfe;
-    --vapor-yellow:#fffb96;
-    --green:#00ff88;
-    --text:#e8e8ff;
+    --bg:#00060f;
+    --taskbar:#000a1a;
+    --panel:rgba(0,10,26,0.85);
+    --cyan:#00e5ff;
+    --pink:#ff1744;
+    --purple:#2979ff;
+    --vapor-pink:#ff6d00;
+    --vapor-purple:#448aff;
+    --vapor-blue:#00b0ff;
+    --vapor-yellow:#ffab40;
+    --green:#18ffff;
+    --text:#e3f2ff;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -28,8 +28,8 @@
     font-family:'Share Tech Mono', monospace;
     color:var(--text);
     background:
-      radial-gradient(ellipse at 50% -10%, rgba(180,0,255,0.35), transparent 55%),
-      linear-gradient(180deg, #150022 0%, #0a000f 45%, #05000a 100%);
+      radial-gradient(ellipse at 50% -10%, rgba(41,121,255,0.35), transparent 55%),
+      linear-gradient(180deg, #00122a 0%, #00060f 45%, #00040a 100%);
     overflow-x:hidden;
     position:relative;
   }
@@ -60,7 +60,7 @@
   /* Synthwave horizon grid, fixed to the bottom of the viewport */
   .horizon{
     position:fixed; left:0; right:0; bottom:0; height:38vh;
-    background:linear-gradient(180deg, transparent 0%, rgba(180,0,255,0.12) 100%);
+    background:linear-gradient(180deg, transparent 0%, rgba(41,121,255,0.12) 100%);
     overflow:hidden;
     z-index:0;
     pointer-events:none;
@@ -70,14 +70,14 @@
     position:absolute; left:50%; bottom:-20%; width:220%; height:140%;
     transform:translateX(-50%) perspective(220px) rotateX(60deg);
     background-image:
-      repeating-linear-gradient(90deg, rgba(0,255,245,0.35) 0, rgba(0,255,245,0.35) 2px, transparent 2px, transparent 60px),
-      repeating-linear-gradient(0deg, rgba(255,45,120,0.3) 0, rgba(255,45,120,0.3) 2px, transparent 2px, transparent 40px);
+      repeating-linear-gradient(90deg, rgba(0,229,255,0.35) 0, rgba(0,229,255,0.35) 2px, transparent 2px, transparent 60px),
+      repeating-linear-gradient(0deg, rgba(255,23,68,0.3) 0, rgba(255,23,68,0.3) 2px, transparent 2px, transparent 40px);
   }
   .horizon::after{
     content:"";
     position:absolute; left:0; right:0; top:0; height:2px;
     background:linear-gradient(90deg, var(--cyan), var(--vapor-pink), var(--vapor-purple), var(--cyan));
-    box-shadow:0 0 12px 2px rgba(0,255,245,0.6);
+    box-shadow:0 0 12px 2px rgba(0,229,255,0.6);
   }
 
   header, main, footer{ position:relative; z-index:2; }
@@ -96,7 +96,7 @@
     -webkit-background-clip:text;
     background-clip:text;
     color:transparent;
-    text-shadow:0 0 30px rgba(180,0,255,0.35);
+    text-shadow:0 0 30px rgba(41,121,255,0.35);
   }
   .tagline{
     font-family:'VT323', monospace;
@@ -106,131 +106,15 @@
     margin:6px 0 0;
   }
 
-  /* ---- "Try it now" sunburst ----------------------------------------
-     The emulator link used to live only in the about text at the very
-     bottom, which is past the point most people stop reading. This is
-     the same link as a retro sticker badge in the header.
-
-     Two stacked polygons: the back one is rotated half a point so its
-     spikes show between the front one's, which is what sells it as a
-     sticker rather than a star icon. Both are geometry, not an image --
-     it scales to any DPI and costs nothing to load. */
-  /* Flex row rather than an absolutely-positioned badge: the wordmark
-     is clamp()-sized and its width depends on the viewport AND on
-     whether Orbitron actually loaded, so there is no fixed inset that
-     reliably clears it -- the first attempt at this sat on top of the
-     final letter. Laying them out as siblings means they cannot
-     overlap at any width or in any fallback font. */
   .header-inner{
     display:flex;
     align-items:center;
+    justify-content:center;
     max-width:1280px;
     margin:0 auto;
     padding:0 24px;
   }
-  /* An invisible twin of the badge on the left. Without it, pushing the
-     badge to the right edge shoves the wordmark off-centre by half the
-     badge's width; with it, the text block is centred on the screen and
-     the badge still sits out at the edge. Cheaper than absolute
-     positioning, and it cannot overlap the wordmark at any width or in
-     any fallback font -- which the first version of this did. */
-  .header-inner::before{
-    content:"";
-    flex:0 0 132px;
-  }
   .header-text{ flex:1 1 auto; min-width:0; }
-  .starburst{
-    flex:0 0 132px;
-    /* Pulled in off the right edge. Percentage rather than a fixed inset
-       so it tracks the viewport: the text block is centred by the
-       ::before spacer, and this margin eats into the badge's side of
-       that split, so too large a value here squeezes the wordmark until
-       it collides. That constraint is why the stacking breakpoint below
-       is 1000px rather than 860 -- the wordmark is ~565px at its
-       clamp() ceiling and needs the room. */
-    margin-right:11%;
-    width:132px; height:132px;
-    position:relative;
-    display:grid;
-    place-items:center;
-    text-decoration:none;
-    transform:rotate(-13deg);
-    transition:transform 0.18s ease;
-    filter:drop-shadow(0 0 12px rgba(255,45,120,0.55));
-  }
-  .starburst:hover, .starburst:focus-visible{
-    transform:rotate(-13deg) scale(1.09);
-  }
-  .starburst:focus-visible{ outline:none; }
-  .starburst:focus-visible .sb-front{ stroke:var(--cyan); stroke-width:3; }
-  .starburst:active{ transform:rotate(-13deg) scale(0.97); }
-  .starburst svg{
-    position:absolute; inset:0;
-    width:100%; height:100%;
-  }
-  .sb-back{
-    fill:var(--vapor-purple);
-    transform-origin:60px 60px;
-    animation:sbSpin 24s linear infinite;
-  }
-  .sb-front{ fill:url(#sbGrad); }
-  @keyframes sbSpin{ to{ transform:rotate(360deg); } }
-  /* Sits still, breathes slightly -- enough to catch the eye in
-     peripheral vision without turning into a distraction while someone
-     is trying to read the flashing steps. */
-  @keyframes sbPulse{
-    0%,100%{ transform:rotate(-13deg) scale(1); }
-    50%    { transform:rotate(-13deg) scale(1.045); }
-  }
-  .starburst{ animation:sbPulse 2.6s ease-in-out infinite; }
-  .starburst:hover, .starburst:focus-visible{ animation:none; }
-
-  .sb-text{
-    position:relative;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    line-height:1;
-    color:#2a0016;
-    text-align:center;
-    pointer-events:none;
-  }
-  .sb-text b{
-    font-family:'Orbitron', sans-serif;
-    font-weight:900;
-    font-size:1.02rem;
-    letter-spacing:0.02em;
-  }
-  .sb-text b + b{ margin-top:2px; }
-  .sb-text i{
-    font-family:'VT323', monospace;
-    font-style:normal;
-    font-size:0.72rem;
-    letter-spacing:0;
-    margin-top:3px;
-    color:#5c0033;
-  }
-
-  /* Below this width the wordmark grows into the badge's corner, so it
-     stops floating and becomes a normal centered element under it. */
-  @media (max-width:1000px){
-    .header-inner{ flex-direction:column; padding:0 16px; }
-    .header-inner::before{ display:none; }
-    .starburst{
-      margin:16px auto 0;
-      transform:rotate(-6deg);
-    }
-    .header-text{ flex:0 1 auto; }
-    .starburst:hover, .starburst:focus-visible{ transform:rotate(-6deg) scale(1.09); }
-    .starburst:active{ transform:rotate(-6deg) scale(0.97); }
-    @keyframes sbPulse{
-      0%,100%{ transform:rotate(-6deg) scale(1); }
-      50%    { transform:rotate(-6deg) scale(1.045); }
-    }
-  }
-  @media (prefers-reduced-motion:reduce){
-    .starburst, .sb-back{ animation:none; }
-  }
 
   main{
     max-width:640px;
@@ -238,90 +122,13 @@
     padding:0 16px 80px;
   }
 
-  /* ---- MuleSkin ---- */
-  .muleskin-stage{
-    position:relative;
-    height:200px;
-    margin:28px 0 8px;
-  }
-  .muleskin-wrap{
-    position:absolute;
-    top:20px; left:0;
-    width:132px;
-  }
-  .bubble{
-    position:absolute;
-    left:50%;
-    bottom:138px;
-    transform:translateX(-50%);
-    min-width:180px;
-    max-width:280px;
-    background:var(--bg);
-    border:2px solid var(--vapor-pink);
-    border-radius:8px;
-    padding:8px 12px;
-    font-size:0.95rem;
-    line-height:1.3;
-    text-align:center;
-    color:#fff;
-    box-shadow:0 0 16px rgba(255,113,206,0.35);
-    opacity:0;
-    transition:opacity 0.25s ease;
-    pointer-events:none;
-    white-space:normal;
-  }
-  .bubble.show{ opacity:1; }
-  .bubble::after{
-    content:"";
-    position:absolute; left:50%; bottom:-9px; transform:translateX(-50%);
-    border:6px solid transparent;
-    border-top-color:var(--vapor-pink);
-  }
-
-  .muleskin-sprite{
-    width:132px; height:132px;
-    image-rendering:pixelated;
-    cursor:pointer;
-    transition:transform 0.08s;
-    filter:
-      drop-shadow(0 0 8px rgba(180,0,255,0.9))
-      drop-shadow(0 0 16px rgba(180,0,255,0.6))
-      drop-shadow(0 0 32px rgba(180,0,255,0.3));
-  }
-  .muleskin-sprite:active{ transform:scale(0.94); }
-  .muleskin-sprite.face-left{ transform:scaleX(-1); }
-  .muleskin-sprite.grabbing{ cursor:grabbing; }
-
-  /* Card gets a comedic wobble while MuleSkin is "fixing" it */
-  @keyframes cardWiggle{
-    0%, 100%{ transform:rotate(0deg) translateX(0); }
-    20%{ transform:rotate(-1.1deg) translateX(-3px); }
-    40%{ transform:rotate(0.9deg) translateX(3px); }
-    60%{ transform:rotate(-0.7deg) translateX(-2px); }
-    80%{ transform:rotate(0.5deg) translateX(2px); }
-  }
-  .card.dd-wiggle{ animation:cardWiggle 0.35s ease-in-out 4; }
-
-  /* Bolt he "removes" from the card during the dismantle bit */
-  .bolt-emoji{
-    position:fixed;
-    font-size:1.6rem;
-    z-index:30;
-    opacity:0;
-    pointer-events:none;
-    transform:translate(-50%,-50%) rotate(0deg);
-    transition:left 0.55s ease, top 0.55s ease, opacity 0.25s ease, transform 0.55s ease;
-  }
-  .bolt-emoji.show{ opacity:1; }
-  .bolt-emoji.spin{ transform:translate(-50%,-50%) rotate(320deg); }
-
   /* ---- Flasher card ---- */
   .card{
     background:var(--panel);
     border:1px solid var(--purple);
     border-radius:10px;
     padding:24px 20px;
-    box-shadow:0 0 24px rgba(180,0,255,0.2);
+    box-shadow:0 0 24px rgba(41,121,255,0.2);
     backdrop-filter:blur(2px);
   }
   .card h2{
@@ -368,7 +175,7 @@
   }
   .board-select:hover, .board-select:focus{
     border-color:var(--vapor-pink);
-    box-shadow:0 0 14px rgba(180,0,255,0.4);
+    box-shadow:0 0 14px rgba(41,121,255,0.4);
     outline:none;
   }
   .board-select optgroup{ color:var(--vapor-pink); font-style:normal; }
@@ -380,60 +187,22 @@
     padding:9px 10px; background:var(--bg); color:#fff;
     border:1px solid var(--vapor-blue); border-radius:8px;
   }
-  .board-code:focus{ outline:none; border-color:var(--cyan); box-shadow:0 0 14px rgba(0,255,245,0.3); }
+  .board-code:focus{ outline:none; border-color:var(--cyan); box-shadow:0 0 14px rgba(0,229,255,0.3); }
   .board-code-answer{ font-family:'VT323', monospace; font-size:1.1rem; min-height:1.3em; color:var(--green); }
   .board-code-answer.warn{ color:var(--vapor-yellow); }
-  .board-help{ margin:0 0 16px; padding-left:18px; font-size:0.82rem; color:#b9b0d6; display:grid; gap:4px; }
+  .board-help{ margin:0 0 16px; padding-left:18px; font-size:0.82rem; color:#a9c3dc; display:grid; gap:4px; }
   .board-help strong{ color:var(--text); font-weight:400; }
+  .board-help a{ color:var(--cyan); text-decoration:none; border-bottom:1px dotted var(--cyan); }
+  .board-help a:hover{ color:var(--vapor-pink); border-color:var(--vapor-pink); }
   .white-screen-note{
     margin:0 0 16px;
     font-size:0.82rem;
     color:var(--vapor-yellow);
-    background:rgba(255,251,150,0.06);
+    background:rgba(255,171,64,0.06);
     border:1px dashed var(--vapor-yellow);
     border-radius:6px;
     padding:8px 10px;
     line-height:1.4;
-  }
-
-  /* Overclock opt-in. Deliberately styled closer to the white-screen
-     caution note than to a feature toggle -- it is a thing that can
-     make your display stop working, and the label has to carry that
-     without a support thread being the way you find out. */
-  .overclock-row{
-    display:flex;
-    align-items:flex-start;
-    gap:10px;
-    margin:0 0 16px;
-    padding:10px 12px;
-    border:1px dashed rgba(255,45,120,0.5);
-    border-radius:6px;
-    background:rgba(255,45,120,0.05);
-    cursor:pointer;
-    transition:opacity 0.15s;
-  }
-  .overclock-row input{
-    flex-shrink:0;
-    width:16px; height:16px;
-    margin-top:2px;
-    accent-color:var(--pink);
-    cursor:pointer;
-  }
-  .overclock-row.disabled{ opacity:0.4; cursor:default; }
-  .overclock-row.disabled input{ cursor:default; }
-  .oc-title{
-    display:block;
-    font-family:'VT323', monospace;
-    font-size:1.05rem;
-    letter-spacing:0.04em;
-    color:var(--pink);
-  }
-  .oc-desc{
-    display:block;
-    font-size:0.78rem;
-    line-height:1.4;
-    color:#a89bc4;
-    margin-top:2px;
   }
 
   .install-btn{
@@ -448,10 +217,10 @@
     border:none;
     border-radius:8px;
     cursor:pointer;
-    box-shadow:0 0 18px rgba(180,0,255,0.5);
+    box-shadow:0 0 18px rgba(41,121,255,0.5);
     transition:transform 0.1s, box-shadow 0.2s;
   }
-  .install-btn:hover{ box-shadow:0 0 26px rgba(255,113,206,0.7); }
+  .install-btn:hover{ box-shadow:0 0 26px rgba(255,109,0,0.7); }
   .install-btn:active{ transform:scale(0.98); }
 
   .unsupported, .not-allowed{
@@ -476,7 +245,7 @@
     padding:6px 0 6px 40px;
     font-size:0.95rem;
     line-height:1.4;
-    border-bottom:1px solid rgba(180,0,255,0.15);
+    border-bottom:1px solid rgba(41,121,255,0.15);
   }
   .steps li:last-child{ border-bottom:none; }
   .steps li::before{
@@ -509,14 +278,14 @@
     padding:6px 16px;
     background:transparent;
     color:var(--cyan);
-    border:1px solid rgba(0,255,245,0.5);
+    border:1px solid rgba(0,229,255,0.5);
     border-radius:6px;
     cursor:pointer;
     transition:all 0.15s;
   }
   .identify-btn:hover:not(:disabled){
-    background:rgba(0,255,245,0.1);
-    box-shadow:0 0 12px rgba(0,255,245,0.3);
+    background:rgba(0,229,255,0.1);
+    box-shadow:0 0 12px rgba(0,229,255,0.3);
   }
   .identify-btn:disabled{ opacity:0.45; cursor:default; }
   .identify-result{
@@ -551,8 +320,8 @@
     display:flex;
     align-items:flex-start;
     gap:10px;
-    background:rgba(180,0,255,0.06);
-    border:1px solid rgba(180,0,255,0.2);
+    background:rgba(41,121,255,0.06);
+    border:1px solid rgba(41,121,255,0.2);
     border-radius:8px;
     padding:10px 12px;
   }
@@ -572,7 +341,7 @@
   .legend-desc{
     display:block;
     font-size:0.78rem;
-    color:#a89bc4;
+    color:#93abc4;
     margin-top:2px;
   }
 
@@ -580,7 +349,7 @@
     margin-top:36px;
     text-align:center;
     font-size:0.9rem;
-    color:#b9a8d8;
+    color:#a9c3dc;
     line-height:1.6;
   }
   .about a{ color:var(--cyan); text-decoration:none; border-bottom:1px dotted var(--cyan); }
@@ -588,7 +357,7 @@
   .driver-note{
     margin-top:18px;
     font-size:0.82rem;
-    color:#7a6a95;
+    color:#5f7896;
   }
   .driver-note a{ color:var(--vapor-blue); border-bottom-color:var(--vapor-blue); }
   .driver-note a:hover{ color:var(--vapor-pink); border-color:var(--vapor-pink); }
@@ -641,7 +410,7 @@
     text-align:center;
     padding:24px 16px 40px;
     font-size:0.8rem;
-    color:#5a4a72;
+    color:#44607e;
   }
 </style>
 </head>
@@ -655,30 +424,10 @@
       <h1 class="wordmark">MuleSkin</h1>
       <p class="tagline">&gt;&gt; WEB FLASHER &lt;&lt;</p>
     </div>
-    <a class="starburst" href="./emulator/" aria-label="Try MuleSkin now in your browser, no install needed">
-      <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false">
-        <defs>
-          <linearGradient id="sbGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#fffb96"/>
-            <stop offset="100%" stop-color="#ff71ce"/>
-          </linearGradient>
-        </defs>
-        <polygon class="sb-back"  points="70.2,1.9 75.0,18.7 89.5,8.9 88.3,26.3 105.2,22.1 98.1,38.0 115.4,39.8 103.3,52.4 119.0,60.0 103.3,67.6 115.4,80.2 98.1,82.0 105.2,97.9 88.3,93.7 89.5,111.1 75.0,101.3 70.2,118.1 60.0,104.0 49.8,118.1 45.0,101.3 30.5,111.1 31.7,93.7 14.8,97.9 21.9,82.0 4.6,80.2 16.7,67.6 1.0,60.0 16.7,52.4 4.6,39.8 21.9,38.0 14.8,22.1 31.7,26.3 30.5,8.9 45.0,18.7 49.8,1.9 60.0,16.0"/>
-        <polygon class="sb-front" points="60.0,7.0 67.1,19.6 78.1,10.2 80.5,24.5 94.1,19.4 91.4,33.6 105.9,33.5 98.5,46.0 112.2,50.8 101.0,60.0 112.2,69.2 98.5,74.0 105.9,86.5 91.4,86.4 94.1,100.6 80.5,95.5 78.1,109.8 67.1,100.4 60.0,113.0 52.9,100.4 41.9,109.8 39.5,95.5 25.9,100.6 28.6,86.4 14.1,86.5 21.5,74.0 7.8,69.2 19.0,60.0 7.8,50.8 21.5,46.0 14.1,33.5 28.6,33.6 25.9,19.4 39.5,24.5 41.9,10.2 52.9,19.6"/>
-      </svg>
-      <span class="sb-text"><b>TRY IT</b><b>NOW!</b><i>in your browser</i></span>
-    </a>
   </div>
 </header>
 
 <main>
-  <div class="muleskin-stage">
-    <div class="muleskin-wrap" id="muleskinWrap">
-      <div class="bubble" id="bubble"></div>
-      <canvas class="muleskin-sprite" id="muleskinSprite" width="96" height="96" title="pet the cryptid"></canvas>
-    </div>
-  </div>
-
   <div class="card">
     <h2>FLASH YOUR DETECTOR</h2>
     <p class="version-note" id="versionNote">checking latest version&hellip;</p>
@@ -733,18 +482,6 @@
       <li>Not on the list? Tell us what it is on <a href="https://github.com/skizzophrenic/MuleSkin-CYD/issues" target="_blank" rel="noopener">GitHub</a>.</li>
     </ul>
 
-    <label class="overclock-row" id="overclockRow">
-      <input type="checkbox" id="overclockChk">
-      <span>
-        <span class="oc-title">Experimental: 80MHz display overclock</span>
-        <span class="oc-desc" id="overclockDesc">
-          Runs the screen at twice the rated clock, which you will notice everywhere.
-          Not every panel takes it. If the screen stays white or shows torn lines,
-          reflash with this unchecked.
-        </span>
-      </span>
-    </label>
-
     <esp-web-install-button id="installBtn" manifest="./manifest-cyd.json">
       <button slot="activate" class="install-btn">[ CONNECT &amp; INSTALL ]</button>
       <span slot="unsupported" class="unsupported">
@@ -774,11 +511,6 @@
       <button id="clockBtn" class="identify-btn">[ SET TIME &amp; ZONE ]</button>
       <div class="identify-result" id="clockResult"></div>
     </div>
-    <div class="identify-row">
-      <button id="wigleBtn" class="identify-btn">[ DOWNLOAD WIGLE FILE ]</button>
-      <div class="identify-result" id="wigleResult"></div>
-    </div>
-    <p class="browser-note"><strong>Download WiGLE File</strong> is for a T-Watch S3 Plus with WARDRIVE on (WATCH SETTINGS): it saves every network and device the watch logged, with where, as a WiGLE file you can upload at <a href="https://wigle.net/uploads" target="_blank" rel="noopener">wigle.net/uploads</a>. The log stays on the watch until you clear it.</p>
     <p class="browser-note">After flashing, <strong>Set Time &amp; Zone</strong> tells the board this computer's clock and time zone over the same cable. The zone is kept for good; the clock lasts until the board is unplugged, and a saved WiFi network puts it back at every boot. A T-Watch has its clock set for it after installing, and keeps the time from then on, even through a flat battery.</p>
   </div>
 
@@ -786,63 +518,62 @@
     <h2 class="legend-title">&gt;&gt; WHAT IT DETECTS &lt;&lt;</h2>
     <div class="legend-grid">
       <div class="legend-item">
-        <span class="legend-dot" style="background:#ff2d78;color:#ff2d78"></span>
-        <div><span class="legend-name">FLOCK CAM</span><span class="legend-desc">Flock Safety license-plate camera</span></div>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background:#ff2d78;color:#ff2d78"></span>
-        <div><span class="legend-name">AXON</span><span class="legend-desc">Axon body camera or other LE gear</span></div>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background:#ff2d78;color:#ff2d78"></span>
-        <div><span class="legend-name">META GLASSES</span><span class="legend-desc">Ray-Ban Meta smart glasses — can record</span></div>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background:#fffb96;color:#fffb96"></span>
-        <div><span class="legend-name">SKIMMER</span><span class="legend-desc">Bluetooth card skimmer</span></div>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background:#ffa600;color:#ffa600"></span>
-        <div><span class="legend-name">RAVEN</span><span class="legend-desc">ShotSpotter/Raven gunshot detector</span></div>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background:#ffa600;color:#ffa600"></span>
-        <div><span class="legend-name">ALPR</span><span class="legend-desc">Automated license-plate reader</span></div>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background:#b967ff;color:#b967ff"></span>
+        <span class="legend-dot" style="background:#448aff;color:#448aff"></span>
         <div><span class="legend-name">AIRTAG</span><span class="legend-desc">Apple AirTag or other FindMy tracker</span></div>
       </div>
       <div class="legend-item">
-        <span class="legend-dot" style="background:#b967ff;color:#b967ff"></span>
-        <div><span class="legend-name">DRONE</span><span class="legend-desc">Drone broadcasting Remote ID</span></div>
+        <span class="legend-dot" style="background:#ff9100;color:#ff9100"></span>
+        <div><span class="legend-name">ALPR</span><span class="legend-desc">Automated license-plate reader</span></div>
       </div>
       <div class="legend-item">
-        <span class="legend-dot" style="background:#b967ff;color:#b967ff"></span>
-        <div><span class="legend-name">SAMSUNG TAG</span><span class="legend-desc">Samsung Galaxy SmartTag</span></div>
+        <span class="legend-dot" style="background:#ff1744;color:#ff1744"></span>
+        <div><span class="legend-name">AXON</span><span class="legend-desc">Axon body camera or other LE gear</span></div>
       </div>
       <div class="legend-item">
-        <span class="legend-dot" style="background:#b967ff;color:#b967ff"></span>
-        <div><span class="legend-name">GOOGLE TAG</span><span class="legend-desc">Google Find My Device tracker</span></div>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background:#b967ff;color:#b967ff"></span>
-        <div><span class="legend-name">TILE</span><span class="legend-desc">Tile Bluetooth tracker</span></div>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot" style="background:#00fff5;color:#00fff5"></span>
+        <span class="legend-dot" style="background:#00e5ff;color:#00e5ff"></span>
         <div><span class="legend-name">CAMERA</span><span class="legend-desc">Generic WiFi/BLE-connected camera</span></div>
       </div>
       <div class="legend-item">
-        <span class="legend-dot" style="background:#00fff5;color:#00fff5"></span>
+        <span class="legend-dot" style="background:#448aff;color:#448aff"></span>
+        <div><span class="legend-name">DRONE</span><span class="legend-desc">Drone broadcasting Remote ID</span></div>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background:#ff1744;color:#ff1744"></span>
+        <div><span class="legend-name">FLOCK CAM</span><span class="legend-desc">Flock Safety license-plate camera</span></div>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background:#448aff;color:#448aff"></span>
+        <div><span class="legend-name">GOOGLE TAG</span><span class="legend-desc">Google Find My Device tracker</span></div>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background:#ff1744;color:#ff1744"></span>
+        <div><span class="legend-name">META GLASSES</span><span class="legend-desc">Ray-Ban Meta smart glasses — can record</span></div>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background:#ff9100;color:#ff9100"></span>
+        <div><span class="legend-name">RAVEN</span><span class="legend-desc">ShotSpotter/Raven gunshot detector</span></div>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background:#00e5ff;color:#00e5ff"></span>
         <div><span class="legend-name">RING CAM</span><span class="legend-desc">Ring doorbell or camera</span></div>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background:#448aff;color:#448aff"></span>
+        <div><span class="legend-name">SAMSUNG TAG</span><span class="legend-desc">Samsung Galaxy SmartTag</span></div>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background:#ffab40;color:#ffab40"></span>
+        <div><span class="legend-name">SKIMMER</span><span class="legend-desc">Bluetooth card skimmer</span></div>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background:#448aff;color:#448aff"></span>
+        <div><span class="legend-name">TILE</span><span class="legend-desc">Tile Bluetooth tracker</span></div>
       </div>
     </div>
   </div>
 
   <div class="about">
     <p>MuleSkin-CYD is an open-source surveillance detector for the ESP32 "Cheap Yellow Display" board.</p>
-    <p><a href="./emulator/">Try it in your browser first</a> &middot; <a href="https://github.com/skizzophrenic/MuleSkin-CYD" target="_blank" rel="noopener">Source on GitHub</a> &middot; <a href="https://talkingsasquach.com" target="_blank" rel="noopener">talkingsasquach.com</a></p>
     <p class="driver-note">Board not showing up as a port? Most CYDs use a CH340 USB chip — grab the driver:
       <a href="https://www.wch-ic.com/downloads/ch341ser_exe.html" target="_blank" rel="noopener">Windows</a> &middot;
       <a href="https://www.wch-ic.com/downloads/CH34XSER_MAC_ZIP.html" target="_blank" rel="noopener">macOS</a> &middot;
@@ -851,584 +582,11 @@
   </div>
 </main>
 
-<div class="bolt-emoji" id="boltEmoji">&#x1F529;</div>
-
 <footer>Stay muleskin out there.</footer>
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 <script>
 (function () {
-  var wrap = document.getElementById('muleskinWrap');
-  var sprite = document.getElementById('muleskinSprite');
-  var ctx = sprite.getContext('2d');
-  var bubble = document.getElementById('bubble');
-  var stage = document.querySelector('.muleskin-stage');
-  var card = document.querySelector('.card');
-  var bolt = document.getElementById('boltEmoji');
-
-  // Ported straight from talkingsasquach.com's own drawMuleSkin() so the
-  // mascot here is pixel-for-pixel the same character, not a lookalike —
-  // same fur/frame colors, same wayfarers, same grin. Extended with a
-  // few extra modes ('dance'/'sleep') on top of the site's original
-  // stationary idle/wave so he has more going on here than just pacing.
-  var anim = 0, animDir = 1, blink = 0, waveTimer = 0, walkPhase = 0;
-
-  function drawMuleSkin(mode) {
-    var c = ctx;
-    c.clearRect(0, 0, 96, 96);
-
-    var sleeping = mode === 'sleep';
-    var dancing  = mode === 'dance';
-    var walking  = mode === 'walk';
-
-    anim += 0.08 * animDir;
-    if (anim > 1) animDir = -1;
-    if (anim < 0) animDir = 1;
-    var bob = Math.sin(anim * Math.PI) * (sleeping ? 1 : 4);
-    blink++;
-    // "Blinking" doubles as closed-eyes-while-asleep — same flat dark
-    // lens fill either way, just held the whole time instead of a
-    // once-in-a-while flicker.
-    var blinking = sleeping || (blink % 80 < 4);
-    if (waveTimer > 0) waveTimer--;
-    if (walking || dancing) walkPhase += dancing ? 0.22 : 0.35;
-
-    var by = 4 + bob;
-    // Head-lolled-to-the-side tilt while asleep; a small drunken sway
-    // while dancing. Wrapped around a pivot near his feet so he still
-    // reads as standing on the ground rather than floating off-axis.
-    var lean = sleeping ? 0.22 : (dancing ? Math.sin(walkPhase * 0.6) * 0.12 : 0);
-
-    c.save();
-    if (lean) { c.translate(48, 90); c.rotate(lean); c.translate(-48, -90); }
-
-    // Shadow
-    c.fillStyle = 'rgba(180,0,255,0.25)';
-    c.beginPath(); c.ellipse(48, 91, 22, 5, 0, 0, Math.PI * 2); c.fill();
-
-    // Fur body
-    c.fillStyle = '#5a2808'; c.fillRect(22, by + 42, 52, 36);
-    c.fillStyle = '#3d1800'; c.fillRect(20, by + 44, 6, 28); c.fillRect(70, by + 44, 6, 28);
-
-    // Head — bigger and rounder
-    c.fillStyle = '#3d1800'; c.fillRect(16, by + 6, 64, 44);
-    c.fillStyle = '#7a4818'; c.fillRect(22, by + 8, 52, 40);
-    c.fillStyle = '#f4c07a'; c.fillRect(26, by + 10, 44, 32);
-
-    // Hair/fur top
-    c.fillStyle = '#2a1000';
-    c.fillRect(12, by + 2, 10, 24); c.fillRect(74, by + 2, 10, 24);
-    c.fillRect(18, by, 60, 12);
-    c.fillRect(24, by - 4, 12, 8); c.fillRect(42, by - 6, 14, 8); c.fillRect(60, by - 4, 12, 8);
-    c.fillStyle = '#4a2010';
-    c.fillRect(20, by - 2, 6, 6); c.fillRect(70, by - 2, 6, 6);
-
-    // Wayfarer sunglasses
-    c.fillStyle = '#111';
-    c.fillRect(18, by + 14, 60, 5);
-    c.fillRect(18, by + 14, 5, 18); c.fillRect(18, by + 30, 26, 4); c.fillRect(40, by + 14, 5, 20);
-    c.fillRect(51, by + 14, 5, 20); c.fillRect(51, by + 30, 26, 4); c.fillRect(73, by + 14, 5, 18);
-    c.fillRect(43, by + 17, 10, 6);
-    c.fillStyle = '#111';
-    c.fillRect(23, by + 19, 17, 11);
-    c.fillRect(56, by + 19, 17, 11);
-    c.fillStyle = 'rgba(0,220,255,0.18)';
-    c.fillRect(23, by + 19, 17, 11); c.fillRect(56, by + 19, 17, 11);
-    c.fillStyle = 'rgba(255,255,255,0.25)';
-    c.fillRect(25, by + 20, 5, 4); c.fillRect(58, by + 20, 5, 4);
-    c.fillStyle = '#444';
-    c.fillRect(19, by + 14, 58, 2);
-    if (blinking) {
-      c.fillStyle = '#111';
-      c.fillRect(23, by + 19, 17, 11); c.fillRect(56, by + 19, 17, 11);
-    }
-
-    // Big grin
-    c.fillStyle = '#1a0800'; c.fillRect(28, by + 34, 40, 12);
-    c.fillStyle = '#fff';    c.fillRect(30, by + 35, 36, 5);
-    c.fillStyle = '#ff4444'; c.fillRect(30, by + 40, 36, 6);
-    c.fillStyle = '#cc2222'; c.fillRect(32, by + 42, 32, 4);
-
-    // Ears
-    c.fillStyle = '#f4c07a'; c.fillRect(14, by + 20, 10, 14); c.fillRect(72, by + 20, 10, 14);
-    c.fillStyle = '#c87040'; c.fillRect(15, by + 21, 8, 10); c.fillRect(73, by + 21, 8, 10);
-
-    // Arms
-    if (waveTimer > 0) {
-      c.fillStyle = '#5a2808';
-      c.save();
-      c.translate(76, by + 50);
-      c.rotate(-0.8 + Math.sin(waveTimer * 0.4) * 0.5);
-      c.fillRect(0, -6, 22, 12);
-      c.restore();
-      c.fillStyle = '#3d1800'; c.fillRect(8, by + 50, 18, 12);
-    } else if (dancing) {
-      var aL = -0.6 + Math.sin(walkPhase) * 0.9;
-      var aR = -0.6 + Math.sin(walkPhase + Math.PI) * 0.9;
-      c.fillStyle = '#5a2808';
-      c.save(); c.translate(20, by + 50); c.rotate(aL);  c.fillRect(-22, -6, 22, 12); c.restore();
-      c.save(); c.translate(76, by + 50); c.rotate(-aR); c.fillRect(0, -6, 22, 12);   c.restore();
-    } else if (walking) {
-      var armSwing = Math.sin(walkPhase) * 0.7;
-      c.fillStyle = '#3d1800';
-      c.save(); c.translate(8, by + 50); c.rotate(-armSwing); c.fillRect(0, -6, 18, 12); c.restore();
-      c.save(); c.translate(70, by + 50); c.rotate(armSwing); c.fillRect(0, -6, 18, 12); c.restore();
-    } else {
-      c.fillStyle = '#3d1800';
-      c.fillRect(8, by + 44, 16, 28);
-      c.fillRect(72, by + 44, 16, 28);
-      c.fillStyle = '#2a1000';
-      c.fillRect(6, by + 68, 18, 10); c.fillRect(72, by + 68, 18, 10);
-    }
-
-    // Legs
-    if (dancing) {
-      var danceKick = Math.sin(walkPhase * 1.4) * 0.35;
-      c.fillStyle = '#2a1000';
-      c.save(); c.translate(34, by + 74); c.rotate(danceKick);  c.fillRect(-8, 0, 16, 14); c.restore();
-      c.save(); c.translate(62, by + 74); c.rotate(-danceKick); c.fillRect(-8, 0, 16, 14); c.restore();
-      c.fillStyle = '#1a0800';
-      c.save(); c.translate(34, by + 86); c.rotate(danceKick);  c.fillRect(-11, 0, 22, 8); c.restore();
-      c.save(); c.translate(62, by + 86); c.rotate(-danceKick); c.fillRect(-11, 0, 22, 8); c.restore();
-    } else if (walking) {
-      var legSwing = Math.sin(walkPhase) * 0.5;
-      c.fillStyle = '#2a1000';
-      c.save(); c.translate(34, by + 74); c.rotate(legSwing);  c.fillRect(-8, 0, 16, 14); c.restore();
-      c.save(); c.translate(62, by + 74); c.rotate(-legSwing); c.fillRect(-8, 0, 16, 14); c.restore();
-      c.fillStyle = '#1a0800';
-      c.save(); c.translate(34, by + 86); c.rotate(legSwing);  c.fillRect(-11, 0, 22, 8); c.restore();
-      c.save(); c.translate(62, by + 86); c.rotate(-legSwing); c.fillRect(-11, 0, 22, 8); c.restore();
-    } else {
-      c.fillStyle = '#2a1000';
-      c.fillRect(26, by + 74, 16, 14); c.fillRect(54, by + 74, 16, 14);
-      c.fillStyle = '#1a0800';
-      c.fillRect(22, by + 86, 22, 8); c.fillRect(52, by + 86, 22, 8);
-    }
-
-    c.restore(); // end lean transform
-
-    // Drifting "Z" while asleep — drawn unrotated so it stays upright
-    // even though he's leaning.
-    if (sleeping) {
-      var zt = (Date.now() / 900) % 3;
-      var za = Math.max(0, 1 - zt / 3);
-      c.fillStyle = 'rgba(200,225,255,' + za.toFixed(2) + ')';
-      c.font = 'bold ' + Math.round(12 + zt * 3) + 'px monospace';
-      c.fillText('Z', 68 + zt * 5, by - 6 - zt * 12);
-    }
-  }
-
-  var HOW_TO = [
-    "Hey. Plug the board in over USB first.",
-    "Then hit Connect & Install down there.",
-    "Desktop browser, please. Phones can't talk serial.",
-    "Pick the right port, click Install, and don't unplug on me.",
-    "That's it. I'll be here the whole time."
-  ];
-
-  var IDLE_LINES = [
-    "Stay muleskin out there.",
-    "I live in your walls now. No big deal.",
-    "Cryptid by trade, flasher-page mascot by necessity.",
-    "Big feet, bigger opsec.",
-    "This is a browser tab. I contain multitudes.",
-    "No drivers. No installer. Just vibes and Web Serial.",
-    "Somewhere, a camera just got nervous.",
-    "Go touch grass after this. Bring the detector.",
-    "Nobody suspects the MuleSkin.",
-    "Fun fact: license plate readers can't identify Bigfoot. We checked.",
-    "Your smart doorbell is not your friend. Neither is its subscription.",
-    "I don't do social media. I do antisocial media.",
-    "They see everything except me. That's the whole business model.",
-    "Encrypt it, then encrypt the encryption, then go live in the woods.",
-    "A tracker's only weakness is not knowing where it is.",
-    "Every AirTag has a home. It's just not supposed to be your car.",
-    "If it's ‘smart,’ assume it's talking about you behind your back.",
-    "MAC randomization: your phone doesn't need a permanent name tag.",
-    "Free WiFi is never free. Someone's always buying something.",
-    "I read an entire Terms of Service once. It changed me.",
-    "Privacy isn't paranoia. It's just good manners.",
-    "Somewhere a drone just lost signal. Unrelated to me standing near it.",
-    "I don't hide from cameras. Cameras hide from me.",
-  ];
-
-  var PET_LINES = [
-    "Hey! Personal space. ...okay one more.",
-    "Petting a cryptid through a browser. Bold.",
-    "This is why they never get good photos of me.",
-    "Ten out of ten, would be spotted again.",
-  ];
-
-  var JOKES = [
-    ["Why don't hackers ever get cold?", "...They always leave too many Windows open."],
-    ["Why did the AirTag break up with the backpack?", "...It felt like it was being followed."],
-    ["What do you call a MuleSkin with a Faraday bag?", "...Untrackable. Also, my cousin."],
-    ["Why was the WiFi router bad at relationships?", "...Terrible at commitment. Kept dropping the connection."],
-    ["What's a surveillance camera's least favorite forest?", "...One with really good foliage. And me."],
-    ["How does a cryptid stay off the grid?", "...Mostly by not being on one in the first place."],
-  ];
-
-  var DANCE_LINES = [
-    "nobody's watching. well — ironically.",
-    "this is not on any surveillance footage. I checked.",
-    "big feet, bigger dance moves.",
-    "cryptids DO dance. we just don't get filmed doing it.",
-    "no rhythm detector has ever caught me either.",
-  ];
-
-  var SLEEP_LINES = [
-    "gonna just... rest my eyes for a sec.",
-    "zzz... no signal... zzz...",
-    "five more minutes of being a legend.",
-    "don't tell the discord I dozed off.",
-  ];
-
-  var WAKE_LINES = [
-    "huh — what — I was scanning. Definitely scanning.",
-    "I wasn't asleep, I was 'listening for RF activity.'",
-    "back. did I miss anything? probably not.",
-  ];
-
-  var DISMANTLE_CLOSERS = [
-    "aaaand... there. good as new. probably.",
-    "fixed. don't ask what 'it' was.",
-    "all better. that's a load-bearing bolt, by the way.",
-  ];
-
-  function say(text, ms) {
-    bubble.textContent = text;
-    bubble.classList.add('show');
-    clearTimeout(say._t);
-    say._t = setTimeout(function () {
-      bubble.classList.remove('show');
-    }, ms || 7200);
-  }
-
-  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
-  function moveBoltTo(el) {
-    var r = el.getBoundingClientRect();
-    bolt.style.left = (r.left + r.width / 2) + 'px';
-    bolt.style.top  = (r.top + r.height / 2) + 'px';
-    bolt.classList.toggle('spin');
-  }
-
-  var FLING_LINES = [
-    "WHOA—",
-    "okay that's a new one.",
-    "I have complaints.",
-    "cryptid, not a plaything. ...fine, a little bit a plaything.",
-    "sticking the landing. mostly.",
-  ];
-
-  // ---- Movement + render loop -------------------------------------
-  // mode drives drawMuleSkin(); moving gates whether frame() advances
-  // his position — the two are independent so a behavior can hold him
-  // still (moving=false) while still animating in place (mode='dance'
-  // etc), or vice versa. phase is the outer switch: 'auto' is the
-  // normal walk+behavior system above; 'drag'/'fling' hijack his
-  // position entirely while you're holding or have just thrown him.
-  var mode = 'walk', moving = true;
-  var x = 0, dir = 1, speed = 0.55;
-  var phase = 'auto';
-  var offsetY = 0, velX = 0, velY = 0, spin = 0, spinVel = 0;
-  var dragDX = 0, dragDY = 0, ptrLastX = 0, ptrLastY = 0, ptrLastT = 0, dragMoved = 0;
-  var rapidTaps = 0, lastTapAt = 0;
-
-  // Click him 10x fast and he "detects" himself — a meta callback to
-  // the actual firmware's ALERT screen for anyone who's used the
-  // device and will recognize the layout.
-  function triggerFakeAlert() {
-    var overlay = document.createElement('div');
-    overlay.className = 'fake-alert';
-    overlay.innerHTML =
-      '<div class="fa-title">!! DETECTION !!</div>' +
-      '<div class="fa-target">CRYPTID</div>' +
-      '<div class="fa-conf">HIGH CONFIDENCE &nbsp;~420%</div>' +
-      '<div class="fa-vendor">TALKING MULESKIN INDUSTRIES</div>' +
-      '<div class="fa-line">MAC: DE:AD:BE:EF:CA:FE</div>' +
-      '<div class="fa-line">RSSI: -12 dBm &nbsp; CH: 6 &nbsp; (very close)</div>' +
-      '<div class="fa-hint">tap anywhere to dismiss</div>';
-    document.body.appendChild(overlay);
-    function dismiss() {
-      overlay.remove();
-      say('yeah, that was me. hi.', 6000);
-    }
-    overlay.addEventListener('click', dismiss);
-    setTimeout(dismiss, 5000);
-  }
-
-  function frame() {
-    if (phase === 'auto') {
-      if (moving) {
-        var maxX = Math.max(0, stage.clientWidth - wrap.offsetWidth);
-        x += dir * speed;
-        if (x >= maxX) { x = maxX; dir = -1; sprite.classList.add('face-left'); }
-        if (x <= 0) { x = 0; dir = 1; sprite.classList.remove('face-left'); }
-        wrap.style.transform = 'translate(' + x + 'px, 0px)';
-      }
-    } else if (phase === 'fling') {
-      velY += 0.9; // gravity
-      velX *= 0.99;
-      x += velX;
-      offsetY += velY;
-      var maxX2 = Math.max(0, stage.clientWidth - wrap.offsetWidth);
-      var floorY = stage.clientHeight - wrap.offsetHeight - 20 - 4;
-      if (x < 0) { x = 0; velX = -velX * 0.55; }
-      if (x > maxX2) { x = maxX2; velX = -velX * 0.55; }
-      if (offsetY > floorY) { offsetY = floorY; velY = -velY * 0.45; velX *= 0.7; }
-      if (offsetY < -20) { offsetY = -20; velY = -velY * 0.45; }
-      spin += spinVel;
-      spinVel *= 0.96;
-      wrap.style.transform = 'translate(' + x + 'px, ' + offsetY + 'px)';
-      sprite.style.transform = 'rotate(' + spin.toFixed(1) + 'deg)';
-      if (Math.abs(velX) < 0.15 && Math.abs(velY) < 0.15 && Math.abs(offsetY - floorY) < 1) {
-        phase = 'auto';
-        offsetY = 0; spin = 0; spinVel = 0;
-        sprite.style.transform = '';
-        wrap.style.transform = 'translate(' + x + 'px, 0px)';
-        moving = true;
-        mode = 'walk';
-        scheduleIdle();
-      }
-    }
-    // phase 'drag' updates position directly in onDragMove — nothing to do here.
-    drawMuleSkin(phase === 'auto' ? mode : 'idle');
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-
-  function pointerXY(e) {
-    var t = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
-    return { x: t.clientX, y: t.clientY };
-  }
-
-  function startDrag(e) {
-    e.preventDefault();
-    var p = pointerXY(e);
-    var r = stage.getBoundingClientRect();
-    phase = 'drag';
-    moving = false;
-    sprite.classList.add('grabbing');
-    dragDX = p.x - r.left - x;
-    dragDY = p.y - r.top - (20 + offsetY);
-    ptrLastX = p.x; ptrLastY = p.y; ptrLastT = performance.now();
-    dragMoved = 0;
-    velX = 0; velY = 0;
-    document.addEventListener('mousemove', onDragMove);
-    document.addEventListener('mouseup', endDrag);
-    document.addEventListener('touchmove', onDragMove, { passive: false });
-    document.addEventListener('touchend', endDrag);
-  }
-
-  function onDragMove(e) {
-    if (phase !== 'drag') return;
-    e.preventDefault();
-    var p = pointerXY(e);
-    var r = stage.getBoundingClientRect();
-    var now = performance.now();
-    var dt = Math.max(1, now - ptrLastT);
-    velX = (p.x - ptrLastX) / dt * 16;
-    velY = (p.y - ptrLastY) / dt * 16;
-    dragMoved += Math.abs(p.x - ptrLastX) + Math.abs(p.y - ptrLastY);
-    ptrLastX = p.x; ptrLastY = p.y; ptrLastT = now;
-    x = p.x - r.left - dragDX;
-    offsetY = (p.y - r.top - dragDY) - 20;
-    var maxX3 = Math.max(0, stage.clientWidth - wrap.offsetWidth);
-    x = Math.max(0, Math.min(maxX3, x));
-    wrap.style.transform = 'translate(' + x + 'px, ' + offsetY + 'px)';
-  }
-
-  function endDrag() {
-    if (phase !== 'drag') return;
-    document.removeEventListener('mousemove', onDragMove);
-    document.removeEventListener('mouseup', endDrag);
-    document.removeEventListener('touchmove', onDragMove);
-    document.removeEventListener('touchend', endDrag);
-    sprite.classList.remove('grabbing');
-    if (dragMoved < 10) {
-      // Barely moved — treat it as a pet tap, not a throw.
-      phase = 'auto';
-      mode = 'walk';
-      moving = true;
-      offsetY = 0;
-      wrap.style.transform = 'translate(' + x + 'px, 0px)';
-
-      var tapNow = Date.now();
-      rapidTaps = (tapNow - lastTapAt < 500) ? rapidTaps + 1 : 1;
-      lastTapAt = tapNow;
-      if (rapidTaps >= 10) {
-        rapidTaps = 0;
-        triggerFakeAlert();
-        return;
-      }
-
-      waveTimer = 30;
-      say(pick(PET_LINES), 6000);
-      return;
-    }
-    phase = 'fling';
-    spinVel = velX * 0.15;
-    say(pick(FLING_LINES), 4400);
-  }
-
-  sprite.addEventListener('mousedown', startDrag);
-  sprite.addEventListener('touchstart', startDrag, { passive: false });
-
-  // ---- Idle behavior scheduler --------------------------------------
-  // Mostly he just patrols and occasionally chatters, but every so
-  // often (roughly every 6-13s once the intro's done) he stops to do
-  // a whole bit instead — dancing, telling a joke, dozing off, or
-  // "fixing" something on the page — before going back to walking.
-  var BEHAVIOR_WEIGHTS = ['chatter', 'chatter', 'chatter', 'dance', 'joke', 'sleep', 'dismantle'];
-
-  function scheduleIdle() {
-    setTimeout(runRandomBehavior, 6000 + Math.random() * 7000);
-  }
-
-  function resumeWalking() {
-    // If he's being dragged or is still mid-fling, the drag/fling code
-    // re-establishes the scheduler itself once it settles back to
-    // 'auto' — jumping in here too would fight it for control.
-    if (phase !== 'auto') return;
-    mode = 'walk';
-    moving = true;
-    scheduleIdle();
-  }
-
-  function runRandomBehavior() {
-    if (phase !== 'auto') { scheduleIdle(); return; }
-    var b = pick(BEHAVIOR_WEIGHTS);
-    if (b === 'chatter') { say(pick(IDLE_LINES), 7200); scheduleIdle(); return; }
-    moving = false;
-    if (b === 'dance') return doDance();
-    if (b === 'joke') return doJoke();
-    if (b === 'sleep') return doSleep();
-    if (b === 'dismantle') return doDismantle();
-  }
-
-  function doDance() {
-    mode = 'dance';
-    say(pick(DANCE_LINES), 6400);
-    setTimeout(resumeWalking, 6800);
-  }
-
-  function doJoke() {
-    mode = 'idle';
-    var j = pick(JOKES);
-    say(j[0], 4400);
-    setTimeout(function () {
-      say(j[1], 5200);
-      setTimeout(resumeWalking, 5400);
-    }, 4400);
-  }
-
-  function doSleep() {
-    mode = 'sleep';
-    say(pick(SLEEP_LINES), 8400);
-    setTimeout(function () {
-      mode = 'idle';
-      say(pick(WAKE_LINES), 4400);
-      setTimeout(resumeWalking, 4600);
-    }, 8400);
-  }
-
-  function doDismantle() {
-    mode = 'idle';
-    say('hey uh — hold on a sec', 3600);
-
-    setTimeout(function () {
-      say('I think there’s a loose bolt back here', 4400);
-      bolt.style.transition = 'none';
-      moveBoltTo(card);
-      bolt.classList.add('show');
-      void bolt.offsetWidth; // force reflow so the fly-out actually animates
-      bolt.style.transition = '';
-      moveBoltTo(sprite);
-    }, 3600);
-
-    setTimeout(function () {
-      card.classList.add('dd-wiggle');
-      say('found it. this is fine, this is normal', 4400);
-    }, 8000);
-
-    setTimeout(function () {
-      card.classList.remove('dd-wiggle');
-      moveBoltTo(card);
-      say(pick(DISMANTLE_CLOSERS), 5200);
-    }, 12400);
-
-    setTimeout(function () {
-      bolt.classList.remove('show');
-      resumeWalking();
-    }, 17600);
-  }
-
-  // Walk through the how-to lines once on load, then hand off to the
-  // behavior scheduler.
-  var step = 0;
-  function nextHowTo() {
-    if (step < HOW_TO.length) {
-      say(HOW_TO[step], 6800);
-      step++;
-      setTimeout(nextHowTo, 7600);
-    } else {
-      scheduleIdle();
-    }
-  }
-  setTimeout(nextHowTo, 900);
-
-  // ---- Celebrate a successful flash ---------------------------------
-  // esp-web-tools doesn't fire any public "done" event — the dialog
-  // it creates just reflects its own UI step as a `state` attribute
-  // (used for its internal CSS hooks: INSTALL/ASK_ERASE while
-  // flashing, DASHBOARD once connected and ready). That's the only
-  // externally-observable signal available, so this watches for a
-  // transition into DASHBOARD that was actually preceded by being in
-  // the install flow — not just clicking Connect to browse. It's
-  // watching an implementation detail rather than a documented API,
-  // so it's wrapped defensively and just quietly does nothing if a
-  // future esp-web-tools release stops matching this shape.
-  var VICTORY_LINES = [
-    "IT WORKED. Go be mysterious.",
-    "Flashed and ready. Nobody saw that.",
-    "That's a wrap — your detector's alive.",
-    "Boom. Go find some cameras.",
-  ];
-
-  function watchInstallDialog(dialog) {
-    var wasInstalling = false;
-    try {
-      var attrObserver = new MutationObserver(function () {
-        var state = dialog.getAttribute('state');
-        if (state === 'INSTALL' || state === 'ASK_ERASE') wasInstalling = true;
-        if (state === 'DASHBOARD' && wasInstalling) {
-          wasInstalling = false;
-          if (phase === 'auto') {
-            mode = 'dance';
-            moving = false;
-            say(pick(VICTORY_LINES), 8000);
-            setTimeout(resumeWalking, 8400);
-          }
-        }
-      });
-      attrObserver.observe(dialog, { attributes: true, attributeFilter: ['state'] });
-    } catch (e) { /* fine if a future esp-web-tools version doesn't match this shape */ }
-  }
-
-  try {
-    var bodyObserver = new MutationObserver(function (mutations) {
-      mutations.forEach(function (m) {
-        m.addedNodes.forEach(function (node) {
-          if (node.nodeName && node.nodeName.toLowerCase() === 'ewt-install-dialog') {
-            watchInstallDialog(node);
-          }
-        });
-      });
-    });
-    bodyObserver.observe(document.body, { childList: true });
-  } catch (e) {}
-
   // ---- Board picker -----------------------------------------------------
   // Swaps which manifest the install button targets -- esp-web-tools'
   // <esp-web-install-button> reactively re-reads its manifest attribute
@@ -1443,9 +601,6 @@
     var installBtn = document.getElementById('installBtn');
     var note = document.getElementById('whiteScreenNote');
     var versionNote = document.getElementById('versionNote');
-    var ocRow = document.getElementById('overclockRow');
-    var ocChk = document.getElementById('overclockChk');
-    var ocDesc = document.getElementById('overclockDesc');
     if (!select || !installBtn) return;
 
     // ---- Unlisted lab build ---------------------------------------------
@@ -1487,9 +642,6 @@
       }
     } catch (e) { /* location unavailable in some embeddings */ }
 
-    var WHITE_SCREEN_LINE =
-      "White screen after flashing? Your CYD's probably got the other display driver — try the other 2.8\" option in that dropdown.";
-
     // The manifest's own "version" field is stamped with the release
     // tag by .github/workflows/release-flasher.yml at deploy time (the
     // copy committed to the repo just stays a "0.0.0" placeholder --
@@ -1530,29 +682,6 @@
         });
     }
 
-    // The overclock checkbox is not a setting the firmware reads -- it
-    // picks a different build. cyd-fast/cyd-ili9341-fast are the same
-    // sources with -DSPI_FREQUENCY=80000000, published as their own
-    // manifests, so ticking the box swaps which one the install button
-    // targets and unticking it is a reflash rather than a menu the user
-    // has to find on a display that may be the thing that broke.
-    //
-    // Offered for the 2.8" boards only, hence data-fast living on those
-    // two <option>s rather than a flag here: AWOK and the RL Phantom run
-    // their touchscreen on the display's SPI bus through TFT_eSPI's own touch path, which
-    // reads SPI_FREQUENCY directly, so overclocking the panel would
-    // also overclock touch. An option with no data-fast disables the
-    // row instead of silently ignoring the tick.
-    var OC_DESC_ON =
-      "Runs the screen at twice the rated clock — about 34fps instead of 22, which you " +
-      "will notice everywhere. Not every panel takes it. If the screen stays white or shows " +
-      "torn lines, reflash with this unchecked.";
-    var OC_DESC_OFF =
-      "Not available for this board — its touchscreen shares the display's SPI bus, so " +
-      "overclocking the panel would overclock touch along with it.";
-    var OVERCLOCK_LINE =
-      "Overclock, huh. If it comes up white or torn, that panel said no — flash again with the box unticked.";
-
     // Which release directory the manifest lives in. "" is the latest,
     // which sits at the site root; older ones are in <tag>/ subdirectories
     // laid down by the release workflow.
@@ -1577,40 +706,23 @@
     if (verSel) {
       verSel.addEventListener('change', function () {
         verDir = verSel.value;
-        applySelection('version');
+        applySelection();
       });
     }
 
-    function applySelection(announce) {
+    function applySelection() {
       var opt = select.options[select.selectedIndex];
-      var fast = opt.dataset.fast;
-      if (ocRow) {
-        ocRow.classList.toggle('disabled', !fast);
-        if (ocChk) ocChk.disabled = !fast;
-        // A board may say WHY the row is off rather than take the default
-        // reason, which is about a shared touch bus and is not every board's.
-        if (ocDesc) ocDesc.textContent = fast ? OC_DESC_ON
-                                              : (opt.dataset.ocnote || OC_DESC_OFF);
-      }
-      var useFast = !!fast && !!(ocChk && ocChk.checked && !ocChk.disabled);
-      // Board and overclock choose WHICH manifest; the version picker
-      // chooses which release's copy of it. The manifest's own relative
-      // paths then resolve to the binaries beside it.
-      var manifest = './' + verDir + (useFast ? fast : opt.value).replace(/^\.\//, '');
+      // The board chooses WHICH manifest; the version picker chooses which
+      // release's copy of it. The manifest's own relative paths then resolve
+      // to the binaries beside it.
+      var manifest = './' + verDir + opt.value.replace(/^\.\//, '');
       installBtn.setAttribute('manifest', manifest);
-      var isCyd28 = opt.dataset.cyd28 === '1';
-      if (note) note.hidden = !isCyd28;
-      if (announce === 'board' && isCyd28) say(WHITE_SCREEN_LINE, 8000);
-      if (announce === 'overclock' && useFast) say(OVERCLOCK_LINE, 8000);
-      if (announce === 'version' && verDir) {
-        say("Rolling back. If that one behaves, tell me which build broke it.", 8000);
-      }
+      if (note) note.hidden = opt.dataset.cyd28 !== '1';
       loadVersion(manifest);
     }
 
-    select.addEventListener('change', function () { applySelection('board'); });
-    if (ocChk) ocChk.addEventListener('change', function () { applySelection('overclock'); });
-    applySelection(null);
+    select.addEventListener('change', applySelection);
+    applySelection();
 
     // "Which one do I have?": the code printed on the back of the board picks
     // the entry. The patterns are the codes the boards carry; a code this
@@ -1636,7 +748,7 @@
       if (v.length < 4) { codeOut.textContent = ''; return; }
       for (var i = 0; i < CODES.length; i++) {
         if (!CODES[i].re.test(v)) continue;
-        if (CODES[i].v) { select.value = CODES[i].v; applySelection('board'); }
+        if (CODES[i].v) { select.value = CODES[i].v; applySelection(); }
         else codeOut.className = 'board-code-answer warn';
         codeOut.textContent = CODES[i].say;
         return;
@@ -1670,16 +782,6 @@
   // had time to boot, and the boot-time update check with it.
   var clockBtn = document.getElementById('clockBtn');
   var clockResult = document.getElementById('clockResult');
-  var wigleBtn = document.getElementById('wigleBtn');
-  var wigleResult = document.getElementById('wigleResult');
-  if (wigleBtn) {
-    if (!('serial' in navigator)) {
-      wigleBtn.disabled = true;
-      wigleBtn.textContent = '[ DOWNLOAD WIGLE FILE ] (needs a desktop browser)';
-    } else {
-      wigleBtn.addEventListener('click', downloadWigle);
-    }
-  }
   if (clockBtn) {
     if (!('serial' in navigator)) {
       clockBtn.disabled = true;
@@ -1840,7 +942,6 @@
       } else if (gotClock || gotZone) {
         clockResult.textContent = 'SET: ' + (gotZone ? gotZone[1] : z.zone) + (gotClock ? '  ·  clock ' + gotClock[1] : '') +
           (z.sure ? '' : '  (your zone, ' + z.from + ', is not in the list: pick one under SYSTEM)');
-        say('Clock set. I know what day it is now. Big day for me.', 7600);
       } else {
         clockResult.textContent = 'Sent TIME and ZONE ' + z.zone + ' but heard nothing back. If the board was still booting, try once more.';
       }
@@ -1852,93 +953,6 @@
       try { if (port) await port.close(); } catch (e4) {}
     } finally {
       clockBtn.disabled = false;
-    }
-  }
-
-  // The watch's wardrive log as a WigleWifi-1.6 file. It is sent WIGLE on its
-  // console and writes the file between two marker lines (wigleExport in
-  // src/main.cpp); this keeps what is between them -- and only the lines
-  // shaped like the file, since the watch's radio tasks keep logging while it
-  // exports -- then hands it to the browser as a download. Same rules as
-  // tools/wigle_dump.py.
-  async function downloadWigle() {
-    wigleBtn.disabled = true;
-    wigleResult.className = 'identify-result';
-    var port, writer, reader;
-    try {
-      wigleResult.textContent = 'Pick the watch’s port...';
-      port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303A }] });
-      await port.open({ baudRate: 115200, bufferSize: 65536 });
-      try { await port.setSignals({ requestToSend: false }); } catch (e) {}
-      try { await port.setSignals({ dataTerminalReady: false }); } catch (e) {}
-      var enc = new TextEncoder(), dec = new TextDecoder();
-      reader = port.readable.getReader();
-      var text = '', started = false, ended = null, sentAt = 0, asked = 0, t0 = Date.now(), lastData = Date.now();
-      async function ask() {
-        writer = port.writable.getWriter();
-        // A blank line first: the first byte after an open can go missing.
-        await writer.write(enc.encode('\nWIGLE\n'));
-        writer.releaseLock(); writer = null;
-        sentAt = Date.now(); asked++;
-      }
-      await ask();
-      while (!ended) {
-        var chunk = await Promise.race([reader.read(), new Promise(function (r) { setTimeout(function () { r({ done: false, value: null }); }, 400); })]);
-        if (chunk.done) break;
-        if (chunk.value) { text += dec.decode(chunk.value, { stream: true }); lastData = Date.now(); }
-        if (!started && text.indexOf('=== WIGLE BEGIN') >= 0) started = true;
-        var m = /=== WIGLE END (\d+) rows \((\d+) bench rows left out\)( INCOMPLETE)? ===/.exec(text);
-        if (m) { ended = m; break; }
-        if (started) {
-          var rows = (text.match(/\n[0-9a-f]{2}(:[0-9a-f]{2}){5},/g) || []).length;
-          wigleResult.textContent = 'Receiving... ' + rows + ' rows';
-          if (Date.now() - lastData > 10000) throw new Error('the watch stopped sending part-way');
-        } else {
-          // Opening the port can restart the watch. If nothing answers, wait
-          // for its main screen and ask again.
-          if (text.indexOf('[frame]') >= 0 && Date.now() - sentAt > 4000 && asked < 3) { text = ''; await ask(); }
-          if (Date.now() - t0 > 60000) throw new Error('the watch did not answer. Is it a T-Watch S3 Plus on this firmware?');
-          if (!started) wigleResult.textContent = 'Asking the watch for its log...';
-        }
-        if (text.length > 40000000) throw new Error('far more came back than a wardrive log holds');
-      }
-      await reader.cancel(); reader.releaseLock(); reader = null;
-      await port.close(); port = null;
-      if (!ended) throw new Error('the export did not finish');
-      if (ended[3]) throw new Error('the watch says the export was cut short');
-      var body = text.slice(text.indexOf('=== WIGLE BEGIN'), text.indexOf('=== WIGLE END')).split(/\r?\n/);
-      var pre = null, cols = null, keep = [], noise = 0;
-      var macRe = /^[0-9a-f]{2}(:[0-9a-f]{2}){5},/;
-      body.forEach(function (l) {
-        if (!pre && l.indexOf('WigleWifi-1.6,') === 0) { pre = l; return; }
-        if (!cols && l.indexOf('MAC,SSID,AuthMode,') === 0) { cols = l; return; }
-        if (macRe.test(l)) keep.push(l); else if (l && l.indexOf('=== WIGLE') !== 0) noise++;
-      });
-      if (!pre || !cols) throw new Error('no WiGLE header came back');
-      if (!keep.length) {
-        wigleResult.textContent = 'The watch has no wardrive rows yet' + (ended[2] !== '0' ? ' (' + ended[2] + ' bench rows are left out)' : '') +
-          '. Turn WARDRIVE on under WATCH SETTINGS and go for a walk.';
-        return;
-      }
-      var d = new Date(), pad = function (n) { return (n < 10 ? '0' : '') + n; };
-      var name = 'MuleSkin-wigle-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + '.csv';
-      var blob = new Blob([[pre, cols].concat(keep).join('\n') + '\n'], { type: 'text/csv' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = name;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
-      var sent = +ended[1];
-      wigleResult.textContent = 'SAVED ' + keep.length + ' rows as ' + name + (sent !== keep.length ? ' (the watch sent ' + sent + '; ' + (sent - keep.length) + ' arrived damaged and were left out)' : '') +
-        '. Upload it at wigle.net/uploads.';
-      say('Every network I heard, and where. WiGLE is going to love this.', 7600);
-    } catch (err) {
-      wigleResult.className = 'identify-result err';
-      wigleResult.textContent = 'Couldn’t download it: ' + (err && err.message ? err.message : 'unknown error');
-      try { if (writer) writer.releaseLock(); } catch (e2) {}
-      try { if (reader) { await reader.cancel(); reader.releaseLock(); } } catch (e3) {}
-      try { if (port) await port.close(); } catch (e4) {}
-    } finally {
-      wigleBtn.disabled = false;
     }
   }
 
@@ -1959,7 +973,6 @@
       var chipDesc = await esploader.main();
       var mac = await esploader.chip.readMac(esploader);
       identifyResult.textContent = 'IDENTIFIED: ' + chipDesc + '  ·  MAC ' + mac;
-      say('That’s a ' + chipDesc + '. I know a fellow cryptid when I see one.', 7600);
       await transport.setRTS(true);
       await new Promise(function (r) { setTimeout(r, 100); });
       await esploader.after();
@@ -1996,12 +1009,12 @@
   window.addEventListener('resize', resize);
 
   function draw() {
-    c.fillStyle = 'rgba(5,0,15,0.07)';
+    c.fillStyle = 'rgba(0,4,15,0.07)';
     c.fillRect(0, 0, W, H);
     c.font = '14px "Share Tech Mono", monospace';
     for (var i = 0; i < cols; i++) {
       var ch = chars[Math.floor(Math.random() * chars.length)];
-      c.fillStyle = Math.random() > 0.85 ? 'rgba(255,113,206,0.9)' : 'rgba(0,255,245,0.85)';
+      c.fillStyle = Math.random() > 0.85 ? 'rgba(255,109,0,0.9)' : 'rgba(0,229,255,0.85)';
       c.fillText(ch, i * 18, drops[i] * 18);
       if (drops[i] * 18 > H && Math.random() > 0.975) drops[i] = 0;
       drops[i]++;

@@ -7,9 +7,9 @@ of Flock Safety cameras, Axon body cameras, recording glasses, card
 skimmers, AirTags, drones, proximity beacons and pentest hardware. It runs
 standalone on a bare CYD board — no PC, no extras, just plug it into USB.
 
-The UI is a vaporwave-themed take on the **MuleSkinWare** aesthetic: matrix
-digital rain, MuleSkin the mascot, full-screen dramatic ALERT overlays, and
-the glitchy MuleSkin wordmark.
+The UI is a neon radar: the hooded-MuleSkin artwork on the splash, a
+sweeping radar scope behind the main screen, full-screen ALERT cards, and
+headlines in Orbitron.
 
 <p align="center">
   <a href="https://MuleSkin.com/emulator/" title="Drive it in your browser">
@@ -127,17 +127,24 @@ A full beginner-friendly walkthrough is in [docs/BUILD.md](docs/BUILD.md).
 ## Usage
 
 1. Plug the CYD into USB-C.
-2. The splash runs for a second and a half, stamped with the build's own
-   version (from `git describe`, so a working-tree build says so).
-3. The main screen appears: your chosen background, MuleSkin, and live
-   per-type counters. He says something reassuring every thirty seconds.
-4. The soft button at the bottom:
-   - **`[ LOG ]`** — open the rolling 200-entry detection log; tap it again
-     to return to the main screen.
-   - On the LOG screen a second button, **`[ CLR ]`**, wipes the log and returns.
+2. The splash runs for about three seconds: the MuleSkin artwork, ears
+   twitching, with the release under the wordmark and the build's own
+   version on the INITIALIZING line (from `git describe`, so a working-tree
+   build says so).
+3. The main screen appears: the radar sweeping, the time at the top centre
+   once the clock is set, and live per-type counters in alphabetical order.
+4. The soft buttons at the bottom:
+   - **`< WIFI TIME >`** — join your saved WiFi network just long enough to
+     set the clock (see [The clock](#the-clock)).
+   - **`< LOG >`** — open the rolling 200-entry detection log; tap it again
+     to return to the main screen. On the LOG screen a second button,
+     **`[ CLR ]`**, wipes the log and returns.
+   - **`< IN MEETING >`** — a red do-not-disturb sign, **IN A MEETING** in
+     big white letters, with BACK to return. It never dims, and no alert
+     takes it over; detection keeps running and logging behind it.
 5. When something is detected, the device **flashes a full-screen ALERT**:
    a header strip in the detection's own colour with the type in the
-   Bangers face, a data plate with the vendor, the device's own name where
+   headline face, a data plate with the vendor, the device's own name where
    it broadcasts one, its MAC and a signal meter, and a gauge showing what
    was found with the instrument grid over it. Tap anywhere to dismiss
    early, or it clears itself after 60 seconds.
@@ -147,10 +154,14 @@ If a microSD card is present, every detection is also appended to
 
 ### The clock
 
-There is no GPS, and the board never joins a network to scan. But it does
-join one for the update check at boot, and for UPDATE OVER WIFI, and the
-clock rides along: one NTP round trip while the radio is up anyway, about a
-second. The zone is yours to pick, and there are three ways: the web
+There is no GPS, and the board never joins a network to scan. It joins one
+to tell the time: **`< WIFI TIME >`** on the main screen joins your saved
+network (the one marked USE, or the strongest saved one in range), asks a time
+server, and lets go, pausing detection only while the radio is busy; with no
+network saved it opens WIFI NETWORKS to add one. The boot-time update check
+and UPDATE OVER WIFI set the clock the same way while the radio is up anyway.
+Once the time is real it shows at the top centre of the main screen, 12-hour
+with AM/PM. The zone is yours to pick, and there are three ways: the web
 flasher's **Set Time & Zone** button sends this computer's clock and zone
 down the same cable right after flashing; the first time the clock is set
 with no zone chosen, a card on the main screen asks, with the live time in
@@ -169,16 +180,8 @@ honest. Such a clock is used for the date only; the LOG times, the night
 tag and the hour lines wait for a real answer.
 
 Once it is set, the LOG shows the real time of each catch (or the date, for
-one from another day); the alert card says **AT NIGHT** for anything caught
-between eleven and five, and MuleSkin's line sharpens to match; he says hello
-once a day with the date in it, knows whether it's Monday, lunch, the three
-o'clock slump or two in the morning, and counts the days since the board
-first knew the date: a week, a month, a hundred days, a year.
-
-**BANTER** on the APPEARANCE page sets how much he talks when nothing is
-happening: IMPORTANT (idle chatter off; he still speaks for a catch, a
-message, a newer release and the daily hello), LESS, NORMAL or MORE. The
-set pieces two MuleSkins act out follow the same setting.
+one from another day), and the alert card says **AT NIGHT** for anything
+caught between eleven and five.
 
 ## The status light
 
@@ -202,21 +205,17 @@ that screen.
 ## MuleSkinMesh
 
 > **Work in progress.** It is in this release because it works — two boards
-> find each other and each draws the other's MuleSkin — but it has had days of
-> testing, not months. Both halves are **off** until you turn them on, and one
+> find each other — but it has had days of testing, not months. Both halves are **off** until you turn them on, and one
 > of them costs you something; the device asks before it lets you near the
 > switch.
 
-Two MuleSkines in range of each other notice, and each one draws the
-other's MuleSkin as a visitor. He walks in, they high five, they stand around
-talking — now and then breaking into one of the thirty-odd emotes on their
-own, a pie fight, a coin toss, a selfie, a dance-off, the same one on both
-screens with the same result — and he goes home when the other board does.
-His outfit, his shades and his name all travelled over the air in a
-twenty-byte BLE advert. The name is one row, **NAME** under MULESKINMESH: a
-curated one until somebody types one on the payphone, where **SHUFFLE**
-steps through the curated list for anyone who would rather not type.
-Whichever it is, the visitor wears it on a sticker on his chest.
+Two MuleSkines in range of each other notice: each hears the other's
+twenty-byte BLE advert, which carries its name and version. (This build
+does not draw the other board as a visitor -- the mascot is switched off --
+so there are no on-screen visits.) The name is one row, **NAME** under
+MULESKINMESH: a curated one until somebody types one on the payphone, where
+**SHUFFLE** steps through the curated list for anyone who would rather not
+type.
 
 It is deliberately not a network. No pairing, no connection, no
 acknowledgement, no retry — a broadcast that says who is here, and anybody in
@@ -224,8 +223,8 @@ earshot may or may not catch it. A peer is recognised inside the scan callback
 and returns before the signature tables ever see it, so two of these can never
 set each other off.
 
-**Settings → MULESKINMESH**, and it asks first. `DETECT` is receive-only: you
-see other people's MuleSkins and broadcast nothing at all. `TRANSMIT` is the
+**Settings → MULESKINMESH**, and it asks first. `DETECT` is receive-only: your
+board hears other boards and broadcasts nothing at all. `TRANSMIT` is the
 half that makes you visible, and a full-screen warning stands in front of that
 menu spelling out what goes out, how often, and what somebody with a scanner
 can reconstruct from it — a fixed address that never changes is a trail of
@@ -240,9 +239,10 @@ doing. Offering it is defensible; switching it on quietly would not be.
 
 Two MuleSkines that share a five-word phrase can message each other: one
 of 24 ready-made lines, or up to 48 characters typed on the payphone or the
-QWERTY board. A message arrives as a **red** bubble with the sender's name in
-it, so it is never mistaken for the MuleSkins' own chatter, and nothing is sent
-until you have confirmed it.
+QWERTY board, and nothing is sent until you have confirmed it. The message
+screen -- **Settings → MULESKINMESH → SQUAD → REPLY** -- shows the latest one
+in **red** with the sender's name, and the status light double-blinks while
+one is unread.
 
 **Settings → MULESKINMESH → MESSAGES**, then **PHRASE**: one of you ROLLs five
 words and reads them out, the other ENTERs the same five. Setting a phrase
@@ -265,8 +265,8 @@ message is not.
 </p>
 
 The typed phrase is the reliable way in and always will be. The convenient
-way is **ADD**, beside INVITE and HUNT on the SQUAD screen (the **+N** next to
-a visitor). Pick a board in range and tap it; their board asks them whether
+way is **ADD**, beside INVITE and HUNT on the SQUAD screen. Pick a board in
+range and tap it; their board asks them whether
 they want in. Both screens then show the same four digits, which the two of
 you compare out loud, and the phrase goes across sealed under a key that
 exists for that one exchange and no other. The digits are derived from both
@@ -286,8 +286,8 @@ phrase on every board.
 
 **Settings → MULESKINMESH → SQUAD** is the roster: everybody who has ever been
 heard holding your phrase, here or not, up to sixteen, kept across restarts.
-Each member shows in the outfit from their latest advert, with how many
-separate times you have met, those in range first. INVITE works when they
+Each member shows with how many separate times you have met, those in range
+first. INVITE works when they
 are here, AWAY says when they are not, and FORGET drops them after asking
 once; they come back the next time they are heard with the phrase. A new
 phrase clears the roster, because a new phrase is a new squad.
@@ -297,8 +297,8 @@ phrase clears the roster, because a new phrase is a new squad.
 **HUNT** on either SQUAD screen aims HUNT MODE's signal gauge at that board.
 It is the same meter the detector uses for a tag: no compass, so you turn
 your body and walk toward where the needle does not fall. Two readings in a
-row at arm's length and the gauge says **CAUGHT!**, MuleSkin bounces, and the
-light on the back flashes green. The fox needs TRANSMIT on; the hunters need
+row at arm's length and the gauge says **CAUGHT!** and the light on the back
+flashes green. The fox needs TRANSMIT on; the hunters need
 DETECT on, which they have if they can see the SQUAD screen at all.
 
 **SHOW PHRASE** on the PHRASE screen is on by default. Off, the five words
@@ -312,9 +312,8 @@ WiFi network joins it for about a second, asks MuleSkin.com for the latest
 version of its own build, and lets go again, all before Bluetooth starts;
 **UPDATE CHECK** on the SYSTEM page turns that off. And every board's hello
 to its squad carries its version, so a board that hears a member running
-something newer knows without touching WiFi. Either way MuleSkin says it once
-on the main screen, the SYSTEM row reads UPDATE, and UPDATE FIRMWARE names
-the version until you install it.
+something newer knows without touching WiFi. Either way the SYSTEM row reads
+UPDATE, and UPDATE FIRMWARE names the version until you install it.
 
 **WIFI NETWORKS** on the SYSTEM page is where the board keeps the networks it
 knows: up to six, with USE marking the one it tries first. ADD picks one from
@@ -332,7 +331,7 @@ none of the saved networks is in range. REMOVE takes one off the list.
   closer since its last reading and a red down-arrow when it has moved away;
   under four dB of change shows nothing, which is what a still device does.
 - **First of its kind.** The first time this board ever catches a type, the
-  card says so and MuleSkin marks the occasion when you get back to him.
+  card says so.
 - **FILL on the message screen.** Eight openings that end in a blank, MEET AT,
   I'M AT, BACK IN and the rest; pick one and the keyboard opens with it typed.
 - **Read receipts.** When a squad member opens your message their board says
@@ -341,10 +340,6 @@ none of the saved networks is in range. REMOVE takes one off the list.
 - **SNOOZE on an alert.** Quiets that one device until the board restarts. It
   is still scanned, counted and logged; only the alert stops. IGNORE is the
   same thing kept for good.
-- **Banter about something.** Two MuleSkins now talk about the weather on
-  screen, what was caught earlier, each other's outfits, how many times
-  they've met, the squad's size, and the length of the day, one exchange in
-  three, when there's something to say.
 
 ### Updating the squad
 
@@ -361,23 +356,6 @@ SECURITY screen turns that off for anyone who wants it off. A locked board
 ignores the whole thing regardless. So the order on release day is: update
 one board by hand, then UPDATE SQUAD from it.
 
-## Every outfit
-
-MuleSkin has sixteen costumes. Most are earned by detection count; six are
-hidden behind things nobody tells you about, on the background they belong
-to. Two of them are in the animation at the top of this page.
-
-<p align="center">
-  <img src="docs/outfits.png" width="880"
-       alt="All sixteen of MuleSkin's outfits, rendered by the firmware">
-</p>
-
-No fabricated marketing shots, which was the promise here before there was
-anything to show. Every panel above was drawn by the firmware, one render
-per costume, and the labels are read out of the source rather than typed
-next to it — so a renamed or newly added outfit cannot end up captioned
-wrongly. Regenerate with `python3 make_gallery.py` in `sim/`.
-
 ## Project layout
 
 ```
@@ -391,7 +369,9 @@ MuleSkin-CYD/
 │   ├── BUILD.md                  (friendly walkthrough)
 │   ├── PINOUT.md                 (CYD pin map)
 │   ├── DETECTIONS.md             (per-signature provenance)
-│   └── MULESKINWARE-AESTHETIC.md   (CSS → RGB565 mapping)
+│   ├── MULESKINWARE-AESTHETIC.md   (CSS → RGB565 mapping)
+│   ├── demo.gif                  (the artwork at the top of this file)
+│   └── radar.gif                 (the radar background's source; see tools/)
 ├── include/
 │   ├── state.h                   (DetectionType, Detection, Confidence)
 │   ├── theme.h                   (palette, backgrounds, icons, chrome)
@@ -404,14 +384,16 @@ MuleSkin-CYD/
 │   ├── meshmsg.h                 (sealed frames: messages, emotes, nudges, invites)
 │   ├── muleskinmesh.h              (the MuleSkinMesh wire format -- read first)
 │   ├── settings.h
-│   ├── muleskin.h                 (the mascot)
-│   ├── bangers_font.h            (generated 1bpp display face)
+│   ├── muleskin.h                 (the mascot -- switched off: MASCOT_SHOWN)
+│   ├── bangers_font.h            (generated 1bpp headline face: Orbitron)
+│   ├── muleskin_art.h            (generated: the splash artwork)
+│   ├── radar_art.h               (generated: the radar background's model)
 │   ├── cyd_user_setup.h          (TFT_eSPI config for the CYD)
 │   └── ui_*.h
 ├── src/
 │   ├── main.cpp                  (setup/loop, state machine, touch)
 │   ├── theme.cpp                 (backgrounds, per-type icons, chrome)
-│   ├── muleskin.cpp               (the mascot, his outfits and his lines)
+│   ├── muleskin.cpp               (the mascot's state; not drawn)
 │   ├── signatures.cpp
 │   ├── detection.cpp             (WiFi promiscuous + NimBLE scan)
 │   ├── remote_id.cpp
@@ -424,14 +406,16 @@ MuleSkin-CYD/
 │   ├── status_light.cpp
 │   ├── sd_log.cpp
 │   └── ui_*.cpp
+├── tools/
+│   ├── make_boot_art.py          (docs/input.png -> muleskin_art.h)
+│   ├── make_radar.py             (docs/radar.gif -> radar_art.h)
+│   └── gen_headline_font.py      (Orbitron -> bangers_font.h)
 ├── test/                         (host tests -- `make -C test`, no framework)
 └── sim/                          (PC emulator — compiles src/ natively)
     ├── Makefile                  (`make` for the CLI, `make wasm` for the web build)
     ├── *.h                       (Arduino/TFT_eSPI/NVS shims)
-    ├── make_readme_demo.py       (renders the animation at the top of this file)
-    ├── make_demo.py              (the older background tour)
-    ├── make_mesh_demo.py         (renders the MuleSkinMesh clip above)
-    ├── make_gallery.py           (renders the outfit sheet above)
+    ├── make_readme_demo.py       (renders an emulator clip, docs/demo1.gif)
+    ├── make_invite_demo.py       (renders the ADD TO SQUAD clip above)
     ├── make_social.py            (renders the repo's social preview card)
     └── web/                      (the browser build)
 ```

@@ -1,7 +1,6 @@
 {
   "name": "MuleSkin-CYD (Elecrow CrowPanel Advance 7.0\")",
   "version": "0.0.0",
-  "funding_url": "https://talkingsasquach.com",
   "new_install_prompt_erase": true,
   "builds": [
     {

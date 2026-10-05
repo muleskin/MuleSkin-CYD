@@ -1,7 +1,6 @@
 {
   "name": "MuleSkin-CYD (3.5\" BETA)",
   "version": "0.0.0",
-  "funding_url": "https://talkingsasquach.com",
   "new_install_prompt_erase": true,
   "builds": [
     {

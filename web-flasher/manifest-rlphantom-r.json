@@ -1,7 +1,6 @@
 {
   "name": "MuleSkin-CYD (RL Phantom 2.4\")",
   "version": "0.0.0",
-  "funding_url": "https://talkingsasquach.com",
   "new_install_prompt_erase": true,
   "builds": [
     {
