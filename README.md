@@ -207,11 +207,6 @@ that screen.
 > of them costs you something; the device asks before it lets you near the
 > switch.
 
-<p align="center">
-  <img src="docs/muleskinmesh.gif" width="640"
-       alt="Two MuleSkines in range of each other. One MuleSkin walks in, they greet each other, and the pair stand around talking.">
-</p>
-
 Two MuleSkines in range of each other notice, and each one draws the
 other's MuleSkin as a visitor. He walks in, they high five, they stand around
 talking — now and then breaking into one of the thirty-odd emotes on their
@@ -242,11 +237,6 @@ is the exact behaviour this device exists to catch other people's hardware
 doing. Offering it is defensible; switching it on quietly would not be.
 
 ### Messages
-
-<p align="center">
-  <img src="docs/muleskinmesh-messages.gif" width="640"
-       alt="A visiting MuleSkin sends a typed message that lands in a red speech bubble; a ready-made reply is chosen, confirmed and sent, the visitor answers, and the phrase picker shows its big alphabet and word list.">
-</p>
 
 Two MuleSkines that share a five-word phrase can message each other: one
 of 24 ready-made lines, or up to 48 characters typed on the payphone or the
