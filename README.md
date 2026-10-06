@@ -11,6 +11,12 @@ The UI is a neon radar: the hooded-MuleSkin artwork on the splash, a
 sweeping radar scope behind the main screen, full-screen ALERT cards, and
 headlines in Orbitron.
 
+> **A fork of [SquachWatch-CYD](https://github.com/skizzophrenic/SquachWatch-CYD)
+> by [skizzophrenic](https://github.com/skizzophrenic).** The detection engine,
+> the board ports, the mesh and most of what follows are their work; this fork
+> rebrands it as MuleSkin and reworks the look and the main screen. Like the
+> original, it is GPL-3.0.
+
 <p align="center">
   <img src="docs/demo.gif" width="280"
        alt="MuleSkin seen from behind: a hooded figure with mule ears sitting at a computer in a dark room, ears twitching">
@@ -436,6 +442,11 @@ MuleSkin-CYD/
 
 ## Credits
 
+- **[skizzophrenic](https://github.com/skizzophrenic)**, author of
+  [SquachWatch-CYD](https://github.com/skizzophrenic/SquachWatch-CYD), the
+  project MuleSkin-CYD is forked from. The firmware, the detection
+  signatures, the web flasher, the simulator and the tests all started
+  there.
 - Flock Safety OUI research: [@NitekryDPaul](https://x.com/NitekryDPaul),
   DeFlockJoplin, [`colonelpanichacks/flock-you`](https://github.com/colonelpanichacks/flock-you)
   (MIT).
@@ -448,9 +459,12 @@ MuleSkin-CYD/
 
 ## Status
 
-**Shipping.** Releases are cut by pushing a `v*.*.*` tag; the flasher above
-is rebuilt and redeployed by the same CI run, so the web flasher always
-matches the newest release.
+**Shipping.** There is no CI in this repo: nothing builds or deploys on a
+push or a tag. `tools/build_flasher_bins.sh` builds every board the web
+flasher lists (in Docker, so nothing needs installing) into
+`.pio/flasher-bins`, and `web-flasher/Dockerfile` serves the flasher on port
+8000 with those bins mounted at `/firmware`. Getting a release onto
+MuleSkin.com is a manual step.
 
 Detection is reliable for the high-priority targets (Flock, Axon, skimmer,
 camera glasses). Remote ID and iBeacon are exact-format matches. Raven,
