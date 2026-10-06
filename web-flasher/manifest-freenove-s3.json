@@ -1,6 +1,6 @@
 {
   "name": "MuleSkin-CYD (Freenove ESP32-S3 2.8\")",
-  "version": "0.0.0",
+  "version": "03.01",
   "new_install_prompt_erase": true,
   "builds": [
     {

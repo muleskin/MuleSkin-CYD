@@ -656,16 +656,12 @@
       }
     } catch (e) { /* location unavailable in some embeddings */ }
 
-    // The manifest's own "version" field is stamped with the release
-    // tag by .github/workflows/release-flasher.yml at deploy time (the
-    // copy committed to the repo just stays a "0.0.0" placeholder --
-    // only the one actually deployed alongside this page on GitHub
-    // Pages carries the real value), so fetching it here is the only
-    // way this page can show a real version without hardcoding one
-    // that'd silently go stale the next release. Re-fetched on every
-    // board change since each board gets its own manifest file, even
-    // though in practice all three get stamped with the same tag in
-    // one release run.
+    // The manifest's own "version" field is the release, shown as
+    // "V.03.01" to match the firmware's splash screen. There is no release
+    // workflow in this repo, so the committed manifests carry it directly:
+    // bump all of them together when the splash version changes.
+    // Re-fetched on every board change since each board gets its own
+    // manifest file.
     var versionReqSeq = 0;
     function loadVersion(manifestUrl) {
       if (!versionNote) return;
@@ -687,7 +683,7 @@
             return;
           }
           installBtn.style.display = '';
-          versionNote.textContent = m && m.version ? ('latest firmware: v' + m.version) : '';
+          versionNote.textContent = m && m.version ? ('latest firmware: V.' + m.version) : '';
         })
         .catch(function () {
           if (seq !== versionReqSeq) return;
