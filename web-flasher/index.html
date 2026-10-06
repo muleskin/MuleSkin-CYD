@@ -106,6 +106,14 @@
     margin:6px 0 0;
   }
 
+  .credit-line{
+    font-size:0.85rem;
+    color:#a9c3dc;
+    margin:8px 0 0;
+  }
+  .credit-line a, footer a{ color:var(--vapor-yellow); text-decoration:none; border-bottom:1px dotted var(--vapor-yellow); }
+  .credit-line a:hover, footer a:hover{ color:var(--vapor-pink); border-color:var(--vapor-pink); }
+
   .header-inner{
     display:flex;
     align-items:center;
@@ -423,6 +431,7 @@
     <div class="header-text">
       <h1 class="wordmark">MuleSkin</h1>
       <p class="tagline">&gt;&gt; WEB FLASHER &lt;&lt;</p>
+      <p class="credit-line">A fork of <a href="https://github.com/skizzophrenic/SquachWatch-CYD" target="_blank" rel="noopener">SquachWatch-CYD</a> by <a href="https://github.com/skizzophrenic" target="_blank" rel="noopener">skizzophrenic</a></p>
     </div>
   </div>
 </header>
@@ -574,6 +583,11 @@
 
   <div class="about">
     <p>MuleSkin-CYD is an open-source surveillance detector for the ESP32 "Cheap Yellow Display" board.</p>
+    <p>It is a fork of <a href="https://github.com/skizzophrenic/SquachWatch-CYD" target="_blank" rel="noopener">SquachWatch-CYD</a>, created by
+      <a href="https://github.com/skizzophrenic" target="_blank" rel="noopener">skizzophrenic</a>. The detection engine and its signatures,
+      the board ports, the mesh, the simulator and this web flasher itself all began as skizzophrenic's work;
+      MuleSkin rebrands it and reworks the look and the main screen. Full credit to skizzophrenic &mdash;
+      like the original, it is free software under the GPL-3.0.</p>
     <p class="driver-note">Board not showing up as a port? Most CYDs use a CH340 USB chip — grab the driver:
       <a href="https://www.wch-ic.com/downloads/ch341ser_exe.html" target="_blank" rel="noopener">Windows</a> &middot;
       <a href="https://www.wch-ic.com/downloads/CH34XSER_MAC_ZIP.html" target="_blank" rel="noopener">macOS</a> &middot;
@@ -582,7 +596,7 @@
   </div>
 </main>
 
-<footer>Stay muleskin out there.</footer>
+<footer>Stay muleskin out there. &middot; Built on <a href="https://github.com/skizzophrenic/SquachWatch-CYD" target="_blank" rel="noopener">SquachWatch-CYD</a> by <a href="https://github.com/skizzophrenic" target="_blank" rel="noopener">skizzophrenic</a>.</footer>
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 <script>
@@ -604,7 +618,7 @@
     if (!select || !installBtn) return;
 
     // ---- Unlisted lab build ---------------------------------------------
-    // MuleSkin.com/?lab=1 adds a development build to the picker. It is
+    // flasher.oillie.cloud/?lab=1 adds a development build to the picker. It is
     // UNLISTED, not secret: this repo and this Pages site are both public,
     // so anyone who knows the parameter can flash it. That is fine -- the
     // point is that nobody arrives at an unfinished feature by accident,

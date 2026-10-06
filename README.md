@@ -93,7 +93,7 @@ SDMMC card slot, a WS2812 status light and a battery connector. Pins in
 No build tools, no IDE, no cloning anything — flash a board straight
 from your browser:
 
-**[https://MuleSkin.com/](https://MuleSkin.com/)**
+**[https://flasher.oillie.cloud/](https://flasher.oillie.cloud/)**
 
 Works in Firefox, Chrome, Edge, or Brave on desktop. Pick your board (2.8" CYD,
 AWOK 2.4", RL Phantom 2.4", Freenove 3.2", or in beta the 3.5", the LilyGo
