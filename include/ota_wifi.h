@@ -2,7 +2,7 @@
 //
 // The board finds nearby networks, you pick yours and type the password on
 // the board, and it downloads the latest release for its own build straight
-// from MuleSkin.com. No computer, no browser, so it works for anybody --
+// from flasher.oillie.cloud. No computer, no browser, so it works for anybody --
 // iPhone owners included. Everything that makes the install itself safe is in
 // OtaCore (ota_core.h); this file only gets the bytes there.
 //

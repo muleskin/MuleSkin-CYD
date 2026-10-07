@@ -125,7 +125,7 @@
   var R = { HELLO_OK: 0x81, BAD_CODE: 0x82, READY: 0x83, ACK: 0x84, DONE: 0x85, FAIL: 0x86 };
   var WINDOW = 64;   // chunks between SYNCs: a lost one costs at most this many
 
-  // Where the firmware lives. The site root on MuleSkin.com; ?base= for a
+  // Where the firmware lives. The site root on flasher.oillie.cloud; ?base= for a
   // local test server.
   var params = new URLSearchParams(location.search);
   var BASE = params.get('base') || '../';

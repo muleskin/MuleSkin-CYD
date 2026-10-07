@@ -246,7 +246,7 @@ void drawBtWaiting(TFT_eSPI& t, bool connected) {
     y += lineH(t);
     label(t, y, Theme::WHITE, "open");
     t.setTextColor(Theme::CYAN, Theme::BG);
-    t.print(" MuleSkin.com/update");
+    t.print(" flasher.oillie.cloud/update");
     y += lineH(t);
     label(t, y, Theme::WHITE, "press CONNECT and pick");
     y += lineH(t);

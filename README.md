@@ -325,7 +325,7 @@ from that board's side is ADD TO SQUAD, in person.
 ### Knowing there is an update
 
 Two ways, neither of which installs anything. At boot, a board with a saved
-WiFi network joins it for about a second, asks MuleSkin.com for the latest
+WiFi network joins it for about a second, asks flasher.oillie.cloud for the latest
 version of its own build, and lets go again, all before Bluetooth starts;
 **UPDATE CHECK** on the SYSTEM page turns that off. And every board's hello
 to its squad carries its version, so a board that hears a member running
@@ -363,7 +363,7 @@ none of the saved networks is in range. REMOVE takes one off the list.
 **Settings → SYSTEM → UPDATE FIRMWARE → UPDATE SQUAD** tells every board in
 range with your phrase to install the version this one is running. Each of
 them shows a thirty-second countdown with SKIP, joins WiFi, installs the
-signed release from MuleSkin.com, restarts, and reports back by name to
+signed release from flasher.oillie.cloud, restarts, and reports back by name to
 the board that asked. The sender can share its own saved network with the
 nudge, sealed with the phrase; the receiving boards use it once and forget it.
 
@@ -464,7 +464,8 @@ push or a tag. `tools/build_flasher_bins.sh` builds every board the web
 flasher lists (in Docker, so nothing needs installing) into
 `.pio/flasher-bins`, and `web-flasher/Dockerfile` serves the flasher on port
 8000 with those bins mounted at `/firmware`. Getting a release onto
-MuleSkin.com is a manual step.
+flasher.oillie.cloud is a manual step; the boards check that same site
+for updates.
 
 Detection is reliable for the high-priority targets (Flock, Axon, skimmer,
 camera glasses). Remote ID and iBeacon are exact-format matches. Raven,

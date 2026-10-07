@@ -17,7 +17,7 @@
 #define FIRMWARE_VERSION "unknown"
 #endif
 #ifndef OTA_WIFI_BASE
-#define OTA_WIFI_BASE "http://MuleSkin.com/"
+#define OTA_WIFI_BASE "http://flasher.oillie.cloud/"
 #endif
 
 using OtaCore::Fail;

@@ -215,7 +215,7 @@ void drawUpdateTab(TFT_eSPI& t, const Geom& g) {
 
     const char* from = OtaCore::availableFrom();
     if (from[0]) snprintf(buf, sizeof buf, "%s's board", from);
-    else         snprintf(buf, sizeof buf, "MuleSkin.com");
+    else         snprintf(buf, sizeof buf, "flasher.oillie.cloud");
     row(t, g, y, "Heard from", buf, Theme::W95_DKSHADOW, true);
     y += LINE + 5;
 
