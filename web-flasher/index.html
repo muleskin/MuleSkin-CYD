@@ -656,10 +656,11 @@
       }
     } catch (e) { /* location unavailable in some embeddings */ }
 
-    // The manifest's own "version" field is the release, shown as
-    // "V.03.01" to match the firmware's splash screen. There is no release
-    // workflow in this repo, so the committed manifests carry it directly:
-    // bump all of them together when the splash version changes.
+    // The manifest's own "version" field is the release: three numbers,
+    // matching the git tag (v3.1.0 -> "3.1.0"). The boards compare it with
+    // their own git-describe version and only take x.y.z, so it must stay in
+    // that form. There is no release workflow in this repo, so the committed
+    // manifests carry it directly: bump all of them with each new tag.
     // Re-fetched on every board change since each board gets its own
     // manifest file.
     var versionReqSeq = 0;
@@ -683,7 +684,7 @@
             return;
           }
           installBtn.style.display = '';
-          versionNote.textContent = m && m.version ? ('latest firmware: V.' + m.version) : '';
+          versionNote.textContent = m && m.version ? ('latest firmware: v' + m.version) : '';
         })
         .catch(function () {
           if (seq !== versionReqSeq) return;
