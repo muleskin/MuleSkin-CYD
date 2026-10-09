@@ -56,7 +56,9 @@ tools/release.sh 3.1.2 --push
 ```
 
 That stamps every `web-flasher/manifest-*.json` with the version, commits,
-tags `v3.1.2` and pushes. Then on the server, one command:
+tags `v3.1.2` and pushes. Add `--name "Short name"` (19 characters) and up to
+four `--note "What changed"` (39 each, plain ASCII) and boards show them with
+the update notice, in System Properties. Then on the server, one command:
 
 ```bash
 sudo OTA_SIGNING_KEY=/path/to/ota-key.pem /root/MuleSkin-CYD/deploy/redeploy.sh
