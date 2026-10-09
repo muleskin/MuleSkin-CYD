@@ -28,6 +28,7 @@
 #include <Preferences.h>  // AWOK's own per-rotation touch-cal storage; see the AWOK block below pollTouch()'s globals
 #include "auto_time.h"    // AUTO TIME's schedule (tested on the desktop)
 #include "night_mode.h"   // NIGHT DIM's hours (tested on the desktop)
+#include "tracker_follow.h" // a tag travelling with you (tested on the desktop)
 #include <esp_heap_caps.h>   // heap_caps_get_largest_free_block() -- diagnostics screen
 #if defined(NM_CYD_C5)
 #include <esp_memory_utils.h> // esp_ptr_external_ram(): is the frame in PSRAM? (IDF 5 only)
@@ -1866,6 +1867,50 @@ static void serviceNightDim(uint32_t now) {
         s_nightDim = want;
         applyBrightness();
         Serial.printf("[night] %s\n", want ? "dim" : "full brightness");
+    }
+}
+
+// A tracker travelling with you (include/tracker_follow.h): every 30 s, feed
+// the tags in the LOG to the follow table and raise the first one that has
+// stayed with you twenty minutes while the devices around kept changing. Once
+// per tag, never for an ignored one, and only from the main screen or the LOG
+// -- the meeting sign, settings and the rest are left alone. It skips AUTO
+// SNOOZE on purpose: a tag that keeps coming back is the point.
+static TrackerFollow::Table s_follow;
+static void serviceFollowing(uint32_t now) {
+    static uint32_t lastScan = 0;
+    if (now - lastScan < 30000) return;
+    lastScan = now;
+    const uint32_t seq = engine.newRows();
+    for (uint8_t i = 0; i < engine.logCount(); i++) {
+        const Detection* d = engine.logAt(i);
+        if (!d || d->restored || !d->lastSeen) continue;
+        switch (d->type) {
+            case DetectionType::AIRTAG: case DetectionType::TILE:
+            case DetectionType::SAMSUNG_TAG: case DetectionType::GOOGLE_TAG: break;
+            default: continue;
+        }
+        if (IgnoreList::contains(d->mac)) continue;
+        s_follow.heard(d->mac, d->firstSeen, d->lastSeen, seq);
+    }
+    s_follow.expire(now);
+    if (state != AppState::CLEAR && state != AppState::LOG) return;
+    const int k = s_follow.due(now, seq);
+    if (k < 0) return;
+    for (uint8_t i = 0; i < engine.logCount(); i++) {
+        const Detection* d = engine.logAt(i);
+        if (!d || memcmp(d->mac, s_follow.e[k].mac, 6) != 0) continue;
+        const uint16_t mins = s_follow.minutes(k);
+        s_follow.e[k].alerted = true;
+        Serial.printf("[follow] %s %02x:%02x:%02x:%02x:%02x:%02x with you %u min, %lu new devices since\n",
+                      detectionTypeName(d->type), d->mac[0], d->mac[1], d->mac[2], d->mac[3], d->mac[4], d->mac[5],
+                      (unsigned)mins, (unsigned long)(seq - s_follow.e[k].seqAtFirst));
+        s_alertSpam = false;
+        s_alertLastFree = false;
+        enterAlert(*d);
+        uiAlertSetFollow(mins);
+        lastTouch = now;   // lights a dimmed screen, like any alert
+        return;
     }
 }
 
@@ -4395,6 +4440,7 @@ void loop() {
     serviceTimeSyncRadio();
     serviceAutoTime(now);
     serviceNightDim(now);
+    serviceFollowing(now);
     if (state == AppState::CLEAR) {
         const char* sub = nullptr;
         bool good = false;

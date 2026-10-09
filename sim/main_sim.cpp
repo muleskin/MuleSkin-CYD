@@ -1011,6 +1011,8 @@ int main(int argc, char** argv) {
         if (alertFirst)    uiAlertSetFirst(true);
         if (alertNight)    uiAlertSetNight(true);
         if (alertLastFree) uiAlertSetLastFree(true);
+        // MULESKINSIM_FOLLOW=N: the card for a tag that has travelled with you N minutes.
+        if (const char* f = getenv("MULESKINSIM_FOLLOW")) uiAlertSetFollow((uint16_t)atoi(f));
     }
 
     // After uiSettingsInit(), which clears any pending question.

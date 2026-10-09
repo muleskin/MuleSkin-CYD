@@ -148,6 +148,9 @@ public:
     void     loop();
     void     clearLog();
     uint8_t  logCount() const { return _logCount; }
+    // How many rows the log has ever taken (never reset by eviction): how
+    // fast the devices around are changing. See tracker_follow.h.
+    uint32_t newRows() const { return _newRows; }
     const Detection* logAt(uint8_t idx) const;     // 0 = newest
     const Detection* latest() const { return _latest; }
     // Whether latest() is a row the log had never held, as opposed to a
@@ -562,6 +565,7 @@ private:
     // Detection log
     Detection  _log[LOG_CAP];
     uint8_t    _logCount = 0;            // number of valid entries (<= LOG_CAP)
+    uint32_t   _newRows  = 0;            // rows ever pushed, for newRows()
     uint8_t    _logHead  = 0;            // next slot to write
     Detection* _latest   = nullptr;      // pointer into _log or null
     bool       _latestNew = false;       // _latest is a fresh row, not a reactivation

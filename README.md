@@ -160,6 +160,13 @@ A full beginner-friendly walkthrough is in [docs/BUILD.md](docs/BUILD.md).
    it broadcasts one, its MAC and a signal meter, and a gauge showing what
    was found with the instrument grid over it. Tap anywhere to dismiss
    early, or it clears itself after 60 seconds.
+6. **A tracker travelling with you** gets its own alert. An AirTag, Tile,
+   SmartTag or Find My Device tag that has stayed in range for twenty
+   minutes while the devices around you kept changing -- you are moving and
+   it is not being left behind -- raises the alert card with **WITH YOU
+   N MIN** across the top, once per tag. A tag near its owner changes its
+   address every quarter of an hour, so it never gets that far; one planted
+   on you keeps its address for about a day. Ignore a tag to stop it.
 
 If a microSD card is present, every detection is also appended to
 `MuleSkin-<day>.log` (CSV: `ts,type,rssi,mac,channel,vendor,ssid`).

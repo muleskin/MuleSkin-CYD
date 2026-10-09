@@ -2011,6 +2011,7 @@ void DetectionEngine::pushLog(const Detection& d) {
     _log[_logHead].prevAt   = (uint8_t)(millis() >> 11);
     _logHead = (_logHead + 1) % LOG_CAP;
     if (_logCount < LOG_CAP) _logCount++;
+    _newRows++;
     _latest = &_log[(_logHead + LOG_CAP - 1) % LOG_CAP];
     _latestNew = true;      // the one place a row the log never held is made
     _latestChangeMs = millis();

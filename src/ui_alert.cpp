@@ -149,6 +149,8 @@ void uiAlertSetLastFree(bool lastFree) { s_lastFree = lastFree; }
 static bool     s_spam      = false;
 static uint16_t s_spamFakes = 0;
 void uiAlertSetSpam(bool spam, uint16_t fakes) { s_spam = spam; s_spamFakes = fakes; }
+static uint16_t s_followMin = 0;
+void uiAlertSetFollow(uint16_t minutes) { s_followMin = minutes; }
 
 void uiAlertInit(TFT_eSPI& t, const Detection& d) {
     s_last = d;
@@ -156,6 +158,7 @@ void uiAlertInit(TFT_eSPI& t, const Detection& d) {
     s_night = false;
     s_lastFree = false;
     s_spam     = false;
+    s_followMin = 0;
     s_touched = false;
     s_alertStart = millis();
     s_glitchStep = 0;
@@ -517,7 +520,16 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
     t.print(info);
     // The first one of its kind, ever, on this board: a line in the gap
     // between the strip and the plate, in the strip's own colour.
-    if (s_spam) {
+    if (s_followMin) {
+        // A tracker that has travelled with you. Ahead of everything: it is
+        // the one banner that is about you rather than about the device.
+        char fl[32];
+        snprintf(fl, sizeof fl, "* WITH YOU %u MIN *", (unsigned)s_followMin);
+        t.setTextSize(1);
+        t.setTextColor(Theme::RED, Theme::BG);
+        t.setCursor(PLATE_X + (PLATE_W - t.textWidth(fl)) / 2, stripHOf(w) + 2);
+        t.print(fl);
+    } else if (s_spam) {
         // A flood of fake tags, and this is its one alert. Beats FIRST and
         // AT NIGHT: they are about one catch, and this is about the room.
         char fl[32];

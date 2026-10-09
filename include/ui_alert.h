@@ -21,6 +21,9 @@ void uiAlertSetLastFree(bool lastFree);
 // This alert is a spam flood's one announcement (see spam_watch.h): the card
 // says how many fakes so far, and that the rest of the flood stays quiet.
 void uiAlertSetSpam(bool spam, uint16_t fakes);
+// A tracker that has travelled with you this many minutes (tracker_follow.h):
+// "* WITH YOU N MIN *" in red, ahead of every other banner. 0 = not one.
+void uiAlertSetFollow(uint16_t minutes);
 // SNOOZE (this device, until restart), bottom centre between HUNT and MORE INFO.
 bool uiAlertHitSnooze(int x, int y, int screenW, int screenH);
 // While the device is locked with ALERTS WHEN LOCKED at TYPE ONLY: the type
