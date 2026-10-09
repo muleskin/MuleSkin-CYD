@@ -2,6 +2,7 @@
 #include "ui_boot.h"
 #include "theme.h"
 #include "settings.h"
+#include <cstdio>
 
 // Stamped in by extra_script.py from `git describe` at build time --
 // same macro the Diary screen already reads (see its own guard
@@ -10,6 +11,18 @@
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "unknown"
 #endif
+
+// "v3.1.1-2-g3095627-dirty" -> "V.3.1.1". A version with no x.y.z in front
+// (an untagged build's bare hash) comes through as it is, cut to fit.
+static void bootVersionLabel(char* out, size_t cap, const char* v) {
+    if (*v == 'v' || *v == 'V') v++;
+    unsigned a, b, c;
+    int n = 0;
+    if (sscanf(v, "%u.%u.%u%n", &a, &b, &c, &n) == 3 && n > 0)
+        snprintf(out, cap, "V.%u.%u.%u", a, b, c);
+    else
+        snprintf(out, cap, "%.12s", v);
+}
 
 // When this splash started, and how far through its scripted glitch
 // bursts we are. The subtitle's chromatic split rides the shared burst
@@ -75,7 +88,11 @@ void uiBootTick(TFT_eSPI& t, uint32_t now) {
         t.drawFastHLine(x, 46, 1, Theme::titlebarColor(x, w));
     }
 
-    // V.03.01 subtitle -- the release, under the MULESKIN wordmark.
+    // The release under the MULESKIN wordmark, as "V.3.1.1": taken from
+    // FIRMWARE_VERSION (the git tag, stamped at build time) so it can never
+    // drift from the version the board reports. Anything past the x.y.z --
+    // "-3-g554330d" after a tag, "-dirty" for local edits -- is left off;
+    // a build with no tag at all shows what git describe gave it.
     //
     // Chromatic: a white core with cyan and magenta copies split either
     // side, over a hard black drop shadow. The shadow replaces the old
@@ -97,7 +114,8 @@ void uiBootTick(TFT_eSPI& t, uint32_t now) {
     // rectangle. Anything built on it would look correct in one and
     // wrong on the other, and the emulator is where this gets checked.
     t.setTextSize(2);
-    const char* sub = "V.03.01";
+    char sub[24];
+    bootVersionLabel(sub, sizeof sub, FIRMWARE_VERSION);
     const int sw = t.textWidth(sub);
     const int sx = (w - sw) / 2;
     const int sy = 54;
