@@ -1,0 +1,46 @@
+# Is flasher.oillie.cloud serving the newest release? Every six hours (and on
+# demand) it compares the site's manifest with the newest vX.Y.Z tag, and
+# checks what the boards rely on: the update files over plain HTTP with no
+# redirect, and a signature beside the firmware. A failed run means a release
+# was tagged but not deployed (or a deploy went wrong) -- GitHub emails the
+# failure. Right after tools/release.sh it fails until deploy/redeploy.sh has
+# run; that is the reminder working.
+name: Site check
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compare the site with the newest tag
+        run: |
+          set -u
+          site=http://flasher.oillie.cloud
+          tag=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
+          want=${tag#v}
+          fail=0
+          # Plain HTTP, no redirect followed: that is how the boards ask.
+          code=$(curl -s -o manifest.json -w '%{http_code}' "$site/manifest-cyd-ili9341.json")
+          live=$(grep -o '"version": *"[^"]*"' manifest.json | grep -o '[0-9][^"]*' || true)
+          echo "newest tag: $tag   site: ${live:-?} (HTTP $code)" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$code" != 200 ]; then
+            echo "::error::the manifest isn't served on plain HTTP (HTTP $code) -- boards can't check for updates"; fail=1
+          elif [ "$live" != "$want" ]; then
+            echo "::error::the site serves ${live:-nothing}, the newest release is $want -- run deploy/redeploy.sh on the server"; fail=1
+          fi
+          for f in cyd-ili9341-firmware.bin cyd-ili9341-firmware.sig; do
+            c=$(curl -s -o /dev/null -r 0-0 -w '%{http_code}' "$site/$f")
+            echo "$f: HTTP $c" | tee -a "$GITHUB_STEP_SUMMARY"
+            case $c in 200|206) ;; *) echo "::error::$f isn't served on plain HTTP (HTTP $c)"; fail=1 ;; esac
+          done
+          c=$(curl -s -o /dev/null -w '%{http_code}' "https://flasher.oillie.cloud/")
+          echo "page over HTTPS: HTTP $c" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$c" = 200 ] || { echo "::error::the flasher page is down (HTTP $c)"; fail=1; }
+          exit $fail
