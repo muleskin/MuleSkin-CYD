@@ -363,6 +363,11 @@ namespace Settings {
     uint8_t     nightMode();
     void        cycleNightMode();
 
+    // UPDATES: STABLE (the releases everyone gets) or LAB (test builds
+    // published ahead of a release; see ota_wifi.cpp manifestName()).
+    bool        labChannel();
+    void        toggleLabChannel();
+
     // TIME ZONE: an index into Clock's zone table, applied at load and on
     // every change. UTC until somebody picks one; timeZoneChosen() says
     // whether anybody has, so MuleSkin can ask once.

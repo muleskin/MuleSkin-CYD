@@ -84,6 +84,24 @@ public half is `include/ota_pubkey.h`), and, when the checkout is exactly on a
 release tag, keeps a copy in `.pio/flasher-bins/vX.Y.Z/` and rewrites
 `versions.json` for the flasher's "Firmware version" picker (newest five).
 
+## A lab build first
+
+Boards with **SYSTEM -> UPDATES** set to **LAB** check for test builds
+instead of releases. To try a change on your own board over WiFi before
+releasing it, on the server, from the checkout you want to test:
+
+```bash
+cd /root/MuleSkin-CYD && sudo LAB_VERSION=3.1.4 OTA_SIGNING_KEY=/root/.config/muleskin/ota-signing-key.pem tools/build_flasher_bins.sh
+```
+
+It builds the checkout as `v3.1.4-lab` and publishes only
+`lab-<board>-firmware.bin/.sig` and `manifest-lab-<board>.json` -- the
+stable files, the archive and `versions.json` are untouched, and no
+container rebuild is needed (they are served from the `/firmware` mount).
+The flasher page offers them at `?lab=1`. The version must be newer than the
+release the lab boards run. Then release it as usual; a lab board on
+`3.1.4-lab` sees release `3.1.4` as the same version, so it stays put.
+
 ## Checking it
 
 ```bash

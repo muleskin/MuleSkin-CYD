@@ -5,6 +5,7 @@
 #include "settings.h"
 #endif
 #include "security.h"
+#include "settings.h"   // the update channel (STABLE / LAB)
 #include "clock.h"
 #include <Arduino.h>
 #include <WiFi.h>
@@ -24,6 +25,18 @@ using OtaCore::Fail;
 
 namespace OtaWifi {
 namespace {
+
+// The update channel's file names. STABLE: manifest-<env>.json and
+// <env>-firmware.bin/.sig, what the web flasher installs. LAB: the same with
+// "lab-" in front (manifest-lab-<env>.json, lab-<env>-firmware.*), published
+// by build_flasher_bins.sh LAB_VERSION=... ahead of a release, so a test board
+// takes a build over WiFi before everyone else does. Settings::labChannel().
+String manifestName() {
+    return String(Settings::labChannel() ? "manifest-lab-" : "manifest-") + OtaCore::buildName() + ".json";
+}
+String firmwareName(const char* ext) {
+    return String(Settings::labChannel() ? "lab-" : "") + OtaCore::buildName() + "-firmware." + ext;
+}
 
 const char* NVS_NS = "otawifi";
 const uint32_t JOIN_TIMEOUT_MS  = 20000;
@@ -345,7 +358,7 @@ bool check() {
                   (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     uint8_t body[1024];
     size_t  len = 0;
-    int code = getSmall(String("manifest-") + OtaCore::buildName() + ".json", body, sizeof body - 1, len);
+    int code = getSmall(manifestName(), body, sizeof body - 1, len);
     if (code != 200) {
         Serial.printf("[ota] manifest: HTTP %d\n", code);
         fail(Fail::NO_SITE);
@@ -354,7 +367,7 @@ bool check() {
     body[len] = '\0';
     if (!parseVersion((const char*)body, s_latest, sizeof s_latest)) { fail(Fail::NO_SITE); return false; }
 
-    code = getSmall(String(OtaCore::buildName()) + "-firmware.sig", s_sig, sizeof s_sig, len);
+    code = getSmall(firmwareName("sig"), s_sig, sizeof s_sig, len);
     if (code == 404) { fail(Fail::NOT_SIGNED); return false; }
     if (code != 200 || len < 8 || len >= sizeof s_sig) {
         Serial.printf("[ota] signature: HTTP %d, %u bytes\n", code, (unsigned)len);
@@ -371,7 +384,7 @@ void download() {
     s_downloadStarted = true;
     s_rx = 0;
     HTTPClient http;
-    if (!http.begin(*client(), String(OTA_WIFI_BASE) + OtaCore::buildName() + "-firmware.bin")) {
+    if (!http.begin(*client(), String(OTA_WIFI_BASE) + firmwareName("bin"))) {
         fail(Fail::NO_SITE);
         return;
     }
@@ -798,7 +811,7 @@ bool bootCheck(uint32_t budgetMs) {
         const String base = OTA_WIFI_BASE;
         WiFiClient plain;
         HTTPClient http;
-        if (http.begin(plain, base + "manifest-" + OtaCore::buildName() + ".json")) {
+        if (http.begin(plain, base + manifestName())) {
             http.setConnectTimeout((int32_t)left);
             http.setTimeout((uint16_t)(left > 60000 ? 60000 : left));
             const int code = http.GET();

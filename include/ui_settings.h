@@ -65,6 +65,7 @@ enum class SettingsRow : uint8_t {
     PRIVACY,         // PRIVACY MODE: addresses and names masked on screen, on the SYSTEM page
     AUTO_TIME,       // on the SYSTEM page: rejoin the saved WiFi daily to keep the clock right
     NIGHT_MODE,      // on the APPEARANCE page: NIGHT DIM, the hours the screen runs dim
+    UPDATE_CHANNEL,  // on the SYSTEM page: UPDATES STABLE / LAB
     BACK,
     COUNT,
     NONE = 255

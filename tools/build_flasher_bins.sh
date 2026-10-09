@@ -22,6 +22,17 @@
 # manifests are also kept in .pio/flasher-bins/vX.Y.Z/, and versions.json is
 # rewritten from those folders -- the flasher's "Firmware version" picker
 # reads it, so older releases stay one click away. The newest five are kept.
+#
+# A LAB build -- a test build ahead of a release, for boards whose SYSTEM ->
+# UPDATES is set to LAB:
+#
+#   LAB_VERSION=3.1.4 OTA_SIGNING_KEY=... tools/build_flasher_bins.sh
+#
+# builds the checkout as it is, reporting "v3.1.4-lab", and publishes ONLY
+# lab-<env>-firmware.bin/.sig and manifest-lab-<env>.json (which the flasher
+# page also offers at ?lab=1). The stable files, the archive and versions.json
+# are left alone. The version must be newer than the boards' current release
+# or they won't take it.
 set -u
 if [ ! -f /.dockerenv ]; then
   root=$(cd "$(dirname "$0")/.." && pwd)
@@ -32,7 +43,7 @@ if [ ! -f /.dockerenv ]; then
   fi
   tag=$(git -C "$root" describe --tags --exact-match 2>/dev/null || true)
   exec docker run --rm -v "$root:/src" -v pio-cache:/root/.platformio "${keyargs[@]}" \
-    -e RELEASE_TAG="$tag" \
+    -e RELEASE_TAG="$tag" -e LAB_VERSION="${LAB_VERSION:-}" \
     python:3.12 bash /src/tools/build_flasher_bins.sh
 fi
 pip install -q platformio
@@ -48,21 +59,31 @@ if [ -n "$KEY" ]; then
 else
   echo "OTA_SIGNING_KEY not set: building unsigned bins"
 fi
+LAB=${LAB_VERSION:-}
+PFX=""
+if [ -n "$LAB" ]; then
+  [[ "$LAB" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "LAB_VERSION must be x.y.z" >&2; exit 2; }
+  export SQW_VERSION="v$LAB-lab"     # extra_script.py: what the build reports
+  PFX="lab-"
+  echo "LAB build: v$LAB-lab, publishing lab-* files only"
+fi
 ENVS="cyd cyd-fast cyd-ili9341 cyd-ili9341-fast cyd32c cyd35-fast freenove32 rlphantom-r awok twatch-s3 freenove-s3 crowpanel7 nm-cyd-c5"
 failed=""
 for e in $ENVS; do
   echo "=== building $e"
   if pio run -e "$e" > "$OUT/../build-$e.log" 2>&1; then
     B=.pio/build/$e
-    cp "$B/firmware.bin" "$OUT/$e-firmware.bin"
+    cp "$B/firmware.bin" "$OUT/$PFX$e-firmware.bin"
     # A .sig left over from an older build would make boards download the
     # new bin and then refuse it, so it goes either way.
-    rm -f "$OUT/$e-firmware.sig"
+    rm -f "$OUT/$PFX$e-firmware.sig"
     if [ -n "$KEY" ] && ! python tools/sign_firmware.py --key "$KEY" --pub "$PUB" --env "$e" \
-        --bin "$OUT/$e-firmware.bin" --out "$OUT/$e-firmware.sig"; then
-      rm -f "$OUT/$e-firmware.sig"
+        --bin "$OUT/$PFX$e-firmware.bin" --out "$OUT/$PFX$e-firmware.sig"; then
+      rm -f "$OUT/$PFX$e-firmware.sig"
       echo "    SIGNING FAILED"; failed="$failed $e(sig)"; continue
     fi
+    # A lab build shares the stable bootloader and partition table.
+    if [ -n "$LAB" ]; then echo "    ok"; continue; fi
     case $e in
       twatch-s3|freenove-s3|crowpanel7)
         cp "$B/bootloader.bin" "$OUT/esp32s3-bootloader.bin"
@@ -84,6 +105,33 @@ a=$(find /root/.platformio/packages -path '*framework-arduinoespressif32/tools/p
 [ -n "$a" ] && cp "$a" "$OUT/esp32-otadata.bin"
 c=$(find /root/.platformio/packages -name boot_app0.bin -path '*arduino*' | grep -v "^$a$" | head -1)
 cp "${c:-$a}" "$OUT/esp32c5-boot_app0.bin"
+
+# A lab build: its manifests, from the stable ones, and nothing else.
+if [ -n "$LAB" ]; then
+  python3 - "$OUT" "$LAB" $ENVS <<'PY'
+import json, os, sys
+out, ver, envs = sys.argv[1], sys.argv[2], sys.argv[3:]
+for e in envs:
+    if not os.path.exists(os.path.join(out, "lab-%s-firmware.bin" % e)):
+        continue
+    with open("web-flasher/manifest-%s.json" % e) as f:
+        m = json.load(f)
+    m["version"] = ver
+    m["name"] = "LAB -- " + m.get("name", e)
+    m.pop("whats_new", None)
+    m["release_name"] = "LAB BUILD"
+    for b in m.get("builds", []):
+        for p in b.get("parts", []):
+            if p.get("path") == "%s-firmware.bin" % e:
+                p["path"] = "lab-%s-firmware.bin" % e
+    with open(os.path.join(out, "manifest-lab-%s.json" % e), "w") as f:
+        json.dump(m, f, indent=2)
+print("lab manifests written for", ver)
+PY
+  ls -la "$OUT"/*lab*
+  echo "FAILED:${failed:- none}"
+  exit 0
+fi
 
 # The release archive and the version list (see the top of this file).
 TAG=${RELEASE_TAG-$(git -c safe.directory=/src describe --tags --exact-match 2>/dev/null || true)}

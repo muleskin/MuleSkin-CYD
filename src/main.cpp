@@ -5930,6 +5930,11 @@ void loop() {
                         case SettingsRow::UPDATE_CHECK:    Settings::toggleUpdateCheck();     break;
                         case SettingsRow::AUTO_TIME:       Settings::toggleAutoTime();        break;
                         case SettingsRow::NIGHT_MODE:      Settings::cycleNightMode();        break;
+                        case SettingsRow::UPDATE_CHANNEL:
+                            Settings::toggleLabChannel();
+                            Theme::showToast(Settings::labChannel() ? "UPDATES: LAB" : "UPDATES: STABLE",
+                                             Settings::labChannel() ? "Test builds first" : "Releases only", Theme::CYAN);
+                            break;
                         case SettingsRow::TIME_ZONE:
                             // Left half back, right half forward -- see the row's label.
                             Settings::stepTimeZone(gestureStartX < tft.width() / 2 ? -1 : 1);
