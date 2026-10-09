@@ -317,25 +317,6 @@ namespace Theme {
     void drawPulsingBorder(TFT_eSPI& t, uint32_t now, uint16_t a, uint16_t b,
                            uint8_t thick = 4);
 
-    // Boot-screen vaporwave sunset scene (dusk purple -> magenta ->
-    // sunset orange sky, twinkling stars, a sinking retrowave sun,
-    // drifting seagull silhouettes, and a dark synthwave floor with a
-    // perspective grid) — same visual language as the CSI radar's 3-D
-    // view. yTop/yHoriz/yBottom carve the screen into sky and floor.
-    void drawSunsetSky(TFT_eSPI& t, uint32_t now, int yTop, int yHoriz);
-    void drawSunsetSun(TFT_eSPI& t, int cx, int cy, int r, int yTop, int yHoriz);
-    void drawSeagulls(TFT_eSPI& t, uint32_t now, int yTop, int yHoriz);
-    void drawRetroFloor(TFT_eSPI& t, uint32_t now, int yHoriz, int yBottom);
-    // The boot splash's sunset scene as a full background: sky, sun,
-    // parallax ridgeline, reflective water and the neon grid, composed
-    // into one band-filling effect. See its comment in theme.cpp for
-    // why the reflection is recomputed rather than sampled.
-    // horizonFrac places the waterline within the band. The default
-    // suits a background; the boot splash passes its own so the gulls
-    // and MuleSkin, which are positioned against that line, stay where
-    // they were.
-    void drawSynthwave(TFT_eSPI& t, uint32_t now, int yTop, int yBottom,
-                       float horizonFrac = 0.44f);
 
 
     // Idle-screen background styles, picked from the settings menu
@@ -343,55 +324,14 @@ namespace Theme {
     // draw into the band between yStart/yEnd, self-seed static state
     // on first call, and are safe to call every frame.
 
-    // 20-column digital rain tick. Columns fall at independent
-    // speeds, heads cycle pink/cyan/green, trails fade to BG.
-    // advance: gates state mutation (column position/speed, the rare
-    // glitch-message trigger) to once per logical frame -- see the
-    // matching comment on MuleSkin::tick(). Boards that render in a
-    // single pass never need to touch this (defaults to true).
-    void drawDigitalRain(TFT_eSPI& t, uint32_t now, int yStart, int yEnd, bool advance = true);
-
-    // Classic "flying through space" starfield: points radiate outward
-    // from the band's center, accelerating and brightening as they
-    // approach, then wrap back to the center once they exit the band.
-    void drawStarfield(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
-
-    // After Dark-style flying toasters: a handful of pixel-art toasters
-    // with flapping wings drift up-and-right across the band, wrapping
-    // around when they exit.
-    void drawFlyingToasters(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
-
-    // A handful of simple fish silhouettes drifting side to side at
-    // different depths, with slow rising bubbles.
-    void drawAquarium(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
-
-    // Scrolling fake system log — hacker-movie-style boot chatter,
-    // freshly assembled each line from small word banks, fading out
-    // as it scrolls up and off.
-    void drawTerminalLog(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
-
-    // Fireflies: a meadow at dusk. Dithered sky that swings from sunset to
-    // night, a moon with a per-row halo, a black treeline, fog over the
-    // far field, and fireflies at three depths -- far ones are single
-    // points, near ones are soft blooms that light the grass under them.
-    void drawFireflies(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
-
-    // A run down a corridor of mainframe towers, with a live trace over
-    // the top: x maps across WiFi channels 1-13 and the trace height is
-    // that channel's real activity, so ambient traffic deforms it. A new
-    // entry at the front of the detection log locks onto one building --
-    // it floods with that detection's colour, takes a reticle, and the
-    // feed line names it. The corridor keeps flying either way, which is
-    // the point: the old waterfall showed nothing at all when nothing was
-    // on the air, which is nearly always.
-    void drawGibson(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
-                    const DetectionEngine& eng);
 
 
-    // Classic Doom-style ASCII fire: a coarse heat grid seeded at the
-    // bottom, propagated upward with random decay/drift, rendered
-    // through a black -> red -> orange -> yellow -> white palette.
-    void drawFire(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
+
+
+
+
+
+
 
     // A tap that landed on the idle background, in screen coordinates.
     // Backgrounds with something tappable in them consume it and return
@@ -524,9 +464,6 @@ namespace Theme {
                   uint16_t body, uint16_t edge, float curl, float lift,
                   uint16_t shade = 0xD6DB);
 
-    // Falling snow with a gentle sideways sway, a few larger bright
-    // flakes mixed into a field of smaller dim ones.
-    void drawSnowfall(TFT_eSPI& t, uint32_t now, int yStart, int yEnd);
 
     // Glitchy wordmark renderer for the ALERT screen bottom strip.
     // Horizontal jitter of +/-2 px every ~150 ms.
@@ -539,13 +476,6 @@ namespace Theme {
     // frame while elapsedMs < totalMs; a no-op once it's expired.
     void drawTransitionGlitch(TFT_eSPI& t, uint32_t elapsedMs, uint32_t totalMs);
 
-    // Small rotating radar widget for the ALERT screen: a few range
-    // rings, a continuously-rotating sweep, and a blip whose distance
-    // from center reflects signal strength (closer = stronger) at a
-    // bearing that's stable for a given MAC (so it doesn't jump around
-    // between frames of the same alert).
-    void drawSignalRadar(TFT_eSPI& t, int cx, int cy, int r, uint32_t now,
-                        int8_t rssi, float bearingRad);
 
     // Bangers (SIL OFL) comic-impact display font, baked in as a 1bpp
     // bitmap glyph set (see include/bangers_font.h) — used for

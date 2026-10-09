@@ -115,21 +115,10 @@ void uiSecurityTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
 
     Theme::Palette saved = Theme::dimPaletteForOverlay(179);
     const int bgTop = 0;
-    switch (Settings::background()) {
-        case Settings::Background::STARFIELD: Theme::drawStarfield(t, now, bgTop, bodyBottom); break;
-        case Settings::Background::TOASTERS:  Theme::drawFlyingToasters(t, now, bgTop, bodyBottom); break;
-        case Settings::Background::AQUARIUM:  Theme::drawAquarium(t, now, bgTop, bodyBottom); break;
-        case Settings::Background::TERMINAL:  Theme::drawTerminalLog(t, now, bgTop, bodyBottom); break;
-        case Settings::Background::FIREFLIES: Theme::drawFireflies(t, now, bgTop, bodyBottom); break;
-        case Settings::Background::FIRE:      Theme::drawFire(t, now, bgTop, bodyBottom); break;
-        case Settings::Background::SNOWFALL:  Theme::drawSnowfall(t, now, bgTop, bodyBottom); break;
-        case Settings::Background::SPECTRUM:  Theme::drawGibson(t, now, bgTop, bodyBottom, eng); break;
-        case Settings::Background::SYNTHWAVE: Theme::drawSynthwave(t, now, bgTop, bodyBottom); break;
-        case Settings::Background::MULESKIN:  Theme::drawArtworkBackground(t, now, bgTop, bodyBottom); break;
-        case Settings::Background::RADAR:     Theme::drawRadarBackground(t, now, bgTop, bodyBottom); break;
-        case Settings::Background::BLACK:     t.fillRect(0, bgTop, w, bodyBottom - bgTop, Theme::BG); break;
-        default:                              Theme::drawDigitalRain(t, now, bgTop, bodyBottom, true); break;
-    }
+    // RADAR is the only background left (BLACK in boring mode); a retired
+    // value still saved on a board loads as RADAR -- see Settings::load().
+    if (Settings::background() == Settings::Background::BLACK) t.fillRect(0, bgTop, w, bodyBottom - bgTop, Theme::BG);
+    else Theme::drawRadarBackground(t, now, bgTop, bodyBottom);
     Theme::restorePalette(saved);
 
     Theme::drawTitleBar(t, ">> SECURITY <<");

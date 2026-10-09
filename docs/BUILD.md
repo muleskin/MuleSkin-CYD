@@ -73,9 +73,10 @@ If asked to select a serial port, pick the one labeled
 ## First boot
 
 The CYD will reboot and:
-1. Show the **MuleSkin splash** for 1.5 seconds.
-2. Drop into the **clear screen** — matrix digital rain, ghost
-   avatar, live counters, three soft buttons.
+1. Show the **MuleSkin splash** for about three seconds.
+2. Drop into the **main screen** — the sweeping radar with live
+   detections as blips, the per-type counters, and three soft buttons
+   (WIFI TIME, LOG, IN MEETING).
 
 That's it. You're running.
 

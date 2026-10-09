@@ -3163,10 +3163,9 @@ void setup() {
     // (MuleSkin + a background effect), so it gets a real half-height
     // sprite (~76KB at 8-bit, comfortably fits) and renders in two
     // bands via setViewport() -- see the AppState::CLEAR case in
-    // loop(). `advance` on uiClearTick()/MuleSkin::tick()/
-    // Theme::drawDigitalRain() gates state mutation to the first band
-    // only, so calling them twice per logical frame doesn't double
-    // animation speed.
+    // loop(). `advance` on uiClearTick()/MuleSkin::tick() gates state
+    // mutation to the first band only, so calling them twice per logical
+    // frame doesn't double animation speed.
     canvas->setTextSize(1);
     frame.setColorDepth(8);
     if (!frame.createSprite(tft.width(), tft.height() / 2)) {
