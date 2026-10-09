@@ -1961,11 +1961,29 @@ static void serviceLive(uint32_t now) {
 // version if anything fails. Night is NIGHT DIM's hours, or 1-5 AM without
 // them; only from the main screen, after ten minutes untouched, unlocked, and
 // one try a night.
+//
+// AFTER 3 DAYS waits three days from when THIS board first heard of the
+// release; EARLY goes the first night. Set one board EARLY and a release
+// that turns out bad is found there, and pulled from the site, before the
+// rest ever install it -- no server-side rollout needed.
+static const uint32_t AUTO_WAIT_S = 3u * 24u * 3600u;
 static void serviceAutoUpdate(uint32_t now) {
     static uint32_t lastTry = 0;
     if (!Settings::autoUpdate() || state != AppState::CLEAR) return;
     if (!OtaCore::available() || !OtaCore::availableVersion()[0] || !OtaWifi::hasSaved()) return;
     if (Security::locked() || !Clock::trusted() || OtaWifi::timeSyncBusy()) return;
+    {
+        // Asked once a minute: NVS is read, and written only for a new version.
+        static uint32_t lastAsk = 0;
+        static bool     waiting = true;
+        if (!lastAsk || now - lastAsk > 60000u) {
+            lastAsk = now;
+            const uint32_t ep   = Clock::nowEpoch();
+            const uint32_t seen = Settings::autoSeen(OtaCore::availableVersion(), ep);
+            waiting = Settings::autoUpdateMode() == 1 && ep - seen < AUTO_WAIT_S;
+        }
+        if (waiting) return;
+    }
     const uint8_t p = Settings::nightMode();
     const uint8_t h = Clock::hour();
     const bool night = p ? NightMode::active(p, h) : (h >= 1 && h < 5);
@@ -5893,7 +5911,7 @@ void loop() {
                         case SettingsRow::UPDATE_CHECK:    Settings::toggleUpdateCheck();     break;
                         case SettingsRow::AUTO_TIME:       Settings::toggleAutoTime();        break;
                         case SettingsRow::NIGHT_MODE:      Settings::cycleNightMode();        break;
-                        case SettingsRow::AUTO_UPDATE:     Settings::toggleAutoUpdate();      break;
+                        case SettingsRow::AUTO_UPDATE:     Settings::cycleAutoUpdate();       break;
                         case SettingsRow::PHONE_ALERTS:
                             Settings::togglePhoneAlerts();
                             PhoneAlerts::setEnabled(Settings::phoneAlerts());

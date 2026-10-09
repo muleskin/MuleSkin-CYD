@@ -162,7 +162,7 @@ static bool    s_updateCheck  = true;
 static bool    s_autoTime     = true;
 static uint8_t s_nightMode    = 0;
 static bool    s_labChannel   = false;
-static bool    s_autoUpdate   = false;
+static uint8_t s_autoUpdate   = 0;     // 0 OFF, 1 AFTER 3 DAYS, 2 EARLY
 static bool    s_phoneAlerts  = false;
 static uint16_t s_phoneCode   = 0;
 static uint8_t s_timeZone     = 10;   // UTC in Clock's table
@@ -499,7 +499,11 @@ void load() {
     s_autoTime     = s_prefs.getBool("autoTime", true);
     s_nightMode    = s_prefs.getUChar("night", 0);
     s_labChannel   = s_prefs.getBool("lab", false);
-    s_autoUpdate   = s_prefs.getBool("autoUpd", false);
+    // A board set ON before the waiting mode existed keeps updating, and
+    // gets the wait: an on/off was all the old key could say.
+    if (s_prefs.isKey("autoUpd2")) s_autoUpdate = s_prefs.getUChar("autoUpd2", 0);
+    else                           s_autoUpdate = s_prefs.getBool("autoUpd", false) ? 1 : 0;
+    if (s_autoUpdate > 2) s_autoUpdate = 0;
     s_phoneAlerts  = s_prefs.getBool("phoneAl", false);
     s_phoneCode    = (uint16_t)s_prefs.getUInt("phCode", 0);
     if (s_nightMode >= NightMode::PRESET_N) s_nightMode = 0;
@@ -678,8 +682,19 @@ bool autoTime()             { return s_autoTime; }
 void toggleAutoTime()       { s_autoTime = !s_autoTime; s_prefs.putBool("autoTime", s_autoTime); }
 uint8_t nightMode()         { return s_nightMode; }
 bool labChannel()           { return s_labChannel; }
-bool autoUpdate()           { return s_autoUpdate; }
-void toggleAutoUpdate()     { s_autoUpdate = !s_autoUpdate; s_prefs.putBool("autoUpd", s_autoUpdate); }
+bool    autoUpdate()        { return s_autoUpdate != 0; }
+uint8_t autoUpdateMode()    { return s_autoUpdate; }
+void    cycleAutoUpdate()   { s_autoUpdate = (uint8_t)((s_autoUpdate + 1) % 3); s_prefs.putUChar("autoUpd2", s_autoUpdate); }
+uint32_t autoSeen(const char* version, uint32_t now) {
+    char had[16] = "";
+    s_prefs.getString("auVer", had, sizeof had);
+    if (version && strcmp(had, version) != 0) {
+        s_prefs.putString("auVer", version);
+        s_prefs.putUInt("auSeen", now);
+        return now;
+    }
+    return s_prefs.getUInt("auSeen", now);
+}
 bool phoneAlerts()          { return s_phoneAlerts; }
 void togglePhoneAlerts()    { s_phoneAlerts = !s_phoneAlerts; s_prefs.putBool("phoneAl", s_phoneAlerts); }
 uint16_t phoneCode()        { return s_phoneCode; }

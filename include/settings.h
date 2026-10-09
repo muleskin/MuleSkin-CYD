@@ -361,9 +361,16 @@ namespace Settings {
     void        toggleLabChannel();
 
     // AUTO UPDATE: install a newer release on its own, at night (main.cpp
-    // serviceAutoUpdate()). Off by default.
+    // serviceAutoUpdate()). 0 OFF (the default), 1 AFTER 3 DAYS -- three
+    // days after this board first heard of the release, so one that turns
+    // out bad and is pulled never reaches it -- or 2 EARLY, the first night,
+    // for the board you test releases on.
     bool        autoUpdate();
-    void        toggleAutoUpdate();
+    uint8_t     autoUpdateMode();
+    void        cycleAutoUpdate();
+    // When this board first heard of `version` (epoch seconds): recorded the
+    // first time it is asked about a version, `now` then.
+    uint32_t    autoSeen(const char* version, uint32_t now);
 
     // PHONE ALERTS: alerts to a phone over Bluetooth (phone_alerts.h). Off
     // by default; only the boards that can (PhoneAlerts::available()) list it.

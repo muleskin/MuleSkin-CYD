@@ -912,7 +912,9 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             else value = "NONE >";
             break;
         case SettingsRow::AUTO_UPDATE:
-            label = "AUTO UPDATE"; value = Settings::autoUpdate() ? "AT NIGHT" : "OFF";
+            // AFTER 3 DAYS for every board; EARLY for the one you test on.
+            label = "AUTO UPDATE";
+            value = Settings::autoUpdateMode() == 2 ? "EARLY" : Settings::autoUpdateMode() == 1 ? "AFTER 3 DAYS" : "OFF";
             break;
         case SettingsRow::PHONE_ALERTS:
             // CONNECTED says a phone is listening -- and, the slot being one,

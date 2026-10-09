@@ -322,6 +322,12 @@ restarts; anything that fails leaves the old version running. The daily AUTO
 TIME join checks for a new release too, so a board that is never restarted
 still hears about one.
 
+It has two speeds. **AFTER 3 DAYS** waits three days from when that board
+first heard of the release; **EARLY** goes the first night. Set the board you
+test on to EARLY and the rest to AFTER 3 DAYS: a release that turns out bad
+shows itself on the test board, and once it is pulled from the site the
+others never install it.
+
 **WIFI NETWORKS** on the SYSTEM page is where the board keeps the networks it
 knows: up to six, with USE marking the one it tries first. ADD picks one from
 a scan and takes the password on the board's keyboard; it is not checked by
