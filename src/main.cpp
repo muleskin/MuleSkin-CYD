@@ -1983,6 +1983,18 @@ static void runSelfTest() {
     Serial.printf("[selftest] done: %u pass, %u warn, %u fail\n", pass, warn, fail);
 }
 
+// LIVE VIEW (the console's LIVE ON): every two seconds, each device heard in
+// those two seconds -- type, address, signal now, vendor, name.
+static void serviceLive(uint32_t now) {
+    static uint32_t last = 0;
+    if (!g_liveOn || now - last < 2000) return;
+    last = now;
+    for (uint8_t i = 0; i < engine.logCount(); i++) {
+        const Detection* d = engine.logAt(i);
+        if (d && !d->restored && d->lastSeen && now - d->lastSeen <= 2000) printLive(*d, false);
+    }
+}
+
 static void enterHunt() {
     state = AppState::HUNT;
     transitionStart = millis();
@@ -4511,6 +4523,7 @@ void loop() {
     serviceAutoTime(now);
     serviceNightDim(now);
     serviceFollowing(now);
+    serviceLive(now);
     if (state == AppState::CLEAR) {
         const char* sub = nullptr;
         bool good = false;

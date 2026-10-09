@@ -111,6 +111,9 @@ struct BootHeap {
 };
 BootHeap bootHeap();
 bool     scanPassiveNow();   // the scan is passive right now (the room, or heap pressure)
+// One LIVE VIEW line for `d` (see detection.cpp); g_liveOn says whether to.
+void printLive(const Detection& d, bool again);
+extern volatile bool g_liveOn;
 uint32_t advertRate();       // adverts/s the radio handed over in the last second
 uint32_t wifiFramesSeen();   // frames the WiFi sniffer has been handed since boot
 #if defined(TWATCH_S3)

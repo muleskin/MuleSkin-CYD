@@ -537,6 +537,11 @@
       <div class="identify-result" id="selfResult"></div>
     </div>
     <p class="browser-note"><strong>Self-test</strong> checks the board's parts -- memory, touch calibration, both radios, the black box, SD card, settings, clock, WiFi, update keys -- and lists anything that needs a look. Useful right after flashing a new board.</p>
+    <div class="identify-row">
+      <button id="liveBtn" class="identify-btn">[ LIVE VIEW ]</button>
+      <div class="identify-result" id="liveResult"></div>
+    </div>
+    <p class="browser-note"><strong>Live view</strong> shows what the board is detecting right now, on this computer, while it stays plugged in -- each device's type, name, signal and how long ago it was heard. Press it again to stop.</p>
     <p class="browser-note">After flashing, <strong>Set Time &amp; Zone</strong> tells the board this computer's clock and time zone over the same cable. The zone is kept for good; the clock lasts until the board is unplugged, and a saved WiFi network puts it back at every boot. A T-Watch has its clock set for it after installing, and keeps the time from then on, even through a flat battery.</p>
   </div>
 
@@ -984,6 +989,114 @@
       clockBtn.disabled = false;
     }
   }
+
+  // ---- Live view ----------------------------------------------------------------
+  // The firmware's LIVE ON streams, every two seconds, each device heard in
+  // those two seconds (type,mac,rssi,channel,hits,again,vendor,name). Kept
+  // here as a table, freshest first, each type in its radar colour; STOP (or
+  // closing the page) turns it off again.
+  var liveBtn = document.getElementById('liveBtn');
+  var liveResult = document.getElementById('liveResult');
+  var LIVE_COLOURS = {
+    'FLOCK': '#ff4f7b', 'AXON': '#ff4f7b', 'META': '#ff4f7b',
+    'SKIMMER': '#ffe14d', 'RAVEN': '#ffab40', 'ALPR': '#ffab40',
+    'AIRTAG': '#b388ff', 'DRONE': '#b388ff', 'SAMSUNG_TAG': '#b388ff', 'GOOGLE_TAG': '#b388ff',
+    'TILE': '#b388ff', 'IBEACON': '#b388ff', 'CAMERA': '#00e5ff', 'RING': '#00e5ff',
+    'DEAUTH': '#ff3b3b', 'EVIL TWIN': '#ff3b3b', 'HACKER': '#ff3b3b'
+  };
+  var live = null;   // { port, reader, devices: {mac: {...}}, timer }
+  if (liveBtn) {
+    if (!('serial' in navigator)) {
+      liveBtn.disabled = true;
+      liveBtn.textContent = '[ LIVE VIEW ] (needs a desktop browser)';
+    } else {
+      liveBtn.addEventListener('click', function () { live ? stopLive() : startLive(); });
+    }
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function drawLive() {
+    if (!live) return;
+    var now = Date.now();
+    var rows = Object.keys(live.devices).map(function (k) { return live.devices[k]; })
+      .sort(function (a, b) { return b.seen - a.seen || b.rssi - a.rssi; });
+    var html = '<div style="margin-bottom:6px">LIVE: ' + rows.length + ' device' + (rows.length === 1 ? '' : 's') +
+               ' since connecting' + (live.lines ? '' : ' -- waiting for the board...') + '</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:0.75rem;text-align:left">' +
+            '<tr style="color:#5f7896"><th>type</th><th>who</th><th>signal</th><th>seen</th><th>ago</th></tr>';
+    rows.forEach(function (d) {
+      var ago = Math.round((now - d.seen) / 1000);
+      var col = LIVE_COLOURS[d.type] || '#18ffff';
+      var bar = Math.max(0, Math.min(10, Math.round((d.rssi + 100) / 6)));
+      html += '<tr style="' + (ago > 30 ? 'opacity:0.45' : '') + '">' +
+        '<td style="color:' + col + ';font-weight:bold">' + esc(d.type) + '</td>' +
+        '<td>' + esc(d.name || d.vendor || '') + '<br><span style="color:#5f7896">' + esc(d.mac) + '</span></td>' +
+        '<td>' + d.rssi + ' dBm<br><span style="color:' + col + '">' + '█'.repeat(bar) + '</span></td>' +
+        '<td>x' + d.hits + '</td><td>' + (ago < 3 ? 'now' : ago + ' s') + '</td></tr>';
+    });
+    liveResult.innerHTML = html + '</table>';
+  }
+  async function startLive() {
+    liveResult.className = 'identify-result';
+    try {
+      liveResult.textContent = 'Pick the board’s port...';
+      var port = await navigator.serial.requestPort();
+      await port.open({ baudRate: isNativeUsb(port) ? 115200 : 2000000, bufferSize: 65536 });
+      try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (e) {}
+      live = { port: port, reader: null, devices: {}, lines: 0, timer: null };
+      liveBtn.textContent = '[ STOP LIVE VIEW ]';
+      for (var sec = 10; sec > 0 && live; sec--) {
+        liveResult.textContent = 'Letting the board boot... ' + sec;
+        await new Promise(function (r) { setTimeout(r, 1000); });
+      }
+      if (!live) return;
+      var w = port.writable.getWriter();
+      await w.write(new TextEncoder().encode('\nLIVE ON\n'));
+      w.releaseLock();
+      live.timer = setInterval(drawLive, 1000);
+      drawLive();
+      var reader = port.readable.getReader(), dec = new TextDecoder(), buf = '';
+      live.reader = reader;
+      while (live) {
+        var c = await reader.read();
+        if (c.done) break;
+        buf += dec.decode(c.value, { stream: true });
+        var nl;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          var line = buf.slice(0, nl).replace(/\r$/, '');
+          buf = buf.slice(nl + 1);
+          if (line.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
+          if (line.indexOf('[live] ') !== 0 || line.indexOf('[live] on') === 0 || line.indexOf('[live] off') === 0) continue;
+          var f = line.slice(7).split(',');
+          if (f.length < 8) continue;
+          live.lines++;
+          live.devices[f[1]] = { type: f[0], mac: f[1], rssi: +f[2], hits: +f[4], vendor: f[6], name: f.slice(7).join(','), seen: Date.now() };
+        }
+        if (buf.length > 20000) buf = buf.slice(-2000);
+      }
+    } catch (err) {
+      if (live) {
+        liveResult.className = 'identify-result err';
+        liveResult.textContent = 'Live view stopped: ' + (err && err.message ? err.message : 'unknown error');
+      }
+      await stopLive(true);
+    }
+  }
+  async function stopLive(quiet) {
+    if (!live) return;
+    var l = live;
+    live = null;
+    if (l.timer) clearInterval(l.timer);
+    try { if (l.reader) { await l.reader.cancel(); l.reader.releaseLock(); } } catch (e) {}
+    try {
+      var w = l.port.writable.getWriter();
+      await w.write(new TextEncoder().encode('\nLIVE OFF\n'));
+      w.releaseLock();
+    } catch (e) {}
+    try { await l.port.close(); } catch (e) {}
+    liveBtn.textContent = '[ LIVE VIEW ]';
+    if (!quiet) liveResult.insertAdjacentHTML('afterbegin', '<div>STOPPED.</div>');
+  }
+  window.addEventListener('beforeunload', function () { if (live) stopLive(true); });
 
   // ---- Self-test ---------------------------------------------------------------
   // The firmware's SELFTEST console command checks every part it can without a

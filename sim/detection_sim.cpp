@@ -68,6 +68,8 @@ void DetectionEngine::clearLog() {
 }
 
 bool DetectionEngine::sdReady() const { return false; }
+volatile bool g_liveOn = false;   // the console's LIVE ON (clock.cpp); nothing to stream here
+void printLive(const Detection&, bool) {}
 const Detection* DetectionEngine::logAt(uint8_t idx) const {
     if (idx >= _logCount) return nullptr;
     // Newest first, matching the real ring-buffer walk order the LOG

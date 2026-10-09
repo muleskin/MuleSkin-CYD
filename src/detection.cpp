@@ -2089,6 +2089,22 @@ void DetectionEngine::drainBlackBox(uint32_t now) {
     // a half. Nothing left to say about it.
 }
 
+// LIVE ON / LIVE OFF on the console, for the web flasher's LIVE VIEW: every
+// two seconds main.cpp prints each device heard in those two seconds, one CSV
+// line each, through this. Off at boot. Vendor and name lose any comma so the
+// line stays CSV.
+volatile bool g_liveOn = false;
+void printLive(const Detection& d, bool again) {
+    char vendor[24], name[24];
+    snprintf(vendor, sizeof vendor, "%s", vendorText(d));
+    snprintf(name, sizeof name, "%s", d.name);
+    for (char* p = vendor; *p; p++) if (*p == ',') *p = ' ';
+    for (char* p = name; *p; p++) if (*p == ',') *p = ' ';
+    Serial.printf("[live] %s,%02x:%02x:%02x:%02x:%02x:%02x,%d,%u,%u,%u,%s,%s\n",
+                  detectionTypeName(d.type), d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5],
+                  (int)d.rssi, (unsigned)d.channel, (unsigned)d.hits, again ? 1u : 0u, vendor, name);
+}
+
 // LOG on the console. Here rather than in clock.cpp because the ring is the
 // engine's, and g_engine is the only handle on the live one.
 void logDump() {
