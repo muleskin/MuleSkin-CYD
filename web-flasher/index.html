@@ -526,6 +526,12 @@
       <div class="identify-result" id="backupResult"></div>
     </div>
     <p class="browser-note"><strong>Back up settings</strong> before a reinstall that erases the board, and <strong>Restore settings</strong> after it: saved WiFi networks, colour order, time zone, the mesh and the rest come back. The backup stays in this browser (and can be saved as a file); it includes WiFi passwords, so keep the file to yourself. A locked board has to be unlocked on its screen first. Needs firmware v3.1.3 or later.</p>
+    <div class="identify-row">
+      <button id="logBtn" class="identify-btn">[ DOWNLOAD LOG ]</button>
+      <button id="crashBtn" class="identify-btn">[ CRASH REPORT ]</button>
+      <div class="identify-result" id="bbResult"></div>
+    </div>
+    <p class="browser-note"><strong>Download log</strong> saves every detection the board has kept (it survives restarts) as a spreadsheet file. <strong>Crash report</strong> lists the last boots and why each one happened -- a crash, a brownout, a restart -- with the details a bug report needs.</p>
     <p class="browser-note">After flashing, <strong>Set Time &amp; Zone</strong> tells the board this computer's clock and time zone over the same cable. The zone is kept for good; the clock lasts until the board is unplugged, and a saved WiFi network puts it back at every boot. A T-Watch has its clock set for it after installing, and keeps the time from then on, even through a flat battery.</p>
   </div>
 
@@ -971,6 +977,124 @@
     } finally {
       clockBtn.disabled = false;
     }
+  }
+
+  // ---- The black box: detection log and crash report ------------------------
+  // The firmware's BLACKBOX console command prints two CSV tables from flash:
+  // every boot (reset reason, version, uptime, and for a crash the task and
+  // address) and every detection kept. Read it once; DOWNLOAD LOG saves the
+  // detections as a CSV with readable times, CRASH REPORT shows the boots.
+  var logBtn = document.getElementById('logBtn');
+  var crashBtn = document.getElementById('crashBtn');
+  var bbResult = document.getElementById('bbResult');
+  var CRASHES = { 'PANIC': 1, 'INT WDT': 1, 'TASK WDT': 1, 'WDT': 1 };
+  if (logBtn && crashBtn) {
+    if (!('serial' in navigator)) {
+      logBtn.disabled = crashBtn.disabled = true;
+      logBtn.textContent = '[ DOWNLOAD LOG ] (needs a desktop browser)';
+    } else {
+      logBtn.addEventListener('click', function () { readBlackBox(saveLog); });
+      crashBtn.addEventListener('click', function () { readBlackBox(showCrashes); });
+    }
+  }
+
+  function isoOf(epoch) {
+    var e = +epoch;
+    return e > 1500000000 ? new Date(e * 1000).toISOString().replace('T', ' ').slice(0, 19) : '';
+  }
+  function download(name, text, type) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: type }));
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  async function readBlackBox(then) {
+    logBtn.disabled = crashBtn.disabled = true;
+    bbResult.className = 'identify-result';
+    var port;
+    try {
+      bbResult.textContent = 'Pick the board’s port...';
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: isNativeUsb(port) ? 115200 : 2000000, bufferSize: 1 << 20 });
+      try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (e) {}
+      for (var sec = 10; sec > 0; sec--) {
+        bbResult.textContent = 'Letting the board boot... ' + sec;
+        await new Promise(function (r) { setTimeout(r, 1000); });
+      }
+      bbResult.textContent = 'Reading the black box...';
+      var w = port.writable.getWriter();
+      await w.write(new TextEncoder().encode('\nBLACKBOX\n'));
+      w.releaseLock();
+      var r = port.readable.getReader(), dec = new TextDecoder(), text = '', t0 = Date.now(), last = Date.now();
+      while (Date.now() - t0 < 60000 && Date.now() - last < 8000) {
+        var c = await Promise.race([r.read(), new Promise(function (res) { setTimeout(function () { res({ done: false, value: null }); }, 300); })]);
+        if (c.done) break;
+        if (c.value) { text += dec.decode(c.value, { stream: true }); last = Date.now(); }
+        if (/\[blackbox\] (end|off)/.test(text) || text.indexOf('[security] locked') >= 0) break;
+      }
+      await r.cancel(); r.releaseLock();
+      await port.close(); port = null;
+      if (text.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
+      if (/\[blackbox\] off/.test(text)) throw new Error('this board has no black box (no room for it in flash)');
+      var start = text.indexOf('boot,reason,epoch'), end = text.indexOf('[blackbox] end');
+      if (start < 0 || end < 0) throw new Error('no answer from the black box. Try once more after the board has booted');
+      var lines = text.slice(start, end).split(/\r?\n/).filter(function (l) { return l && l[0] !== '['; });
+      var split = lines.indexOf('boot,epoch,up_s,type,mac,rssi,channel,hits,again,vendor,name');
+      then(lines.slice(1, split < 0 ? lines.length : split),
+           split < 0 ? [] : lines.slice(split + 1));
+    } catch (err) {
+      bbResult.className = 'identify-result err';
+      bbResult.textContent = 'Couldn’t read it: ' + (err && err.message ? err.message : 'unknown error');
+      try { if (port) await port.close(); } catch (e) {}
+    } finally {
+      logBtn.disabled = crashBtn.disabled = false;
+    }
+  }
+
+  // Detections, oldest first, as a spreadsheet-ready CSV. The name is the last
+  // field and may hold commas, so it is re-joined and quoted.
+  function saveLog(boots, dets) {
+    var out = ['time_utc,boot,epoch,up_s,type,mac,rssi,channel,hits,again,vendor,name'];
+    var n = 0, cleared = 0;
+    dets.forEach(function (l) {
+      if (l[0] === '#') { cleared++; return; }
+      var f = l.split(',');
+      if (f.length < 11) return;
+      var name = f.slice(10).join(',');
+      var q = function (s) { return /[",]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+      out.push([isoOf(f[1])].concat(f.slice(0, 9), [q(f[9]), q(name)]).join(','));
+      n++;
+    });
+    var day = new Date().toISOString().slice(0, 10);
+    download('muleskin-log-' + day + '.csv', out.join('\n') + '\n', 'text/csv');
+    bbResult.textContent = 'SAVED: ' + n + ' detections from ' + boots.length + ' boots' +
+      (cleared ? ' (including rows cleared with CLR on the board)' : '') + ' -> muleskin-log-' + day + '.csv';
+  }
+
+  // The boots, newest first: what restarted it, and for a crash where.
+  function showCrashes(boots) {
+    var rows = boots.map(function (l) { return l.split(','); }).filter(function (f) { return f.length >= 11; }).reverse();
+    var crashes = rows.filter(function (f) { return CRASHES[f[1]]; });
+    var browns = rows.filter(function (f) { return f[1] === 'BROWNOUT'; }).length;
+    var head = crashes.length ? crashes.length + ' CRASH' + (crashes.length > 1 ? 'ES' : '') + ' in the last ' + rows.length + ' boots'
+                              : 'NO CRASHES in the last ' + rows.length + ' boots';
+    var lines = rows.slice(0, 8).map(function (f) {
+      var when = isoOf(f[2]) || 'boot ' + f[0];
+      var up = +f[4] >= 3600 ? Math.round(f[4] / 3600) + ' h' : Math.round(f[4] / 60) + ' min';
+      return when + '  ' + f[1] + '  ' + f[3] + '  up ' + up + (CRASHES[f[1]] && f[8] ? '  in ' + f[8] + ' @' + f[9] : '');
+    });
+    bbResult.className = crashes.length ? 'identify-result err' : 'identify-result';
+    bbResult.textContent = head + (browns ? '  ·  ' + browns + ' brownout restart(s): use a direct USB port or a 2 A supply' : '');
+    var pre = document.createElement('pre');
+    pre.style.cssText = 'text-align:left;white-space:pre-wrap;font-size:0.75rem;margin:8px 0 0';
+    pre.textContent = lines.join('\n');
+    bbResult.appendChild(pre);
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['boot,reason,epoch,version,up_s,heap_free,heap_block,screen,task,pc,cause\n' + boots.join('\n') + '\n'], { type: 'text/csv' }));
+    a.download = 'muleskin-boots.csv';
+    a.textContent = 'Save every boot as a CSV';
+    bbResult.appendChild(a);
   }
 
   // ---- Settings backup and restore -----------------------------------------
