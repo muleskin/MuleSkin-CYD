@@ -2656,8 +2656,21 @@ static void drawCounterLine(TFT_eSPI& t, int w, int y, const DetectionEngine& en
     // background is doing behind them.
     const int PAD_X = 4, PAD_Y = 2;
     t.fillRect(x - PAD_X, y - PAD_Y, tw + 2 * PAD_X, t.fontHeight() + 2 * PAD_Y, Theme::BG);
-    t.setCursor(x, y);
-    t.print(buf);
+    // Entry by entry, each in its type's colour -- the colour its blips have
+    // on the radar, so a dot and its counter read as the same thing. One
+    // still at zero is a dim shade of it, so what is actually around stands
+    // out. The layout is the one measured above: same text, same gaps.
+    int cx = x;
+    for (uint8_t i = 0; i < n; i++) {
+        char entry[20];
+        const unsigned c = counterCount(eng, types[i]);
+        snprintf(entry, sizeof entry, "%s:%u", counterLabel(types[i]), c);
+        const uint16_t col = Theme::colorFor(types[i]);
+        t.setTextColor(c ? col : Theme::blend(Theme::BG, col, 110), Theme::BG);
+        t.setCursor(cx, y);
+        t.print(entry);
+        cx += t.textWidth(entry) + (i + 1 < n ? t.textWidth("  ") : 0);
+    }
 }
 
 #if MULESKIN_MESH

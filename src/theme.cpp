@@ -1363,6 +1363,20 @@ static uint8_t  s_blipMac[MAX_BLIPS][6];
 static uint8_t  s_blipN = 0, s_blipR = 3;
 static uint32_t s_blipAt = 0;
 
+// A blip's colour is its COUNTER's colour, so a dot and the number under the
+// radar that counts it match: the main screen's row folds the BLE tags into
+// TRACKER (AIRTAG's colour), RING into CAM and EVIL TWIN into HACK -- see
+// counterCount() in ui_clear.cpp. Everywhere else a type keeps its own colour.
+static uint16_t blipColorFor(DetectionType t) {
+    switch (t) {
+        case DetectionType::GOOGLE_TAG: case DetectionType::TILE:
+        case DetectionType::SAMSUNG_TAG: return colorFor(DetectionType::AIRTAG);
+        case DetectionType::RING:        return colorFor(DetectionType::CAMERA);
+        case DetectionType::EVILTWIN:    return colorFor(DetectionType::HACKER);
+        default:                         return colorFor(t);
+    }
+}
+
 static void drawRadarBlips(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
                            const DetectionEngine& eng) {
     using namespace RadarArt;
@@ -1396,7 +1410,7 @@ static void drawRadarBlips(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
         const uint8_t behind = (uint8_t)(sweep - a);
         int k = RadarBlip::paint(behind) * (int)(SHOW_MS - age) / (int)SHOW_MS;
         if (k < 90) k = 90;
-        const uint16_t base = colorFor(d->type);
+        const uint16_t base = blipColorFor(d->type);   // its counter's colour
         t.fillCircle(x, y, rad + 1, BLACK);   // lifts it off the weather behind
         t.fillCircle(x, y, rad, scale565(base, (uint8_t)k));
         if (behind < 16) t.drawCircle(x, y, rad + 2, scale565(base, 200));
