@@ -316,23 +316,36 @@ bool isIBeacon(const uint8_t* mfg, uint8_t len) {
 // build_flasher_bins.sh and fetched by the boot check (ota_wifi.cpp). The
 // rules are one line, entries separated by ';':
 //
-//   OUI aa:bb:cc TYPE [HIGH|MED|LOW] [Vendor]
-//   SSID prefix TYPE [Vendor]
+//   OUI aa:bb:cc TYPE [HIGH|MED|LOW] [Vendor]   an address prefix
+//   SSID prefix TYPE [Vendor]                   a WiFi network-name prefix
+//   UUID 0xFD5F TYPE [Vendor]                   a 16-bit BLE service UUID
+//   CID 0x09C8 TYPE [Vendor]                    a BLE company ID (manufacturer data)
+//   NAME prefix TYPE [Vendor]                   a BLE advertised-name prefix
+//   DROP OUI|SSID|UUID|CID|NAME key             withdraw a rule, built in or not
+//   GRADE aa:bb:cc HIGH|MED|LOW                 re-grade a known address prefix
 //
 // TYPE is a detectionTypeName() ("FLOCK", "AIRTAG", "EVIL_TWIN" for EVIL
-// TWIN). The built-in tables are asked first, so an extra rule can add a
-// prefix but never change one this firmware already knows. Anything that
-// does not parse is skipped, not guessed at.
+// TWIN). The built-in tables are asked first, so an added rule can never
+// change what this firmware already knows -- only DROP and GRADE can, and
+// they say so in as many words. The Bluetooth kinds take their type's own
+// grade, like the built-in Bluetooth tables. Anything that does not parse is
+// skipped, not guessed at -- which is also what an older firmware does with
+// a kind it has never heard of.
 namespace {
-struct XOui  { uint8_t b[3]; DetectionType type; Confidence conf; char name[16]; };
-struct XSsid { char prefix[16]; DetectionType type; char name[16]; };
-const uint8_t X_OUI_MAX = 64, X_SSID_MAX = 32;
-// Allocated to the size of the set, not to the maximum: most boards carry no
-// extra rules at all, and fixed tables cost them 2.5 KB of RAM for nothing.
-XOui*   g_xOui  = nullptr;
-XSsid*  g_xSsid = nullptr;
-uint8_t g_xOuiCap = 0, g_xSsidCap = 0;
-uint8_t g_xOuiN = 0, g_xSsidN = 0;
+enum XKind : uint8_t { XK_OUI, XK_SSID, XK_UUID, XK_CID, XK_NAME };
+struct XOui   { uint8_t b[3]; DetectionType type; Confidence conf; char name[16]; };
+struct XSsid  { char prefix[16]; DetectionType type; char name[16]; };
+struct XBle   { uint8_t kind; uint16_t id; char prefix[16]; DetectionType type; char name[16]; };
+struct XDrop  { uint8_t kind; uint8_t b[3]; uint16_t id; char key[16]; };
+struct XGrade { uint8_t b[3]; Confidence conf; };
+const uint8_t X_OUI_MAX = 64, X_SSID_MAX = 32, X_BLE_MAX = 32, X_DROP_MAX = 32, X_GRADE_MAX = 32;
+// Allocated to the size of the set, not to the maximum: most boards carry few
+// extra rules, and fixed tables would cost them kilobytes of RAM for nothing.
+XOui*   g_xOui   = nullptr; uint8_t g_xOuiCap = 0,   g_xOuiN = 0;
+XSsid*  g_xSsid  = nullptr; uint8_t g_xSsidCap = 0,  g_xSsidN = 0;
+XBle*   g_xBle   = nullptr; uint8_t g_xBleCap = 0,   g_xBleN = 0;
+XDrop*  g_xDrop  = nullptr; uint8_t g_xDropCap = 0,  g_xDropN = 0;
+XGrade* g_xGrade = nullptr; uint8_t g_xGradeCap = 0, g_xGradeN = 0;
 
 bool typeFromName(const char* s, DetectionType& out) {
     for (uint8_t t = 1; t < (uint8_t)DetectionType::COUNT; t++) {
@@ -355,6 +368,48 @@ int hexNib(char c) {
     return (c >= 'a' && c <= 'f') ? c - 'a' + 10 : -1;
 }
 
+// "aa:bb:cc" into three bytes.
+bool parseOui(const char* m, uint8_t out[3]) {
+    if (strlen(m) != 8 || m[2] != ':' || m[5] != ':') return false;
+    for (int b = 0; b < 3; b++) {
+        const int hi = hexNib(m[b * 3]), lo = hexNib(m[b * 3 + 1]);
+        if (hi < 0 || lo < 0) return false;
+        out[b] = (uint8_t)(hi * 16 + lo);
+    }
+    return true;
+}
+
+// "0xFD5F" (or "FD5F") into a 16-bit value.
+bool parseHex16(const char* s, uint16_t& out) {
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) s += 2;
+    const size_t n = strlen(s);
+    if (n < 1 || n > 4) return false;
+    uint16_t v = 0;
+    for (size_t i = 0; i < n; i++) {
+        const int d = hexNib(s[i]);
+        if (d < 0) return false;
+        v = (uint16_t)(v * 16 + d);
+    }
+    out = v;
+    return true;
+}
+
+bool parseConf(const char* s, Confidence& c) {
+    if (strcasecmp(s, "HIGH") == 0) { c = Confidence::HIGH_CONF; return true; }
+    if (strcasecmp(s, "MED")  == 0) { c = Confidence::MED_CONF;  return true; }
+    if (strcasecmp(s, "LOW")  == 0) { c = Confidence::LOW_CONF;  return true; }
+    return false;
+}
+
+bool kindFromName(const char* s, uint8_t& k) {
+    if (strcasecmp(s, "OUI") == 0)  { k = XK_OUI;  return true; }
+    if (strcasecmp(s, "SSID") == 0) { k = XK_SSID; return true; }
+    if (strcasecmp(s, "UUID") == 0) { k = XK_UUID; return true; }
+    if (strcasecmp(s, "CID") == 0)  { k = XK_CID;  return true; }
+    if (strcasecmp(s, "NAME") == 0) { k = XK_NAME; return true; }
+    return false;
+}
+
 // Up to `max` space-separated words of `s` into `w`.
 uint8_t words(char* s, char** w, uint8_t max) {
     uint8_t n = 0;
@@ -373,25 +428,42 @@ void copyName(char* dst, const char* src) {
     for (; src && src[i] && i < 15; i++) dst[i] = src[i];
     dst[i] = '\0';
 }
+
+bool startsWithNoCase(const char* s, const char* prefix) {
+    return s && prefix[0] && strncasecmp(s, prefix, strlen(prefix)) == 0;
+}
+
+template <typename T> void make(T*& p, uint8_t& cap, unsigned want, uint8_t max) {
+    if (want > max) want = max;
+    if (want && (p = (T*)calloc(want, sizeof(T))) != nullptr) cap = (uint8_t)want;
+}
+template <typename T> void drop(T*& p, uint8_t& cap, uint8_t& n) { free(p); p = nullptr; cap = 0; n = 0; }
 }  // namespace
 
 uint16_t setExtraRules(const char* body) {
-    g_xOuiN = g_xSsidN = 0;
-    free(g_xOui);  g_xOui = nullptr;  g_xOuiCap = 0;
-    free(g_xSsid); g_xSsid = nullptr; g_xSsidCap = 0;
+    drop(g_xOui, g_xOuiCap, g_xOuiN);
+    drop(g_xSsid, g_xSsidCap, g_xSsidN);
+    drop(g_xBle, g_xBleCap, g_xBleN);
+    drop(g_xDrop, g_xDropCap, g_xDropN);
+    drop(g_xGrade, g_xGradeCap, g_xGradeN);
     if (!body || !*body) return 0;
     // Room for every entry of each kind the set could hold, capped.
-    unsigned ouis = 0, ssids = 0;
+    unsigned ouis = 0, ssids = 0, bles = 0, drops = 0, grades = 0;
     for (const char* q = body; *q; ) {
         while (*q == ' ' || *q == ';') q++;
-        if (strncasecmp(q, "OUI ", 4) == 0) ouis++;
-        else if (strncasecmp(q, "SSID ", 5) == 0) ssids++;
+        if      (strncasecmp(q, "OUI ", 4) == 0)   ouis++;
+        else if (strncasecmp(q, "SSID ", 5) == 0)  ssids++;
+        else if (strncasecmp(q, "UUID ", 5) == 0 || strncasecmp(q, "CID ", 4) == 0 ||
+                 strncasecmp(q, "NAME ", 5) == 0)  bles++;
+        else if (strncasecmp(q, "DROP ", 5) == 0)  drops++;
+        else if (strncasecmp(q, "GRADE ", 6) == 0) grades++;
         while (*q && *q != ';') q++;
     }
-    if (ouis > X_OUI_MAX) ouis = X_OUI_MAX;
-    if (ssids > X_SSID_MAX) ssids = X_SSID_MAX;
-    if (ouis && (g_xOui = (XOui*)calloc(ouis, sizeof(XOui))) != nullptr) g_xOuiCap = (uint8_t)ouis;
-    if (ssids && (g_xSsid = (XSsid*)calloc(ssids, sizeof(XSsid))) != nullptr) g_xSsidCap = (uint8_t)ssids;
+    make(g_xOui, g_xOuiCap, ouis, X_OUI_MAX);
+    make(g_xSsid, g_xSsidCap, ssids, X_SSID_MAX);
+    make(g_xBle, g_xBleCap, bles, X_BLE_MAX);
+    make(g_xDrop, g_xDropCap, drops, X_DROP_MAX);
+    make(g_xGrade, g_xGradeCap, grades, X_GRADE_MAX);
     char entry[96];
     const char* p = body;
     while (*p) {
@@ -403,38 +475,63 @@ uint16_t setExtraRules(const char* body) {
         p += n + (p[n] == ';' ? 1 : 0);
         char* w[6];
         const uint8_t k = words(entry, w, 6);
-        if (k >= 3 && strcasecmp(w[0], "OUI") == 0 && g_xOuiN < g_xOuiCap) {
+        if (k < 3) continue;
+        if (strcasecmp(w[0], "OUI") == 0 && g_xOuiN < g_xOuiCap) {
             XOui& x = g_xOui[g_xOuiN];
-            const char* m = w[1];
-            if (strlen(m) != 8 || m[2] != ':' || m[5] != ':') continue;
-            bool ok = true;
-            for (int b = 0; b < 3; b++) {
-                const int hi = hexNib(m[b * 3]), lo = hexNib(m[b * 3 + 1]);
-                if (hi < 0 || lo < 0) { ok = false; break; }
-                x.b[b] = (uint8_t)(hi * 16 + lo);
-            }
-            if (!ok || !typeFromName(w[2], x.type)) continue;
+            if (!parseOui(w[1], x.b) || !typeFromName(w[2], x.type)) continue;
             x.conf = Confidence::MED_CONF;
             uint8_t nameAt = 3;
-            if (k > 3) {
-                if      (strcasecmp(w[3], "HIGH") == 0) { x.conf = Confidence::HIGH_CONF; nameAt = 4; }
-                else if (strcasecmp(w[3], "MED")  == 0) { x.conf = Confidence::MED_CONF;  nameAt = 4; }
-                else if (strcasecmp(w[3], "LOW")  == 0) { x.conf = Confidence::LOW_CONF;  nameAt = 4; }
-            }
+            if (k > 3 && parseConf(w[3], x.conf)) nameAt = 4;
             copyName(x.name, k > nameAt ? w[nameAt] : "");
             g_xOuiN++;
-        } else if (k >= 3 && strcasecmp(w[0], "SSID") == 0 && g_xSsidN < g_xSsidCap) {
+        } else if (strcasecmp(w[0], "SSID") == 0 && g_xSsidN < g_xSsidCap) {
             XSsid& x = g_xSsid[g_xSsidN];
             if (strlen(w[1]) > 15 || !typeFromName(w[2], x.type)) continue;
             copyName(x.prefix, w[1]);
             copyName(x.name, k > 3 ? w[3] : "");
             g_xSsidN++;
+        } else if (g_xBleN < g_xBleCap &&
+                   (strcasecmp(w[0], "UUID") == 0 || strcasecmp(w[0], "CID") == 0 ||
+                    strcasecmp(w[0], "NAME") == 0)) {
+            XBle& x = g_xBle[g_xBleN];
+            kindFromName(w[0], x.kind);
+            if (x.kind == XK_NAME) {
+                if (strlen(w[1]) > 15) continue;
+                copyName(x.prefix, w[1]);
+            } else if (!parseHex16(w[1], x.id)) {
+                continue;
+            }
+            if (!typeFromName(w[2], x.type)) continue;
+            copyName(x.name, k > 3 ? w[3] : "");
+            g_xBleN++;
+        } else if (strcasecmp(w[0], "DROP") == 0 && g_xDropN < g_xDropCap) {
+            XDrop& x = g_xDrop[g_xDropN];
+            if (!kindFromName(w[1], x.kind)) continue;
+            if (x.kind == XK_OUI) { if (!parseOui(w[2], x.b)) continue; }
+            else if (x.kind == XK_UUID || x.kind == XK_CID) { if (!parseHex16(w[2], x.id)) continue; }
+            else { if (strlen(w[2]) > 15) continue; copyName(x.key, w[2]); }
+            g_xDropN++;
+        } else if (strcasecmp(w[0], "GRADE") == 0 && g_xGradeN < g_xGradeCap) {
+            XGrade& x = g_xGrade[g_xGradeN];
+            if (!parseOui(w[1], x.b) || !parseConf(w[2], x.conf)) continue;
+            g_xGradeN++;
         }
     }
-    return (uint16_t)(g_xOuiN + g_xSsidN);
+    return (uint16_t)(g_xOuiN + g_xSsidN + g_xBleN + g_xDropN + g_xGradeN);
 }
 
-uint16_t extraRuleCount() { return (uint16_t)(g_xOuiN + g_xSsidN); }
+uint16_t extraRuleCount() { return (uint16_t)(g_xOuiN + g_xSsidN + g_xBleN + g_xDropN + g_xGradeN); }
+
+static bool dropped(uint8_t kind, const uint8_t* b, uint16_t id, const char* s) {
+    for (uint8_t i = 0; i < g_xDropN; i++) {
+        const XDrop& d = g_xDrop[i];
+        if (d.kind != kind) continue;
+        if (kind == XK_OUI && b && b[0] == d.b[0] && b[1] == d.b[1] && b[2] == d.b[2]) return true;
+        if ((kind == XK_UUID || kind == XK_CID) && id == d.id) return true;
+        if ((kind == XK_SSID || kind == XK_NAME) && startsWithNoCase(s, d.key)) return true;
+    }
+    return false;
+}
 
 static const XOui* extraOui(const uint8_t* mac) {
     for (uint8_t i = 0; i < g_xOuiN; i++)
@@ -446,9 +543,25 @@ static const XSsid* extraSsid(const char* ssid) {
         if (strncasecmp(ssid, g_xSsid[i].prefix, strlen(g_xSsid[i].prefix)) == 0) return &g_xSsid[i];
     return nullptr;
 }
+static const XBle* extraBle(uint8_t kind, uint16_t id, const char* name) {
+    for (uint8_t i = 0; i < g_xBleN; i++) {
+        const XBle& x = g_xBle[i];
+        if (x.kind != kind) continue;
+        if (kind == XK_NAME ? startsWithNoCase(name, x.prefix) : x.id == id) return &x;
+    }
+    return nullptr;
+}
+static bool regraded(const uint8_t* mac, Confidence& c) {
+    for (uint8_t i = 0; i < g_xGradeN; i++)
+        if (mac[0] == g_xGrade[i].b[0] && mac[1] == g_xGrade[i].b[1] && mac[2] == g_xGrade[i].b[2]) {
+            c = g_xGrade[i].conf;
+            return true;
+        }
+    return false;
+}
 
 const char* ouiVendorName(const uint8_t* mac) {
-    if (!mac) return nullptr;
+    if (!mac || dropped(XK_OUI, mac, 0, nullptr)) return nullptr;
     for (uint16_t k = 0; k < kOuiCount; k++)
         if (mac[0] == kOuiTable[k].b[0] && mac[1] == kOuiTable[k].b[1] && mac[2] == kOuiTable[k].b[2])
             return kOuiTable[k].name;
@@ -456,17 +569,23 @@ const char* ouiVendorName(const uint8_t* mac) {
     return (x && x->name[0]) ? x->name : nullptr;
 }
 DetectionType lookupOui(const uint8_t* mac, Confidence* conf) {
-    if (!mac) return DetectionType::UNKNOWN;
+    if (!mac || dropped(XK_OUI, mac, 0, nullptr)) return DetectionType::UNKNOWN;
     for (uint16_t i = 0; i < kOuiCount; i++) {
         if (mac[0] == kOuiTable[i].b[0] &&
             mac[1] == kOuiTable[i].b[1] &&
             mac[2] == kOuiTable[i].b[2]) {
-            if (conf) *conf = kOuiTable[i].conf;
+            if (conf) {
+                *conf = kOuiTable[i].conf;
+                regraded(mac, *conf);             // a GRADE rule, since the build
+            }
             return kOuiTable[i].type;
         }
     }
     if (const XOui* x = extraOui(mac)) {          // a rule added since the build
-        if (conf) *conf = x->conf;
+        if (conf) {
+            *conf = x->conf;
+            regraded(mac, *conf);
+        }
         return x->type;
     }
     // Left alone rather than zeroed on a miss: the caller seeds it with the
@@ -475,9 +594,11 @@ DetectionType lookupOui(const uint8_t* mac, Confidence* conf) {
 }
 
 DetectionType lookupUuid(uint16_t uuid16) {
+    if (dropped(XK_UUID, nullptr, uuid16, nullptr)) return DetectionType::UNKNOWN;
     for (uint16_t i = 0; i < kUuidCount; i++) {
         if (kUuidTable[i].uuid == uuid16) return kUuidTable[i].type;
     }
+    if (const XBle* x = extraBle(XK_UUID, uuid16, nullptr)) return x->type;
     return DetectionType::UNKNOWN;
 }
 
@@ -488,7 +609,7 @@ bool isBareSerialName(const char* name) {
 }
 
 DetectionType lookupBtName(const char* name) {
-    if (!name) return DetectionType::UNKNOWN;
+    if (!name || dropped(XK_NAME, nullptr, 0, name)) return DetectionType::UNKNOWN;
     for (uint16_t i = 0; i < kBtClassicCount; i++) {
         if (strcasecmp(name, kBtClassicNames[i].name) == 0) {
             return kBtClassicNames[i].type;
@@ -508,11 +629,12 @@ DetectionType lookupBtName(const char* name) {
     // because the default is what most of them are still called, and it
     // costs nothing next to three exact signatures that cannot be typed.
     if (strcasestr(name, "Flipper"))  return DetectionType::HACKER;
+    if (const XBle* x = extraBle(XK_NAME, 0, name)) return x->type;
     return DetectionType::UNKNOWN;
 }
 
 DetectionType lookupSsid(const char* ssid) {
-    if (!ssid) return DetectionType::UNKNOWN;
+    if (!ssid || dropped(XK_SSID, nullptr, 0, ssid)) return DetectionType::UNKNOWN;
     // A provisioned camera's bare "Flock" (Flock-You's firmware dump). Exact,
     // not a prefix: "Flock" as a prefix would take "Flockhart Family WiFi".
     if (strcasecmp(ssid, "Flock") == 0) return DetectionType::FLOCK;
@@ -527,19 +649,29 @@ DetectionType lookupSsid(const char* ssid) {
 }
 
 const char* uuidName(uint16_t uuid16) {
+    if (dropped(XK_UUID, nullptr, uuid16, nullptr)) return nullptr;
     for (uint16_t i = 0; i < kUuidCount; i++)
         if (kUuidTable[i].uuid == uuid16) return kUuidTable[i].name;
-    return nullptr;
+    const XBle* x = extraBle(XK_UUID, uuid16, nullptr);
+    return (x && x->name[0]) ? x->name : nullptr;
 }
 
 const char* mfgIdName(uint16_t mfgId) {
+    if (dropped(XK_CID, nullptr, mfgId, nullptr)) return nullptr;
     for (uint16_t i = 0; i < kMfgIdCount; i++)
         if (kMfgIdTable[i].mfgId == mfgId) return kMfgIdTable[i].name;
-    return nullptr;
+    const XBle* x = extraBle(XK_CID, mfgId, nullptr);
+    return (x && x->name[0]) ? x->name : nullptr;
+}
+
+const char* btNameVendor(const char* name) {
+    if (!name || dropped(XK_NAME, nullptr, 0, name)) return nullptr;
+    const XBle* x = extraBle(XK_NAME, 0, name);
+    return (x && x->name[0]) ? x->name : nullptr;
 }
 
 const char* ssidVendorName(const char* ssid) {
-    if (!ssid) return nullptr;
+    if (!ssid || dropped(XK_SSID, nullptr, 0, ssid)) return nullptr;
     for (uint16_t i = 0; i < kSsidCount; i++) {
         size_t n = strlen(kSsidPrefixes[i].prefix);
         if (strncasecmp(ssid, kSsidPrefixes[i].prefix, n) == 0) {
@@ -551,9 +683,11 @@ const char* ssidVendorName(const char* ssid) {
 }
 
 DetectionType lookupMfgId(uint16_t mfgId) {
+    if (dropped(XK_CID, nullptr, mfgId, nullptr)) return DetectionType::UNKNOWN;
     for (uint16_t i = 0; i < kMfgIdCount; i++) {
         if (kMfgIdTable[i].mfgId == mfgId) return kMfgIdTable[i].type;
     }
+    if (const XBle* x = extraBle(XK_CID, mfgId, nullptr)) return x->type;
     return DetectionType::UNKNOWN;
 }
 

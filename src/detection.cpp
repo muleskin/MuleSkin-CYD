@@ -390,12 +390,20 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
                     // round ones above: 0x3101 and 0x3102 are the ones that
                     // hand out its GPS position (Flock-You, issue #15).
                     // getValue() is the 16-bit value's own bytes, little-endian.
+                    // A DROP UUID 0x3100 rule withdraws the whole range.
+                    // Then any other 16-bit UUID, for the extra rules: an
+                    // added UUID rule is a value this list has never heard of.
                     if (det.type == DetectionType::UNKNOWN && u.getValue()) {
                         const uint8_t* p = u.getValue();
                         const uint16_t v = (uint16_t)(p[0] | (p[1] << 8));
                         if (v >= 0x3100 && v <= 0x3500) {
-                            det.type = DetectionType::RAVEN;
-                            label    = uuidName(0x3100);
+                            if (lookupUuid(0x3100) == DetectionType::RAVEN) {
+                                det.type = DetectionType::RAVEN;
+                                label    = uuidName(0x3100);
+                            }
+                        } else if (lookupUuid(v) != DetectionType::UNKNOWN) {
+                            det.type = lookupUuid(v);
+                            label    = uuidName(v);
                         }
                     }
                     if (det.type != DetectionType::UNKNOWN) break;
@@ -414,7 +422,7 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         bool matchedByName = false;
         if (det.type == DetectionType::UNKNOWN && det.name[0]) {
             det.type = lookupBtName(det.name);
-            label    = nullptr;          // the name itself identifies it
+            label    = btNameVendor(det.name);   // an extra NAME rule's vendor; built-in names have none
             matchedByName = (det.type != DetectionType::UNKNOWN);
         }
         if (det.type == DetectionType::UNKNOWN) return;
@@ -480,7 +488,8 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
             // no label and stays "BLE": its page is found by the name.
             det.vendor = label;
         } else {
-            det.vendor = "BLE";
+            // An extra rule's own vendor, when one matched; else just BLE.
+            det.vendor = label ? label : "BLE";
         }
         g_engine->postBle(det);
     }

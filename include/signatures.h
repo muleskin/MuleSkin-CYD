@@ -43,7 +43,8 @@ DetectionType lookupOui(const uint8_t* mac, Confidence* conf = nullptr);
 const char* ouiVendorName(const uint8_t* mac);
 // Extra rules, delivered without a firmware release (see signatures.cpp and
 // web-flasher/signatures.txt): replaces any previous set; returns how many
-// parsed. Asked after the built-in tables, never instead of them.
+// parsed. Added rules are asked after the built-in tables, never instead of
+// them; only an explicit DROP or GRADE changes what a built-in row says.
 uint16_t setExtraRules(const char* body);
 uint16_t extraRuleCount();
 DetectionType lookupUuid(uint16_t uuid16);
@@ -63,6 +64,8 @@ DetectionType lookupMfgId(uint16_t mfgId);
 // this is what tells them apart -- and which MORE INFO page they get.
 const char* uuidName(uint16_t uuid16);
 const char* mfgIdName(uint16_t mfgId);
+// The vendor an extra NAME rule gave a BLE name, or nullptr.
+const char* btNameVendor(const char* name);
 
 // AirTag check, run against the RAW advertisement bytes rather than
 // NimBLE's parsed manufacturer-data field -- pass adv->getPayload() and

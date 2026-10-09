@@ -48,6 +48,51 @@ int main() {
     ck("an extra rule can't change a known prefix", lookupOui(km) == builtIn);
     ck("nor its vendor", ouiVendorName(km) == kOuiTable[0].name);
 
+    suite("Bluetooth rules");
+    {
+        const uint16_t got = setExtraRules(
+            "UUID 0xFD84 TILE TileFD84;"           // a value the built-in table lacks
+            "CID 0x0FAB CAMERA SomeCamCo;"
+            "NAME Spyglass- META Spyglass;"
+            "UUID 0xFEED CAMERA Nope;"             // built in already: Tile keeps it
+            "UUID 0xZZZZ TILE;"                    // bad hex
+            "CID 0x12345 TILE;"                    // five digits
+            "NAME ThisNameIsFarTooLongToKeep TILE"); // over 15
+        ck("four good of seven", got == 4);
+        ck("an extra UUID matches", lookupUuid(0xFD84) == DetectionType::TILE);
+        ck("...with its vendor", uuidName(0xFD84) && strcmp(uuidName(0xFD84), "TileFD84") == 0);
+        ck("an extra company ID matches", lookupMfgId(0x0FAB) == DetectionType::CAMERA);
+        ck("...with its vendor", mfgIdName(0x0FAB) && strcmp(mfgIdName(0x0FAB), "SomeCamCo") == 0);
+        ck("an extra name prefix matches, any case", lookupBtName("SPYGLASS-0042") == DetectionType::META);
+        ck("...with its vendor", btNameVendor("spyglass-1") && strcmp(btNameVendor("spyglass-1"), "Spyglass") == 0);
+        ck("a built-in UUID keeps its meaning", lookupUuid(0xFEED) == DetectionType::TILE);
+        ck("nothing else matches", lookupUuid(0x1234) == DetectionType::UNKNOWN && lookupMfgId(0x1234) == DetectionType::UNKNOWN);
+    }
+
+    suite("DROP and GRADE: the two that can change a built-in row");
+    {
+        char r[160];
+        snprintf(r, sizeof r, "DROP OUI %02x:%02x:%02x;DROP UUID 0xFEED;DROP CID 0x0E29;DROP SSID AB2-;DROP NAME Flipper;"
+                              "GRADE %02x:%02x:%02x HIGH;DROP WIBBLE x;GRADE 12:34 LOW",
+                 k[0], k[1], k[2], kOuiTable[1].b[0], kOuiTable[1].b[1], kOuiTable[1].b[2]);
+        ck("six good of eight", setExtraRules(r) == 6);
+        ck("a dropped prefix is gone", lookupOui(km) == DetectionType::UNKNOWN && ouiVendorName(km) == nullptr);
+        ck("a dropped UUID is gone", lookupUuid(0xFEED) == DetectionType::UNKNOWN && uuidName(0xFEED) == nullptr);
+        ck("the other Tile UUID is not", lookupUuid(0xFEEC) == DetectionType::TILE);
+        ck("a dropped company ID is gone", lookupMfgId(0x0E29) == DetectionType::UNKNOWN);
+        ck("a dropped SSID prefix is gone", lookupSsid("AB2-123456") == DetectionType::UNKNOWN);
+        ck("...and only that one", lookupSsid("AB3-123456") == DetectionType::AXON);
+        ck("a dropped name is gone", lookupBtName("Flipper Zeroth") == DetectionType::UNKNOWN);
+        const uint8_t g6[6] = { kOuiTable[1].b[0], kOuiTable[1].b[1], kOuiTable[1].b[2], 1, 2, 3 };
+        Confidence c = Confidence::LOW_CONF;
+        ck("a regraded prefix keeps its type", lookupOui(g6, &c) == kOuiTable[1].type);
+        ck("...and takes the new grade", c == Confidence::HIGH_CONF);
+        setExtraRules("");
+        c = Confidence::LOW_CONF;
+        lookupOui(g6, &c);
+        ck("an empty set puts every row back", c == kOuiTable[1].conf && lookupUuid(0xFEED) == DetectionType::TILE);
+    }
+
     // The set the flasher site actually signs and serves, read the way
     // build_flasher_bins.sh reads it: comments and blank lines dropped, the
     // SERIAL line apart, the rest joined with ';'. Every line must parse --

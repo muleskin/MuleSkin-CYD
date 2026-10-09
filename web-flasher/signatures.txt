@@ -9,17 +9,27 @@
 #
 #   OUI aa:bb:cc TYPE [HIGH|MED|LOW] [Vendor]   an address prefix
 #   SSID prefix TYPE [Vendor]                   a WiFi network-name prefix
+#   UUID 0xFD84 TYPE [Vendor]                   a 16-bit Bluetooth service UUID   (v3.1.6+)
+#   CID 0x0FAB TYPE [Vendor]                    a Bluetooth company ID            (v3.1.6+)
+#   NAME prefix TYPE [Vendor]                   a Bluetooth device-name prefix    (v3.1.6+)
+#   DROP OUI|SSID|UUID|CID|NAME key             withdraw a rule, built in or not  (v3.1.6+)
+#   GRADE aa:bb:cc HIGH|MED|LOW                 re-grade a known address prefix   (v3.1.6+)
 #
 # TYPE: FLOCK AXON META SKIMMER RAVEN AIRTAG DRONE ALPR CAMERA SAMSUNG_TAG
 #       GOOGLE_TAG TILE RING DEAUTH EVIL_TWIN IBEACON HACKER
-# Vendor: one word, up to 15 characters. Confidence defaults to MED.
-# Rules only ADD: a prefix the firmware already knows keeps its built-in
-# meaning. At most 64 OUI and 32 SSID rules; the signed set must stay under
-# about 2 KB.
+# Vendor: one word, up to 15 characters. OUI confidence defaults to MED; the
+# Bluetooth kinds take their type's own grade, as the built-in ones do.
+# Added rules never change what the firmware already knows -- only DROP and
+# GRADE do, and that is what they are for: taking back a prefix that turned
+# out to be wrong without a release. Older firmware skips the kinds it does
+# not know, so a set can use them freely. At most 64 OUI, 32 SSID, 32
+# Bluetooth, 32 DROP and 32 GRADE rules; the signed set must stay under
+# 2000 bytes.
 #
-# Example (not active -- remove the leading # to use):
+# Examples (not active -- remove the leading # to use):
 #   OUI 12:34:56 FLOCK HIGH NewCamCo
 #   SSID Spycam- CAMERA SpyCamInc
+#   DROP OUI 00:0e:58
 
 SERIAL 2
 
