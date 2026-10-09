@@ -53,8 +53,11 @@ CXX      ?= g++
 # makes <TFT_eSPI.h>, <Arduino.h> and <Preferences.h> resolve to the
 # shims here rather than to an ESP32 core that isn't installed.
 EXTRA_CXXFLAGS ?=
+# The version the firmware would report from this tree (extra_script.py does
+# the same for a real build), so the splash and banners in renders say it.
+FW_VERSION := $(shell git describe --tags --always 2>/dev/null || echo sim)
 CXXFLAGS := -std=c++17 -O1 -g -Wall -Wno-unused-parameter $(EXTRA_CXXFLAGS) \
-            -I$(SIM_DIR) -I$(INC) -DMULESKIN_MESH=1
+            -I$(SIM_DIR) -I$(INC) -DMULESKIN_MESH=1 -DFIRMWARE_VERSION=\"$(FW_VERSION)\"
 # MinGW (Windows) compilers: the POSIX bits its runtime lacks (see win_compat.h).
 ifneq ($(findstring mingw,$(shell $(CXX) -dumpmachine)),)
 CXXFLAGS += -include $(SIM_DIR)/win_compat.h

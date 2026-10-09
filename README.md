@@ -126,6 +126,11 @@ A full beginner-friendly walkthrough is in [docs/BUILD.md](docs/BUILD.md).
 
 ## Usage
 
+<p align="center">
+  <img src="docs/demo1.gif" width="320"
+       alt="The emulator: the splash with the version under the wordmark, the radar main screen with the time at the top centre, a FLOCK CAM alert card, then the radar again with that device's blip lighting up as the sweep passes over it">
+</p>
+
 1. Plug the CYD into USB-C.
 2. The splash runs for about three seconds: the MuleSkin artwork, ears
    twitching, with the release under the wordmark and the build's own
@@ -136,7 +141,8 @@ A full beginner-friendly walkthrough is in [docs/BUILD.md](docs/BUILD.md).
    Everything heard in the last minute is a blip on the scope in its type's
    colour -- nearer the centre the stronger its signal, lighting up as the
    arm passes and fading a minute after it was last heard. (The bearing is
-   only a fixed place per device: the board can't tell direction.)
+   only a fixed place per device: the board can't tell direction.) Tap a
+   blip for that device's panel -- WATCH, IGNORE, HUNT or what it is.
 4. The soft buttons at the bottom:
    - **`< WIFI TIME >`** — join your saved WiFi network just long enough to
      set the clock (see [The clock](#the-clock)).
