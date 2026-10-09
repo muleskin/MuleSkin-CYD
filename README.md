@@ -140,8 +140,10 @@ A full beginner-friendly walkthrough is in [docs/BUILD.md](docs/BUILD.md).
      to return to the main screen. On the LOG screen a second button,
      **`[ CLR ]`**, wipes the log and returns.
    - **`< IN MEETING >`** — a red do-not-disturb sign, **IN A MEETING** in
-     big white letters, with BACK to return. It never dims, and no alert
-     takes it over; detection keeps running and logging behind it.
+     big white letters, with BACK to return. It never dims, no alert takes
+     it over, and the status light and buzzers stay quiet; detection keeps
+     running and logging behind it. Tap the sign for a timer -- **BACK IN 15,
+     30 or 60 MIN** -- and it takes itself down when the time is up.
 5. When something is detected, the device **flashes a full-screen ALERT**:
    a header strip in the detection's own colour with the type in the
    headline face, a data plate with the vendor, the device's own name where

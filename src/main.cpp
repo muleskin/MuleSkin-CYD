@@ -1198,7 +1198,7 @@ static bool alertMayInterrupt(const Detection& d) {
     // NIGHT. Never at boot (no automatic alert runs before loop()) and never
     // through a wipe (performWipe() silences it first).
     if (Settings::buzzerOn() && &d == engine.latest() && engine.latestIsNew() &&
-        !s_screenDimmed && !Clock::night())
+        !s_screenDimmed && !Clock::night() && state != AppState::MEETING)
         CrowBuzzer::chirp(BUZZ_CHIRP_MS);
 #endif
     return true;
@@ -2296,6 +2296,7 @@ static void twatchHapticBegin() {
 static void twatchBuzz(Buzz kind) {
     if (!s_drvOk) return;
     if (kind != Buzz::SAMPLE && !Settings::buzz()) { Serial.println("[buzz] alert, but BUZZ is off"); return; }
+    if (kind != Buzz::SAMPLE && state == AppState::MEETING) return;   // the sign is up: no buzzing
     // A room of Ring cameras alerts every few seconds. One buzz in ten
     // seconds for those; a device you asked to WATCH always gets through.
     static uint32_t lastAt = 0;
@@ -4770,11 +4771,21 @@ void loop() {
             // BACK acts on the finger lifting, so the touch that ends here
             // cannot carry on into the main screen's LOG, which sits in the
             // same slot.
-            static bool backArmed = false;
-            if (touchJustDown) backArmed = uiMeetingHitBack(tp.x, tp.y, tft.width(), tft.height());
+            static bool backArmed = false, signArmed = false;
+            if (touchJustDown) {
+                backArmed = uiMeetingHitBack(tp.x, tp.y, tft.width(), tft.height());
+                signArmed = !backArmed && uiMeetingHitSign(tp.x, tp.y, tft.width(), tft.height());
+            }
             if (touchJustUp && backArmed) {
                 backArmed = false;
                 lastTouch = now;
+                enterClear();
+            } else if (touchJustUp && signArmed) {
+                signArmed = false;
+                lastTouch = now;
+                uiMeetingCycleTimer(now);   // BACK IN 15 / 30 / 60 MIN, or none
+            } else if (uiMeetingTimerDone(now)) {
+                Serial.println("[meeting] timer ran out: sign down");
                 enterClear();
             }
             break;
@@ -7103,7 +7114,9 @@ void loop() {
                      w == OtaWifi::State::CONNECTING || w == OtaWifi::State::CHECKING ||
                      w == OtaWifi::State::DOWNLOADING || w == OtaWifi::State::VERIFYING) lc.update = 1;
         }
-        lc.quiet        = (state == AppState::LOCKED || state == AppState::PIN_ENTRY);
+        // The meeting sign means it: no flashing light behind it either.
+        lc.quiet        = (state == AppState::LOCKED || state == AppState::PIN_ENTRY ||
+                           state == AppState::MEETING);
         lc.screenDimmed = s_screenDimmed;
         lc.screenDark   = s_screenDimmed && Settings::dimLevel() == 0;
         StatusLight::tick(now, lc);

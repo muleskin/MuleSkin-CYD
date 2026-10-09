@@ -795,7 +795,12 @@ int main(int argc, char** argv) {
     else if (screen == "update")     uiUpdateInit(frame);
     else if (screen == "nudge")      { const uint8_t v[3] = { 1, 7, 6 }; uiNudgeInit(frame, "BIGFOOT", v, 30, 0); }
     else if (screen == "squadupdate") uiSquadUpdateInit(frame);
-    else if (screen == "meeting")    uiMeetingInit(frame);
+    else if (screen == "meeting")    {
+        uiMeetingInit(frame);
+        // MULESKINSIM_MEETING_TAPS=N: N taps on the sign (1 = 15 min, 2 = 30, 3 = 60).
+        if (const char* n = getenv("MULESKINSIM_MEETING_TAPS"))
+            for (int i = atoi(n); i > 0; i--) uiMeetingCycleTimer(millis());
+    }
     else if (screen == "timesync")   { OtaWifi::timeSyncStart(); uiTimeSyncInit(frame); }
     else if (screen == "invite") {
         // --pose N picks the page: 0 offering, 1 asked, 2 code, 3 sending, 4 joined,
