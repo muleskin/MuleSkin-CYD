@@ -403,6 +403,8 @@ MuleSkin-CYD/
 └── sim/                          (PC simulator — compiles src/ natively)
     ├── Makefile                  (`make` builds the simulator)
     ├── *.h                       (Arduino/TFT_eSPI/NVS shims)
+    ├── screens_check.py          (CI: the main screens against golden/)
+    ├── golden/                   (the reference renders it compares with)
     ├── make_readme_demo.py       (renders a simulator clip, docs/demo1.gif)
     └── make_social.py            (renders the repo's social preview card)
 ```
@@ -430,8 +432,9 @@ MuleSkin-CYD/
 
 ## Status
 
-**Shipping.** CI (`.github/workflows/ci.yml`) builds every flasher board and
-runs the host tests on each push. `tools/release.sh 3.1.5 --name ... --note
+**Shipping.** CI (`.github/workflows/ci.yml`) builds every flasher board, runs
+the host tests, and renders the main screens in the emulator and compares them
+with the references in `sim/golden/` on each push. `tools/release.sh 3.1.5 --name ... --note
 ... --push` stamps the manifests with the version and the release notes the
 boards show, tags and pushes it; the tag builds a GitHub Release with every
 board's bins (`.github/workflows/release.yml`). Getting it onto
