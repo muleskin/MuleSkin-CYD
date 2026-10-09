@@ -31,7 +31,7 @@
 #   SSID Spycam- CAMERA SpyCamInc
 #   DROP OUI 00:0e:58
 
-SERIAL 2
+SERIAL 3
 
 # ---- Set 2 (2026-10-09) ----------------------------------------------------
 # Every prefix below was read out of the IEEE registry itself
@@ -118,6 +118,11 @@ SSID davinci CAMERA Hikvision
 SSID HAP_ CAMERA Hikvision
 # Dahua WiFi camera setup hotspot, DAP- plus serial (IPC-HDBW1230DE-SW guide)
 SSID DAP- CAMERA Dahua
+
+# ---- Set 3 (2026-10-09) ----------------------------------------------------
+# Tile, Inc.'s third SIG-assigned UUID (Bluetooth SIG member UUIDs list),
+# beside the 0xFEED/0xFEEC the firmware has built in. Read by v3.1.6 and later.
+UUID 0xFD84 TILE Tile
 
 # Considered and left out: Cradlepoint and Sierra Wireless (police cars use
 # them, but so do buses, shops and ambulances -- a router is not a camera);

@@ -359,6 +359,21 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
             label    = uuidName(0xFFFA);
         }
 
+        // Google's Find My Device Network. The tracker frame is SERVICE DATA
+        // under 0xFEAA whose first byte is the frame type: 0x40, or 0x41 when
+        // the tag is in unwanted-tracking mode (Google's FMDN spec). Every
+        // Eddystone retail beacon carries 0xFEAA too, with frame types 0x00,
+        // 0x10, 0x20 or 0x30 -- which is why matching the UUID alone, as this
+        // did, reported shop beacons as trackers.
+        if (det.type == DetectionType::UNKNOWN && adv->haveServiceData() &&
+            lookupUuid(0xFEAA) == DetectionType::GOOGLE_TAG) {
+            const std::string sd = adv->getServiceData(NimBLEUUID((uint16_t)0xFEAA));
+            if (!sd.empty() && ((uint8_t)sd[0] == 0x40 || (uint8_t)sd[0] == 0x41)) {
+                det.type = DetectionType::GOOGLE_TAG;
+                label    = uuidName(0xFEAA);
+            }
+        }
+
         // Service UUIDs
         if (det.type == DetectionType::UNKNOWN && adv->haveServiceUUID()) {
             for (int j = 0; j < adv->getServiceUUIDCount(); j++) {
@@ -376,8 +391,8 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
                         0x3100, 0x3200, 0x3300, 0x3400, 0x3500,  // Raven
                         0xFFFA,  // OpenDroneID
                         0xFD5A,  // Samsung SmartTag
-                        0xFEAA,  // Google Find My Device Network (Eddystone)
-                        0x3081, 0x3082, 0x3083,  // Flipper Zero, one per case colour
+                        // 0xFEAA is not here: see the service-data check above.
+                        0x3080, 0x3081, 0x3082, 0x3083,  // Flipper Zero, by case colour
                     };
                     for (uint16_t k : kKnown16) {
                         if (u.equals(NimBLEUUID((uint16_t)k))) {
@@ -438,6 +453,15 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         // "Flipper", which is a string, not a signature.
         if (det.type == DetectionType::HACKER) {
             det.conf = matchedByName ? Confidence::MED_CONF : Confidence::HIGH_CONF;
+        }
+        // Flock by company ID 0x09C8 alone (XUNTONG, the Penguin battery
+        // packs' radio) is a company ID, not a product: MED unless the name
+        // says Penguin or FS Ext Battery as well.
+        if (det.type == DetectionType::FLOCK && !matchedByName && label &&
+            strcmp(label, "XUNTONG") == 0 &&
+            !(strcasestr(det.name, "Penguin") || strcasestr(det.name, "FS Ext") ||
+              isBareSerialName(det.name))) {
+            det.conf = Confidence::MED_CONF;
         }
         // A bare ten-digit name is how one Penguin firmware names itself, and
         // also something any gadget could be called. Logged, but LOW.

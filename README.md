@@ -26,7 +26,7 @@ headlines in Orbitron.
 
 | Type | What | How |
 |---|---|---|
-| `FLOCK` | Flock Safety ALPR cameras | 29 WiFi OUI prefixes + BLE name + company ID `0x09C8` |
+| `FLOCK` | Flock Safety ALPR cameras | 29 WiFi OUI prefixes + BLE name + company ID `0x09C8` (the Penguin battery packs' radio; Medium unless the name agrees) |
 | `AXON` | Axon body cameras, TASERs, LE equipment | 3 WiFi OUI + SSID prefixes `AB2-`/`AB3-`/`AB4-`/`AXON-` |
 | `META` | Camera glasses — Ray-Ban Meta, Snap Spectacles | BLE service UUID `0xFD5F` + Meta / Luxottica / Snap company IDs |
 | `SKIMMER` | Bluetooth card skimmers (HC-05/06/03, RN42, BT04-A) | BT Classic name match + SPP UUID `0x1101` + 3 OUI |
@@ -36,13 +36,13 @@ headlines in Orbitron.
 | `ALPR` | Motorola Solutions / Genetec plate readers | 6 WiFi OUI |
 | `CAMERA` | Generic / covert IP cameras | 17 WiFi OUI (Wyze, Amazon, Tuya, Verkada, Avigilon, Axis, …) |
 | `SAMSUNG_TAG` | Samsung Galaxy SmartTag / SmartTag+ | BLE service UUID `0xFD5A` |
-| `GOOGLE_TAG` | Google Find My Device trackers (Chipolo, Pebblebee, Moto Tag) | BLE service UUID `0xFEAA` |
+| `GOOGLE_TAG` | Google Find My Device trackers (Chipolo, Pebblebee, Moto Tag) | Service data under `0xFEAA` with the tracker frame type `0x40`/`0x41` -- not the plain Eddystone beacons that share the UUID |
 | `TILE` | Tile BLE trackers | BLE service UUID `0xFEED` / `0xFEEC` |
 | `RING` | Ring doorbells / cameras | 15 WiFi OUI (Ring LLC's registered block + Amazon's) |
 | `DEAUTH` | WiFi deauthentication floods | Rate-detected burst, not a signature |
 | `EVILTWIN` | Rogue / spoofed access points | One SSID beaconing from two BSSIDs that disagree about encryption |
 | `IBEACON` | Retail proximity beacons | Exact Apple header `4C 00 02 15` — **off by default**, see below |
-| `HACKER` | Flipper Zero, Pwnagotchi, WiFi Pineapple, ESP deauthers | Flipper's service UUIDs `0x3081`–`0x3083`, company ID `0x0E29` and OUI `0C:FA:22`; the Pwnagotchi's own beacon payload; `Pineapple_` and `pwned` SSIDs |
+| `HACKER` | Flipper Zero, Pwnagotchi, WiFi Pineapple, ESP deauthers | Flipper's service UUIDs `0x3080`–`0x3083`, company ID `0x0E29` and OUI `0C:FA:22`; the Pwnagotchi's own beacon payload; `Pineapple_` and `pwned` SSIDs |
 
 ### Confidence is per signature, not per type
 
@@ -423,8 +423,8 @@ the server -- see [deploy/README.md](deploy/README.md) -- which builds the
 bins, signs them and the rule set with the release key, and deploys.
 
 Detection is reliable for the high-priority targets (Flock, Axon, skimmer,
-camera glasses). Remote ID and iBeacon are exact-format matches. Raven,
-generic ALPR and the Google tracker network are best-effort — see
+camera glasses). Remote ID, iBeacon and Google's tracker frame are
+exact-format matches. Raven and generic ALPR are best-effort — see
 [docs/DETECTIONS.md](docs/DETECTIONS.md) for per-signature provenance and
 the confidence each one earns.
 

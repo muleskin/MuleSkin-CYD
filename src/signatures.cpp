@@ -194,9 +194,11 @@ const UuidEntry kUuidTable[] = {
     {0x1101, "Skim-SPP",   DetectionType::SKIMMER},   // Classic SPP
     {0xFEED, "Tile",       DetectionType::TILE},      // Tile, Inc. — Bluetooth SIG assigned
     {0xFEEC, "Tile",       DetectionType::TILE},      // Tile, Inc. — second SIG-assigned UUID
-    // Its own label, not "Meta": this UUID is the one signature specific to
-    // Ray-Ban Meta, and the company-ID rows below say Meta too -- which is
-    // any Meta radio, Quest headsets included. Two different pages.
+    // Its own label, not "Meta": this UUID is what the Ray-Ban Meta glasses
+    // advertise, and the company-ID rows below say Meta too -- which is any
+    // Meta radio, Quest headsets included. Two different pages. The SIG
+    // registers it to Meta Platforms Technologies, LLC and names no product
+    // (checked 2026-10-09), so it is the glasses in practice, not by decree.
     {0xFD5F, "RayBanMeta", DetectionType::META},      // Ray-Ban Meta glasses
     {0x3100, "Raven",      DetectionType::RAVEN},     // Raven gunshot detector
     {0x3200, "Raven",      DetectionType::RAVEN},
@@ -205,13 +207,20 @@ const UuidEntry kUuidTable[] = {
     {0x3500, "Raven",      DetectionType::RAVEN},
     {0xFFFA, "DroneID",    DetectionType::DRONE},     // OpenDroneID
     {0xFD5A, "SmartTag",   DetectionType::SAMSUNG_TAG}, // Samsung's own SIG-assigned UUID for SmartTag discovery
-    {0xFEAA, "FindMyDev",  DetectionType::GOOGLE_TAG},  // Google "Eddystone" service UUID, also used by the Find My Device network
+    // Google LLC's Eddystone UUID. Every Eddystone retail beacon carries it
+    // too, so the scanner matches it only as SERVICE DATA whose frame type is
+    // 0x40 or 0x41 -- Google's Find My Device Network tracker frame (the FMDN
+    // spec); 0x00/0x10/0x20/0x30 are the plain beacon frames. See
+    // detection.cpp. The row is here for its label, and so DROP UUID 0xFEAA
+    // can withdraw it.
+    {0xFEAA, "FindMyDev",  DetectionType::GOOGLE_TAG},
 
-    // Flipper Zero. It advertises one of three 16-bit service UUIDs, one
-    // per case variant -- which is also how the desktop detectors tell a
-    // white one from a black one. For our purposes the colour does not
-    // matter; that there are exactly three fixed values does, because it
-    // makes this an exact match rather than a guess.
+    // Flipper Zero. It advertises 0x3080 ORed with its case colour (its own
+    // firmware, serial_profile.c): 0x3081 black, 0x3082 white, 0x3083
+    // transparent, and 0x3080 itself when the colour was never set. For our
+    // purposes the colour does not matter; that there are exactly four fixed
+    // values does, because it makes this an exact match rather than a guess.
+    {0x3080, "Flipper",    DetectionType::HACKER},
     {0x3081, "Flipper",    DetectionType::HACKER},
     {0x3082, "Flipper",    DetectionType::HACKER},
     {0x3083, "Flipper",    DetectionType::HACKER},
@@ -257,7 +266,10 @@ const uint16_t kSsidCount = sizeof(kSsidPrefixes) / sizeof(kSsidPrefixes[0]);
 // 16-bit BLE manufacturer IDs.
 const MfgIdEntry kMfgIdTable[] = {
     {0x004C, "Apple",      DetectionType::AIRTAG},    // AirTag / FindMy
-    {0x09C8, "XUNTONG",    DetectionType::FLOCK},     // Flock BLE radio supplier
+    // Registered to XUNTONG; seen in the adverts of Flock's "Penguin" battery
+    // packs (Flock-You). A company ID on its own is weak evidence, so this
+    // match is graded down unless the name agrees -- see detection.cpp.
+    {0x09C8, "XUNTONG",    DetectionType::FLOCK},
 
     // ---- Camera glasses -------------------------------------------------
     // Service UUID 0xFD5F caught Ray-Ban Meta and nothing else. These are
@@ -741,9 +753,10 @@ Confidence confidenceFor(DetectionType t) {
     // Medium — unverified against real hardware, address rotation, or
     // thin OUI coverage, respectively. SAMSUNG_TAG is High: 0xFD5A is
     // Samsung's own dedicated SIG-assigned UUID, not shared with
-    // anything else. GOOGLE_TAG is Medium: 0xFEAA is the general
-    // "Eddystone" service UUID, also used by unrelated retail/asset
-    // beacons, not exclusively Find My Device Network trackers. TILE
+    // anything else. GOOGLE_TAG is High since 2026-10-09: it used to match
+    // 0xFEAA alone, Eddystone's UUID, which every retail beacon shares; it
+    // now needs the Find My Device Network's own frame type in the service
+    // data (0x40/0x41), which no plain beacon sends. TILE
     // is High: 0xFEED/0xFEEC are both Bluetooth SIG-assigned exclusively
     // to Tile, Inc. RING is High: real MA-L registry OUI matches, same
     // evidentiary basis as CAMERA.
@@ -755,6 +768,7 @@ Confidence confidenceFor(DetectionType t) {
         case DetectionType::SAMSUNG_TAG:
         case DetectionType::TILE:
         case DetectionType::RING:
+        case DetectionType::GOOGLE_TAG:
         // Pattern-based rather than a signature, but a specific and
         // hard-to-fake one: two BSSIDs claiming one SSID from different
         // vendors while disagreeing about encryption. A mesh network --
@@ -777,7 +791,6 @@ Confidence confidenceFor(DetectionType t) {
         case DetectionType::AIRTAG:
         case DetectionType::DRONE:
         case DetectionType::ALPR:
-        case DetectionType::GOOGLE_TAG:
         // Rate-thresholded (see DetectionEngine's deauth-flood
         // tracking), not a single-frame guess -- a real burst pattern,
         // but the threshold/window are still heuristic, so Medium

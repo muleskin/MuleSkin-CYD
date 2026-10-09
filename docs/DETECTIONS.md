@@ -133,7 +133,16 @@ SIG assigned range).
 **Source:** [Flock You documentation](https://github.com/colonelpanichacks/flock-you/wiki/Detection-Datasets#raven).
 
 **Confidence in v1.0:** **Medium**. We match the UUIDs but haven't
-verified them against a physical Raven device. Likely works.
+verified them against a physical Raven device.
+
+**Checked 2026-10-09:** none of `0x3100`–`0x3500` is in the Bluetooth SIG
+registry, and the current Flock-You README describes them as Raven's GATT
+*services* (0x3101/0x3102 leaking GPS) -- which a passive scan only sees if
+the unit also lists them in its advert or scan response. So this match
+catches a Raven that advertises them and can miss one that does not. Some
+lists also give `0x180A`, `0x1809` and `0x1819` for older Raven firmware;
+those are standard SIG services (Device Information, Health Thermometer,
+Location and Navigation) and are deliberately not used here.
 
 ---
 
@@ -277,23 +286,23 @@ specific to this product line, same tier as the META match.
 
 ---
 
-## Google Find My Device Network trackers — `GOOGLE_TAG` — **Medium confidence**
+## Google Find My Device Network trackers — `GOOGLE_TAG` — **High confidence**
 
 **Why it works:** Trackers on Google's Find My Device Network
 (Chipolo ONE/CARD Point, Pebblebee Card/Clip/Tag, Moto Tag) advertise
-under Google's `0xFEAA` service UUID — the same UUID Google has used
-for years for general-purpose "Eddystone" beacons. That reuse is the
-catch: retail/asset/museum Eddystone beacons unrelated to tracking
-also use `0xFEAA`, so a match here means "some Google-beacon-class
-device," not specifically a tracker.
+SERVICE DATA under Google's `0xFEAA` UUID -- the same UUID Google has used
+for years for general-purpose "Eddystone" beacons. What separates them is
+the first byte of that service data, the frame type: **`0x40`**, or
+**`0x41`** in unwanted-tracking mode, for a tracker; `0x00`, `0x10`, `0x20`
+or `0x30` for a plain Eddystone beacon. Since 2026-10-09 the firmware
+requires 0x40/0x41, so shop and museum beacons no longer match.
 
 **Source:** [Google's official Find My Device Network (FMDN)
 specification](https://developers.google.com/nearby/fast-pair/specifications/extensions/fmdn)
 (Fast Pair extension docs).
 
-**Confidence in v1.0:** **Medium** — real, current Google documentation,
-but the UUID itself is shared with non-tracker Eddystone beacons, so
-higher false-positive risk than the Samsung match above.
+**Confidence:** **High** since the frame-type check (it was Medium while
+the UUID alone matched, shop beacons included).
 
 ---
 

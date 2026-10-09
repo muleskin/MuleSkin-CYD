@@ -38,14 +38,15 @@ int main() {
     ck("SIG company ID 0x0E29 is HACKER", lookupMfgId(0x0E29) == DetectionType::HACKER);
     ck("0x0FBA (Cosonic) is not", lookupMfgId(0x0FBA) == DetectionType::UNKNOWN);
 
-    // Three UUIDs, one per case colour. All three have to be present: ship
-    // two of them and one colour of Flipper is invisible.
+    // 0x3080 ORed with the case colour (Flipper's serial_profile.c): one per
+    // colour, and 0x3080 itself on a unit whose colour was never set. All
+    // four have to be present: leave one out and that Flipper is invisible.
+    ck("service UUID 0x3080 (no colour) is HACKER", lookupUuid(0x3080) == DetectionType::HACKER);
     ck("service UUID 0x3081 is HACKER", lookupUuid(0x3081) == DetectionType::HACKER);
     ck("service UUID 0x3082 is HACKER", lookupUuid(0x3082) == DetectionType::HACKER);
     ck("service UUID 0x3083 is HACKER", lookupUuid(0x3083) == DetectionType::HACKER);
-    // 0x3080 and 0x3084 are not Flipper's. Widening the check to a range
-    // (the tempting simplification) would swallow both.
-    ck("0x3080 is not", lookupUuid(0x3080) == DetectionType::UNKNOWN);
+    // 0x3084 is not Flipper's. Widening the check to a range (the tempting
+    // simplification) would swallow it.
     ck("0x3084 is not", lookupUuid(0x3084) == DetectionType::UNKNOWN);
 
     // Raven sits at 0x3100..0x3500. The two blocks are close enough that a
