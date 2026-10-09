@@ -106,6 +106,44 @@ a=$(find /root/.platformio/packages -path '*framework-arduinoespressif32/tools/p
 c=$(find /root/.platformio/packages -name boot_app0.bin -path '*arduino*' | grep -v "^$a$" | head -1)
 cp "${c:-$a}" "$OUT/esp32c5-boot_app0.bin"
 
+# The extra detection rules (web-flasher/signatures.txt), signed into
+# manifest-signatures.json for the boards' boot check -- only with the key:
+# boards ignore an unsigned set anyway.
+if [ -f web-flasher/signatures.txt ] && [ -n "$KEY" ]; then
+  python3 - web-flasher/signatures.txt /tmp/sigx-body.txt <<'PY'
+import sys
+serial, rules = 0, []
+for line in open(sys.argv[1]):
+    line = line.strip()
+    if not line or line.startswith("#"):
+        continue
+    if line.upper().startswith("SERIAL "):
+        serial = int(line.split()[1])
+    else:
+        rules.append(" ".join(line.split()))
+body = ";".join(rules)
+if not serial:
+    sys.exit("signatures.txt: no SERIAL line")
+if len(body) > 2000:
+    sys.exit("signatures.txt: %d bytes of rules, the boards hold 2000" % len(body))
+open(sys.argv[2], "w", newline="").write(body)
+open(sys.argv[2] + ".serial", "w").write(str(serial))
+PY
+  if [ $? -eq 0 ] && python tools/sign_firmware.py --raw --key "$KEY" --pub "$PUB" --env signatures \
+       --bin /tmp/sigx-body.txt --out /tmp/sigx.sig > /dev/null; then
+    python3 - "$OUT/manifest-signatures.json" <<'PY'
+import json, sys
+body = open("/tmp/sigx-body.txt").read()
+serial = int(open("/tmp/sigx-body.txt.serial").read())
+sig = open("/tmp/sigx.sig", "rb").read().hex()
+json.dump({"serial": serial, "body": body, "sig": sig}, open(sys.argv[1], "w"))
+print("signatures: set %d, %d rules, signed" % (serial, body.count(";") + 1 if body else 0))
+PY
+  else
+    echo "signatures: NOT published (see above)"; failed="$failed signatures"
+  fi
+fi
+
 # A lab build: its manifests, from the stable ones, and nothing else.
 if [ -n "$LAB" ]; then
   python3 - "$OUT" "$LAB" $ENVS <<'PY'

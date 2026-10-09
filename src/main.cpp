@@ -3138,6 +3138,7 @@ void setup() {
     // saved rotation instead of always starting from the board default.
     Settings::load();
     Clock::begin();   // after Settings: the zone is applied there, the history here
+    OtaWifi::loadExtraRules();   // detection rules delivered since the build, before any scanning
 #if defined(TWATCH_S3)
     twatchRtcBegin();      // after Clock::begin(): a real time beats the note's guess
     twatchHapticBegin();

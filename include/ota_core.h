@@ -59,6 +59,12 @@ static const uint32_t CONFIRM_MS = 30000;
 
 // True on builds with a second app slot to install into.
 bool available();
+// Is `data` signed with an update key? The same scheme as a firmware image:
+// SHA-256("SQWOTA1\n" + name + "\n" + data), checked against ota_pubkey.h.
+// For small signed files that are not firmware -- the extra detection rules
+// (name "signatures"). DER signature, as tools/sign_firmware.py --raw writes.
+bool verifySigned(const char* name, const uint8_t* data, size_t len,
+                  const uint8_t* sig, size_t sigLen);
 
 // Once in setup(), after NVS is usable. Records which version lives in this
 // slot, and works out whether this boot is an update on probation or the

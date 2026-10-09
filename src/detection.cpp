@@ -1988,15 +1988,8 @@ void DetectionEngine::processWiFiQ() {
         } else if (matchedBySsid) {
             const char* name = ssidVendorName(e.ssid);
             if (name) d.vendor = name;
-        } else {
-            for (uint16_t k = 0; k < kOuiCount; k++) {
-                if (e.mac[0] == kOuiTable[k].b[0] &&
-                    e.mac[1] == kOuiTable[k].b[1] &&
-                    e.mac[2] == kOuiTable[k].b[2]) {
-                    d.vendor = kOuiTable[k].name;
-                    break;
-                }
-            }
+        } else if (const char* v = ouiVendorName(e.mac)) {
+            d.vendor = v;   // the built-in table, then any extra rules
         }
         d.firstSeen = d.lastSeen = millis();
         d.hits   = 1;

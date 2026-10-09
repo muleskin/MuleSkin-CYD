@@ -62,11 +62,14 @@ def main():
     ap.add_argument("--pub", help="optional public key(s) to verify the result against: a PEM file "
                                   "with one or more keys (any one matching passes -- a key rotation "
                                   "trusts two)")
+    ap.add_argument("--raw", action="store_true",
+                    help="sign a file that is not a firmware image (the extra detection rules, "
+                         "--env signatures): skip the image check")
     a = ap.parse_args()
 
     with open(a.bin, "rb") as f:
         image = f.read()
-    if not image or image[0] != 0xE9:
+    if not a.raw and (not image or image[0] != 0xE9):
         sys.exit("%s does not start with the ESP32 image magic byte" % a.bin)
 
     fd, msg_path = tempfile.mkstemp(suffix=".msg")

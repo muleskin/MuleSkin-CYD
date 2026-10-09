@@ -39,6 +39,13 @@ extern const uint16_t    kMfgIdCount;
 // Yields the matched entry's own confidence through `conf` when given one.
 // Callers that do not care keep the old one-argument form.
 DetectionType lookupOui(const uint8_t* mac, Confidence* conf = nullptr);
+// The vendor for an address prefix -- the built-in table, then the extra rules.
+const char* ouiVendorName(const uint8_t* mac);
+// Extra rules, delivered without a firmware release (see signatures.cpp and
+// web-flasher/signatures.txt): replaces any previous set; returns how many
+// parsed. Asked after the built-in tables, never instead of them.
+uint16_t setExtraRules(const char* body);
+uint16_t extraRuleCount();
 DetectionType lookupUuid(uint16_t uuid16);
 DetectionType lookupBtName(const char* name);
 // Exactly ten digits and nothing else: a Penguin battery pack's serial.

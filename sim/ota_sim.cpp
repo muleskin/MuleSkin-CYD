@@ -166,6 +166,7 @@ static SimSaved s_list[SAVED_MAX] = {
 static uint8_t s_n = 3, s_use = 0;
 bool        hasSaved()  { return s_saved && s_n > 0; }
 bool        bootCheck(uint32_t) { return false; }
+void        loadExtraRules() {}
 // WIFI TIME: done at once, with the host's clock. MULESKINSIM_TIMESYNC=N
 // leaves it in state N instead (1 joining, 2 asking, 5 no join, 6 no answer),
 // for rendering the screen part way.

@@ -6,6 +6,7 @@
 #endif
 #include "security.h"
 #include "settings.h"   // the update channel (STABLE / LAB)
+#include "signatures.h" // setExtraRules(): detection rules from the site
 #include "clock.h"
 #include <Arduino.h>
 #include <WiFi.h>
@@ -703,6 +704,97 @@ void connect(const char* ssid, const char* pass, bool save) {
     }
 }
 
+// ---- Extra detection rules (signatures.cpp setExtraRules()) -----------------
+// manifest-signatures.json on the site: {"serial": N, "body": "<rules>",
+// "sig": "<DER hex>"}, the body signed like firmware under the name
+// "signatures" (build_flasher_bins.sh). The boot check fetches it; a newer
+// serial whose signature checks out replaces the stored set in NVS ("sigx"),
+// which loadExtraRules() puts back at every boot. A file that fails the
+// signature is ignored and the stored set stays.
+namespace {
+const char* SIGX_NS = "sigx";
+const size_t SIGX_BODY_MAX = 2048;
+
+int hexVal(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+void fetchExtraRules(uint32_t budgetMs) {
+    static char json[3072];
+    static char body[SIGX_BODY_MAX];
+    char sigHex[200];
+    uint8_t sig[100];
+    WiFiClient plain;
+    HTTPClient http;
+    if (!http.begin(plain, String(OTA_WIFI_BASE) + "manifest-signatures.json")) return;
+    http.setConnectTimeout((int32_t)budgetMs);
+    http.setTimeout((uint16_t)(budgetMs > 60000 ? 60000 : budgetMs));
+    const int code = http.GET();
+    size_t len = 0;
+    if (code == 200) {
+        WiFiClient* s = http.getStreamPtr();
+        const int total = http.getSize();
+        const uint32_t t0 = millis();
+        while (len < sizeof json - 1 && (total < 0 || (int)len < total) && millis() - t0 < budgetMs) {
+            const int a = s->available();
+            if (a > 0) { const int r = s->read((uint8_t*)json + len, (size_t)a < sizeof json - 1 - len ? (size_t)a : sizeof json - 1 - len); if (r > 0) len += (size_t)r; }
+            else if (!http.connected()) break;
+            else delay(5);
+        }
+    }
+    http.end();
+    json[len] = '\0';
+    if (code != 200) { Serial.printf("[rules] none on the site (HTTP %d)\n", code); return; }
+
+    const char* k = strstr(json, "\"serial\"");
+    if (!k) return;
+    k = strchr(k, ':');
+    const uint32_t serial = k ? (uint32_t)strtoul(k + 1, nullptr, 10) : 0;
+    Preferences p;
+    p.begin(SIGX_NS, true);
+    const uint32_t have = p.getUInt("serial", 0);
+    p.end();
+    if (serial <= have) { Serial.printf("[rules] up to date (set %lu)\n", (unsigned long)have); return; }
+
+    const char* b = strstr(json, "\"body\"");
+    const char* g = strstr(json, "\"sig\"");
+    if (!b || !g) return;
+    b = strchr(b + 6, '"');
+    g = strchr(g + 5, '"');
+    if (!b || !g || !jsonString(b, body, sizeof body) || !jsonString(g, sigHex, sizeof sigHex)) return;
+    size_t sigLen = 0;
+    for (const char* h = sigHex; h[0] && h[1] && sigLen < sizeof sig; h += 2) {
+        const int hi = hexVal(h[0]), lo = hexVal(h[1]);
+        if (hi < 0 || lo < 0) return;
+        sig[sigLen++] = (uint8_t)(hi * 16 + lo);
+    }
+    if (!OtaCore::verifySigned("signatures", (const uint8_t*)body, strlen(body), sig, sigLen)) {
+        Serial.printf("[rules] set %lu is NOT signed with our key -- ignored\n", (unsigned long)serial);
+        return;
+    }
+    const uint16_t n = setExtraRules(body);
+    p.begin(SIGX_NS, false);
+    p.putString("body", body);
+    p.putUInt("serial", serial);
+    p.end();
+    Serial.printf("[rules] set %lu: %u extra rules, signature good\n", (unsigned long)serial, (unsigned)n);
+}
+}  // namespace
+
+void loadExtraRules() {
+    Preferences p;
+    if (!p.begin(SIGX_NS, true)) return;
+    const uint32_t serial = p.getUInt("serial", 0);
+    String body = p.getString("body", "");
+    p.end();
+    if (!serial) return;
+    const uint16_t n = setExtraRules(body.c_str());
+    Serial.printf("[rules] set %lu: %u extra rules loaded\n", (unsigned long)serial, (unsigned)n);
+}
+
 bool bootCheck(uint32_t budgetMs) {
     readSaved();
     if (!s_n) return false;
@@ -842,6 +934,9 @@ bool bootCheck(uint32_t budgetMs) {
             }
             http.end();
         }
+        // The extra detection rules, while the radio is up anyway: one small
+        // GET, and only a newer, correctly signed set changes anything.
+        fetchExtraRules(2500);
         // The clock, asked AFTER the manifest rather than alongside it. The
         // two used to overlap to save a moment, and on two boots in three
         // the manifest's GET then took 2.8-3.0 s instead of 70 ms: two name

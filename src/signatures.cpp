@@ -3,6 +3,7 @@
 #include "signatures.h"
 #include <string.h>
 #include <strings.h>   // strncasecmp
+#include <ctype.h>     // the extra rules' parsing
 
 // OUI table. Order MATTERS: lookupOui walks top-to-bottom and returns
 // the first match. Per DESIGN.md §6.2: Axon > Flock > ALPR > cameras >
@@ -308,6 +309,134 @@ bool isIBeacon(const uint8_t* mfg, uint8_t len) {
 
 // --- lookups ---
 
+
+// ---- Extra rules, delivered without a firmware release ---------------------
+// web-flasher/signatures.txt, signed into manifest-signatures.json by
+// build_flasher_bins.sh and fetched by the boot check (ota_wifi.cpp). The
+// rules are one line, entries separated by ';':
+//
+//   OUI aa:bb:cc TYPE [HIGH|MED|LOW] [Vendor]
+//   SSID prefix TYPE [Vendor]
+//
+// TYPE is a detectionTypeName() ("FLOCK", "AIRTAG", "EVIL_TWIN" for EVIL
+// TWIN). The built-in tables are asked first, so an extra rule can add a
+// prefix but never change one this firmware already knows. Anything that
+// does not parse is skipped, not guessed at.
+namespace {
+struct XOui  { uint8_t b[3]; DetectionType type; Confidence conf; char name[16]; };
+struct XSsid { char prefix[16]; DetectionType type; char name[16]; };
+const uint8_t X_OUI_MAX = 64, X_SSID_MAX = 32;
+XOui    g_xOui[X_OUI_MAX];
+XSsid   g_xSsid[X_SSID_MAX];
+uint8_t g_xOuiN = 0, g_xSsidN = 0;
+
+bool typeFromName(const char* s, DetectionType& out) {
+    for (uint8_t t = 1; t < (uint8_t)DetectionType::COUNT; t++) {
+        const char* n = detectionTypeName((DetectionType)t);
+        bool same = true;
+        size_t i = 0;
+        for (; n[i] && s[i]; i++) {
+            const char a = (char)toupper((unsigned char)s[i]);
+            const char b = n[i] == ' ' ? '_' : n[i];
+            if (a != b) { same = false; break; }
+        }
+        if (same && !n[i] && !s[i]) { out = (DetectionType)t; return true; }
+    }
+    return false;
+}
+
+int hexNib(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    c = (char)tolower((unsigned char)c);
+    return (c >= 'a' && c <= 'f') ? c - 'a' + 10 : -1;
+}
+
+// Up to `max` space-separated words of `s` into `w`.
+uint8_t words(char* s, char** w, uint8_t max) {
+    uint8_t n = 0;
+    while (*s && n < max) {
+        while (*s == ' ') s++;
+        if (!*s) break;
+        w[n++] = s;
+        while (*s && *s != ' ') s++;
+        if (*s) *s++ = '\0';
+    }
+    return n;
+}
+
+void copyName(char* dst, const char* src) {
+    size_t i = 0;
+    for (; src && src[i] && i < 15; i++) dst[i] = src[i];
+    dst[i] = '\0';
+}
+}  // namespace
+
+uint16_t setExtraRules(const char* body) {
+    g_xOuiN = g_xSsidN = 0;
+    if (!body) return 0;
+    char entry[96];
+    const char* p = body;
+    while (*p) {
+        size_t n = 0;
+        while (p[n] && p[n] != ';') n++;
+        const size_t take = n < sizeof entry - 1 ? n : sizeof entry - 1;
+        memcpy(entry, p, take);
+        entry[take] = '\0';
+        p += n + (p[n] == ';' ? 1 : 0);
+        char* w[6];
+        const uint8_t k = words(entry, w, 6);
+        if (k >= 3 && strcasecmp(w[0], "OUI") == 0 && g_xOuiN < X_OUI_MAX) {
+            XOui& x = g_xOui[g_xOuiN];
+            const char* m = w[1];
+            if (strlen(m) != 8 || m[2] != ':' || m[5] != ':') continue;
+            bool ok = true;
+            for (int b = 0; b < 3; b++) {
+                const int hi = hexNib(m[b * 3]), lo = hexNib(m[b * 3 + 1]);
+                if (hi < 0 || lo < 0) { ok = false; break; }
+                x.b[b] = (uint8_t)(hi * 16 + lo);
+            }
+            if (!ok || !typeFromName(w[2], x.type)) continue;
+            x.conf = Confidence::MED_CONF;
+            uint8_t nameAt = 3;
+            if (k > 3) {
+                if      (strcasecmp(w[3], "HIGH") == 0) { x.conf = Confidence::HIGH_CONF; nameAt = 4; }
+                else if (strcasecmp(w[3], "MED")  == 0) { x.conf = Confidence::MED_CONF;  nameAt = 4; }
+                else if (strcasecmp(w[3], "LOW")  == 0) { x.conf = Confidence::LOW_CONF;  nameAt = 4; }
+            }
+            copyName(x.name, k > nameAt ? w[nameAt] : "");
+            g_xOuiN++;
+        } else if (k >= 3 && strcasecmp(w[0], "SSID") == 0 && g_xSsidN < X_SSID_MAX) {
+            XSsid& x = g_xSsid[g_xSsidN];
+            if (strlen(w[1]) > 15 || !typeFromName(w[2], x.type)) continue;
+            copyName(x.prefix, w[1]);
+            copyName(x.name, k > 3 ? w[3] : "");
+            g_xSsidN++;
+        }
+    }
+    return (uint16_t)(g_xOuiN + g_xSsidN);
+}
+
+uint16_t extraRuleCount() { return (uint16_t)(g_xOuiN + g_xSsidN); }
+
+static const XOui* extraOui(const uint8_t* mac) {
+    for (uint8_t i = 0; i < g_xOuiN; i++)
+        if (mac[0] == g_xOui[i].b[0] && mac[1] == g_xOui[i].b[1] && mac[2] == g_xOui[i].b[2]) return &g_xOui[i];
+    return nullptr;
+}
+static const XSsid* extraSsid(const char* ssid) {
+    for (uint8_t i = 0; i < g_xSsidN; i++)
+        if (strncasecmp(ssid, g_xSsid[i].prefix, strlen(g_xSsid[i].prefix)) == 0) return &g_xSsid[i];
+    return nullptr;
+}
+
+const char* ouiVendorName(const uint8_t* mac) {
+    if (!mac) return nullptr;
+    for (uint16_t k = 0; k < kOuiCount; k++)
+        if (mac[0] == kOuiTable[k].b[0] && mac[1] == kOuiTable[k].b[1] && mac[2] == kOuiTable[k].b[2])
+            return kOuiTable[k].name;
+    const XOui* x = extraOui(mac);
+    return (x && x->name[0]) ? x->name : nullptr;
+}
 DetectionType lookupOui(const uint8_t* mac, Confidence* conf) {
     if (!mac) return DetectionType::UNKNOWN;
     for (uint16_t i = 0; i < kOuiCount; i++) {
@@ -317,6 +446,10 @@ DetectionType lookupOui(const uint8_t* mac, Confidence* conf) {
             if (conf) *conf = kOuiTable[i].conf;
             return kOuiTable[i].type;
         }
+    }
+    if (const XOui* x = extraOui(mac)) {          // a rule added since the build
+        if (conf) *conf = x->conf;
+        return x->type;
     }
     // Left alone rather than zeroed on a miss: the caller seeds it with the
     // type-level default before asking, so a non-OUI match keeps that.
@@ -371,6 +504,7 @@ DetectionType lookupSsid(const char* ssid) {
             return kSsidPrefixes[i].type;
         }
     }
+    if (const XSsid* x = extraSsid(ssid)) return x->type;
     return DetectionType::UNKNOWN;
 }
 
@@ -394,6 +528,7 @@ const char* ssidVendorName(const char* ssid) {
             return kSsidPrefixes[i].name;
         }
     }
+    if (const XSsid* x = extraSsid(ssid)) return x->name[0] ? x->name : nullptr;
     return nullptr;
 }
 

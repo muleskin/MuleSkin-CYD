@@ -1,0 +1,24 @@
+# Extra detection rules, delivered to boards without a firmware release.
+#
+# build_flasher_bins.sh signs this (with OTA_SIGNING_KEY) into
+# manifest-signatures.json; boards fetch it during their boot update check
+# and use a set only when its SERIAL is newer than theirs and the signature
+# is good. Raise SERIAL every time you change the rules.
+#
+# One rule per line:
+#
+#   OUI aa:bb:cc TYPE [HIGH|MED|LOW] [Vendor]   an address prefix
+#   SSID prefix TYPE [Vendor]                   a WiFi network-name prefix
+#
+# TYPE: FLOCK AXON META SKIMMER RAVEN AIRTAG DRONE ALPR CAMERA SAMSUNG_TAG
+#       GOOGLE_TAG TILE RING DEAUTH EVIL_TWIN IBEACON HACKER
+# Vendor: one word, up to 15 characters. Confidence defaults to MED.
+# Rules only ADD: a prefix the firmware already knows keeps its built-in
+# meaning. At most 64 OUI and 32 SSID rules; the signed set must stay under
+# about 2 KB.
+#
+# Example (not active -- remove the leading # to use):
+#   OUI 12:34:56 FLOCK HIGH NewCamCo
+#   SSID Spycam- CAMERA SpyCamInc
+
+SERIAL 1

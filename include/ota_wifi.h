@@ -105,6 +105,9 @@ void connectSaved();
 // whole mode, so detection is paused properly rather than stalled.
 // False when there is no saved network, or nothing came back in time.
 bool bootCheck(uint32_t budgetMs);
+// The extra detection rules last fetched by the boot check (NVS), back into
+// signatures.cpp. Once in setup(), before scanning starts.
+void loadExtraRules();
 
 // ---- WIFI TIME: the main screen's button ------------------------------
 // Joins a saved network only long enough to set the clock -- the one marked

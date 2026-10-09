@@ -84,6 +84,16 @@ public half is `include/ota_pubkey.h`), and, when the checkout is exactly on a
 release tag, keeps a copy in `.pio/flasher-bins/vX.Y.Z/` and rewrites
 `versions.json` for the flasher's "Firmware version" picker (newest five).
 
+## New detection rules without a release
+
+`web-flasher/signatures.txt` holds extra address-prefix (OUI) and
+network-name (SSID) rules. Edit it, raise its `SERIAL`, and run the usual
+redeploy (or just `build_flasher_bins.sh` with `OTA_SIGNING_KEY`): it is
+signed into `manifest-signatures.json`, and every board picks the new set up
+at its next boot update check -- no firmware release. Rules only add: a
+prefix the firmware already knows keeps its built-in meaning. A board logs
+`[rules] set N: K extra rules, signature good`.
+
 ## A lab build first
 
 Boards with **SYSTEM -> UPDATES** set to **LAB** check for test builds

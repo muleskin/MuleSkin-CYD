@@ -408,6 +408,22 @@ Fail begin(uint32_t size, const uint8_t* sig, uint8_t sigLen) {
     return Fail::NONE;
 }
 
+bool verifySigned(const char* name, const uint8_t* data, size_t len,
+                  const uint8_t* sig, size_t sigLen) {
+    mbedtls_sha256_context sha;
+    mbedtls_sha256_init(&sha);
+    sqw_sha256_starts(&sha, 0);
+    static const char PREFIX[] = "SQWOTA1\n";
+    sqw_sha256_update(&sha, (const uint8_t*)PREFIX, sizeof PREFIX - 1);
+    sqw_sha256_update(&sha, (const uint8_t*)name, strlen(name));
+    sqw_sha256_update(&sha, (const uint8_t*)"\n", 1);
+    sqw_sha256_update(&sha, data, len);
+    uint8_t hash[32];
+    sqw_sha256_finish(&sha, hash);
+    mbedtls_sha256_free(&sha);
+    return checkSignature(hash, sig, sigLen) == 0;
+}
+
 bool write(const uint8_t* data, size_t len) {
     lock();
     scanVersion(data, len);
