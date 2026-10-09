@@ -999,6 +999,35 @@
     }
   }
 
+  // Before CONNECT & INSTALL: offer to back the board's settings up first,
+  // since the install dialog may erase it. Asked once -- not again while a
+  // backup from the last half hour exists, or straight after a "no". In the
+  // capture phase, so it runs before esp-web-tools opens its port picker.
+  var installBtnEl = document.getElementById('installBtn');
+  var skipBackupAskUntil = 0;
+  if (installBtnEl && 'serial' in navigator && backupBtn) {
+    installBtnEl.addEventListener('click', function (ev) {
+      if (Date.now() < skipBackupAskUntil || backupBtn.disabled) return;
+      var b = loadBackup();
+      if (b && Date.now() - Date.parse(b.when) < 30 * 60 * 1000) return;
+      skipBackupAskUntil = Date.now() + 10 * 60 * 1000;
+      if (!window.confirm('Back up this board’s settings first?\n\nIf you tick “Erase device” in the next step, its WiFi networks, ' +
+                          'colour order, zone and the rest are wiped. A backup lets RESTORE SETTINGS put them back.\n\n' +
+                          'OK: take me to BACK UP SETTINGS.\nCancel: install without a backup.')) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      // Not backupSettings() straight away: the port picker needs a click of
+      // its own (a browser allows it only within ~5 s of one, and reading this
+      // dialog can take longer), so point at the button instead.
+      backupBtn.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      backupBtn.focus();
+      backupResult.className = 'identify-result';
+      backupResult.textContent = 'Press BACK UP SETTINGS, then CONNECT & INSTALL again.';
+      backupBtn.style.boxShadow = '0 0 0 3px var(--vapor-yellow)';
+      setTimeout(function () { backupBtn.style.boxShadow = ''; }, 6000);
+    }, true);
+  }
+
   // Open the board's console and let it boot (opening the port resets it).
   async function openConsole(msg) {
     var port = await navigator.serial.requestPort();
