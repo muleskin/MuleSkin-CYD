@@ -67,6 +67,7 @@ void DetectionEngine::clearLog() {
     memset(_typeCounts, 0, sizeof(_typeCounts));
 }
 
+bool DetectionEngine::sdReady() const { return false; }
 const Detection* DetectionEngine::logAt(uint8_t idx) const {
     if (idx >= _logCount) return nullptr;
     // Newest first, matching the real ring-buffer walk order the LOG

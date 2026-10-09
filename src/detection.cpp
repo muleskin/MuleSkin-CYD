@@ -2157,6 +2157,8 @@ void DetectionEngine::expireStale() {
     }
 }
 
+bool DetectionEngine::sdReady() const { return _sd.ready(); }
+
 const Detection* DetectionEngine::logAt(uint8_t idx) const {
     if (idx >= _logCount) return nullptr;
     uint8_t slot = (_logHead + LOG_CAP - 1 - idx) % LOG_CAP;

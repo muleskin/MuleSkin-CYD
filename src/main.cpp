@@ -1617,6 +1617,7 @@ static void enterInvite() {
 volatile bool g_consoleInvert = false;
 volatile bool g_consoleAdc = false;     // ADC: the spare analog inputs, for finding a battery sense line
 volatile bool g_consoleXyzzy = false;   // XYZZY: the TERMINAL background types the magic word now
+volatile bool g_consoleSelfTest = false;  // SELFTEST: check every part, one line each (runSelfTest)
 volatile bool g_consoleLegend = false;  // LEGEND: wear the Legend look (and its aura) until the next boot, or take it off
 volatile bool g_consoleOutfitSet = false;  // OUTFIT n: wear costume n until the next boot, for timing it; -1 takes it off
 volatile int8_t g_consoleOutfit = -1;
@@ -1924,6 +1925,62 @@ static void serviceFollowing(uint32_t now) {
         lastTouch = now;   // lights a dimmed screen, like any alert
         return;
     }
+}
+
+// SELFTEST on the console (and the web flasher's SELF-TEST button): every
+// part of the board that can be checked without a person looking at it, one
+// line each, then a summary. PASS is working, WARN is working but worth a
+// look (no SD card, no saved WiFi, the clock not set), FAIL is broken. It
+// changes nothing and joins nothing -- detection runs on throughout.
+static void runSelfTest() {
+    unsigned pass = 0, warn = 0, fail = 0;
+    auto line = [&](int lvl, const char* what, const char* fmt, ...) {
+        char detail[96];
+        va_list ap;
+        va_start(ap, fmt);
+        vsnprintf(detail, sizeof detail, fmt, ap);
+        va_end(ap);
+        static const char* const L[] = { "PASS", "WARN", "FAIL" };
+        Serial.printf("[selftest] %s  %-12s %s\n", L[lvl], what, detail);
+        (lvl == 0 ? pass : lvl == 1 ? warn : fail)++;
+    };
+    Serial.printf("[selftest] MuleSkin %s on %s, up %lu s, last reset %s\n",
+                  FIRMWARE_VERSION, OtaCore::buildName(), (unsigned long)(millis() / 1000), resetReasonName());
+
+    // Memory: what the radios and the display allocate from.
+    const uint32_t freeH = ESP.getFreeHeap();
+    const uint32_t block = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    line(block < 12000 ? 2 : block < 20000 ? 1 : 0, "memory", "%lu free, largest block %lu",
+         (unsigned long)freeH, (unsigned long)block);
+    // The frame buffer the main screen draws into.
+    line(frame.created() ? 0 : 1, "framebuffer", frame.created() ? "allocated" : "none (drawing direct, slower)");
+    // Touch: a calibration of this board's own, or the built-in guess.
+    line(s_calSource == CalSource::SAVED ? 0 : 1, "touch",
+         s_calSource == CalSource::SAVED ? "calibrated" : "built-in ranges (Settings > CALIBRATE TOUCH)");
+    // The two radios, by what they have actually handed over.
+    line(advertRate() > 0 ? 0 : 2, "bluetooth", "%lu adverts/s", (unsigned long)advertRate());
+    line(wifiFramesSeen() > 0 ? 0 : 2, "wifi sniff", "%lu frames so far", (unsigned long)wifiFramesSeen());
+    // Storage.
+    line(BlackBox::ready() ? 0 : 1, "black box", BlackBox::ready() ? "%u detections, %u crashes kept" : "off (no room in flash)",
+         (unsigned)BlackBox::detectionsKept(), (unsigned)BlackBox::crashesKept());
+    if (BlackBox::ready() && BlackBox::crashesKept()) line(1, "crashes", "%u kept -- CRASH REPORT in the web flasher", (unsigned)BlackBox::crashesKept());
+    line(engine.sdReady() ? 0 : 1, "sd card", engine.sdReady() ? "logging" : "none (optional)");
+    {
+        Preferences p;
+        const bool ok = p.begin("settings", true);
+        p.end();
+        line(ok ? 0 : 2, "settings", ok ? "readable" : "NVS will not open");
+    }
+    // Time and the network it comes from.
+    line(Clock::trusted() ? 0 : 1, "clock", Clock::trusted() ? "set" : "not set (WIFI TIME)");
+    line(OtaWifi::savedCount() ? 0 : 1, "wifi saved", "%u network(s)", (unsigned)OtaWifi::savedCount());
+    // Updates and their keys.
+    line(OtaCore::available() ? 0 : 1, "updates", OtaCore::available() ? "second app slot ready, %u trusted key(s)" : "no second app slot", OtaCore::trustedKeyCount());
+    line(0, "rules", "%u extra detection rules", (unsigned)extraRuleCount());
+#if MULESKIN_MESH
+    line(MeshTalk::selfTestOk() ? 0 : 2, "mesh crypto", MeshTalk::selfTestOk() ? "self-test passed" : "self-test FAILED: messages are off");
+#endif
+    Serial.printf("[selftest] done: %u pass, %u warn, %u fail\n", pass, warn, fail);
 }
 
 static void enterHunt() {
@@ -4603,6 +4660,10 @@ void loop() {
     // ADC: every input-only analog pin the CYDs leave free, in millivolts,
     // averaged over 16 reads. A battery divider shows up as about half the
     // cell's voltage, and moves when the cell is unplugged.
+    if (g_consoleSelfTest) {
+        g_consoleSelfTest = false;
+        runSelfTest();
+    }
     if (g_consoleLegend) {
         g_consoleLegend = false;
         MuleSkin::previewLegend(!MuleSkin::legendPreview());

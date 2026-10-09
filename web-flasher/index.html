@@ -532,6 +532,11 @@
       <div class="identify-result" id="bbResult"></div>
     </div>
     <p class="browser-note"><strong>Download log</strong> saves every detection the board has kept (it survives restarts) as a spreadsheet file. <strong>Crash report</strong> lists the last boots and why each one happened -- a crash, a brownout, a restart -- with the details a bug report needs.</p>
+    <div class="identify-row">
+      <button id="selfBtn" class="identify-btn">[ SELF-TEST ]</button>
+      <div class="identify-result" id="selfResult"></div>
+    </div>
+    <p class="browser-note"><strong>Self-test</strong> checks the board's parts -- memory, touch calibration, both radios, the black box, SD card, settings, clock, WiFi, update keys -- and lists anything that needs a look. Useful right after flashing a new board.</p>
     <p class="browser-note">After flashing, <strong>Set Time &amp; Zone</strong> tells the board this computer's clock and time zone over the same cable. The zone is kept for good; the clock lasts until the board is unplugged, and a saved WiFi network puts it back at every boot. A T-Watch has its clock set for it after installing, and keeps the time from then on, even through a flat battery.</p>
   </div>
 
@@ -977,6 +982,71 @@
       try { if (port) await port.close(); } catch (e4) {}
     } finally {
       clockBtn.disabled = false;
+    }
+  }
+
+  // ---- Self-test ---------------------------------------------------------------
+  // The firmware's SELFTEST console command checks every part it can without a
+  // person looking (memory, touch calibration, both radios, the black box, SD,
+  // settings, clock, WiFi, update keys, the mesh's crypto) and prints a line
+  // each. Shown here as a list, failures first.
+  var selfBtn = document.getElementById('selfBtn');
+  var selfResult = document.getElementById('selfResult');
+  if (selfBtn) {
+    if (!('serial' in navigator)) {
+      selfBtn.disabled = true;
+      selfBtn.textContent = '[ SELF-TEST ] (needs a desktop browser)';
+    } else {
+      selfBtn.addEventListener('click', runBoardSelfTest);
+    }
+  }
+  async function runBoardSelfTest() {
+    selfBtn.disabled = true;
+    selfResult.className = 'identify-result';
+    var port;
+    try {
+      selfResult.textContent = 'Pick the board’s port...';
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: isNativeUsb(port) ? 115200 : 2000000, bufferSize: 65536 });
+      try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (e) {}
+      for (var sec = 10; sec > 0; sec--) {
+        selfResult.textContent = 'Letting the board boot... ' + sec;
+        await new Promise(function (r) { setTimeout(r, 1000); });
+      }
+      selfResult.textContent = 'Testing...';
+      var w = port.writable.getWriter();
+      await w.write(new TextEncoder().encode('\nSELFTEST\n'));
+      w.releaseLock();
+      var r = port.readable.getReader(), dec = new TextDecoder(), text = '', t0 = Date.now();
+      while (Date.now() - t0 < 8000) {
+        var c = await Promise.race([r.read(), new Promise(function (res) { setTimeout(function () { res({ done: false, value: null }); }, 200); })]);
+        if (c.done) break;
+        if (c.value) text += dec.decode(c.value, { stream: true });
+        if (/\[selftest\] done:[^\n]*\n/.test(text) || text.indexOf('[security] locked') >= 0) break;
+      }
+      await r.cancel(); r.releaseLock();
+      await port.close(); port = null;
+      if (text.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
+      var lines = text.split(/\r?\n/).filter(function (l) { return l.indexOf('[selftest]') === 0; })
+                      .map(function (l) { return l.replace('[selftest] ', ''); });
+      var done = lines.filter(function (l) { return l.indexOf('done:') === 0; })[0];
+      if (!done) throw new Error('no answer. This needs firmware v3.1.5 or later');
+      var head = lines[0];
+      var checks = lines.filter(function (l) { return /^(PASS|WARN|FAIL) /.test(l); });
+      var rank = { FAIL: 0, WARN: 1, PASS: 2 };
+      checks.sort(function (a, b) { return rank[a.slice(0, 4)] - rank[b.slice(0, 4)]; });
+      selfResult.className = /, [1-9]\d* fail/.test(done) ? 'identify-result err' : 'identify-result';
+      selfResult.textContent = done.replace('done: ', 'SELF-TEST: ') + '  ·  ' + head;
+      var pre = document.createElement('pre');
+      pre.style.cssText = 'text-align:left;white-space:pre-wrap;font-size:0.75rem;margin:8px 0 0';
+      pre.textContent = checks.join('\n');
+      selfResult.appendChild(pre);
+    } catch (err) {
+      selfResult.className = 'identify-result err';
+      selfResult.textContent = 'Couldn’t test it: ' + (err && err.message ? err.message : 'unknown error');
+      try { if (port) await port.close(); } catch (e) {}
+    } finally {
+      selfBtn.disabled = false;
     }
   }
 

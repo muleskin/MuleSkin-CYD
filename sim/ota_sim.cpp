@@ -76,6 +76,7 @@ uint32_t    written()                          { return 0; }
 Fail        finish()                           { return Fail::NONE; }
 void        abort()                            {}
 
+unsigned trustedKeyCount() { return 1; }
 }  // namespace OtaCore
 
 // ---- OtaBle ---------------------------------------------------------------------

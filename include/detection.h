@@ -151,6 +151,7 @@ public:
     // How many rows the log has ever taken (never reset by eviction): how
     // fast the devices around are changing. See tracker_follow.h.
     uint32_t newRows() const { return _newRows; }
+    bool     sdReady() const;   // the SD card log is writing (SELFTEST)
     const Detection* logAt(uint8_t idx) const;     // 0 = newest
     const Detection* latest() const { return _latest; }
     // Whether latest() is a row the log had never held, as opposed to a

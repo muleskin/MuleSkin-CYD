@@ -189,6 +189,7 @@ const char* failWords(Fail f) {
 }
 
 bool available() { return esp_ota_get_next_update_partition(nullptr) != nullptr; }
+unsigned trustedKeyCount() { return OTA_PUBKEY_N; }
 
 const char* runningSlot() {
     const esp_partition_t* p = esp_ota_get_running_partition();

@@ -59,6 +59,8 @@ static const uint32_t CONFIRM_MS = 30000;
 
 // True on builds with a second app slot to install into.
 bool available();
+// How many signing keys this build trusts (more than one only mid-rotation).
+unsigned trustedKeyCount();
 // Is `data` signed with an update key? The same scheme as a firmware image:
 // SHA-256("SQWOTA1\n" + name + "\n" + data), checked against ota_pubkey.h.
 // For small signed files that are not firmware -- the extra detection rules
