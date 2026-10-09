@@ -1,0 +1,98 @@
+# A GitHub Release for every vX.Y.Z tag (tools/release.sh pushes them): the
+# release notes from the manifests, and every board's firmware attached under
+# the names the web flasher uses -- a second copy for when the flasher site is
+# down, and a public changelog.
+#
+# The bins here are UNSIGNED: the signing key never leaves the signing
+# machine, so boards can't take these over WiFi. They are for flashing by USB
+# (esptool, or a local copy of the web flasher). The signed set is the one on
+# flasher.oillie.cloud.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:   # to make a release for a tag cut before this existed
+    inputs:
+      tag:
+        description: "Existing tag, e.g. v3.1.4"
+        required: true
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        env: [cyd, cyd-fast, cyd-ili9341, cyd-ili9341-fast, cyd32c, cyd35-fast,
+              freenove32, rlphantom-r, awok, twatch-s3, freenove-s3, crowpanel7,
+              nm-cyd-c5]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0   # the tag, so the build reports vX.Y.Z
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ matrix.env == 'nm-cyd-c5' && 'c5' || 'esp32' }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-${{ matrix.env == 'nm-cyd-c5' && 'c5' || 'esp32' }}-
+      - run: pip install -q platformio
+      - run: pio run -e ${{ matrix.env }}
+      - name: Name the files as the flasher does
+        run: |
+          e=${{ matrix.env }}; B=.pio/build/$e; mkdir -p out
+          cp "$B/firmware.bin" "out/$e-firmware.bin"
+          case $e in
+            twatch-s3|freenove-s3|crowpanel7) cp "$B/bootloader.bin" out/esp32s3-bootloader.bin; cp "$B/partitions.bin" out/twatch-s3-partitions.bin ;;
+            nm-cyd-c5) cp "$B/bootloader.bin" out/esp32c5-bootloader.bin; cp "$B/partitions.bin" out/nm-cyd-c5-partitions.bin ;;
+            *)         cp "$B/bootloader.bin" out/esp32-bootloader.bin;  cp "$B/partitions.bin" out/esp32-partitions.bin ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bins-${{ matrix.env }}
+          path: out/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+          pattern: bins-*
+          merge-multiple: true   # the shared bootloaders/partitions are the same files
+      - name: Notes from the manifests
+        run: |
+          python3 - <<'PY' > notes.md
+          import json, os
+          tag = os.environ["TAG"]
+          m = json.load(open("web-flasher/manifest-cyd.json"))
+          name = m.get("release_name", "")
+          print(("## %s\n" % name) if name else "")
+          for line in m.get("whats_new", []):
+              print("- " + line)
+          print("\nFlash it from the browser: https://flasher.oillie.cloud/ (signed, and what boards update from over WiFi).")
+          print("The files below are the same build UNSIGNED, for flashing by USB; boards will not take them over WiFi.")
+          PY
+          cat notes.md
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="$TAG"
+          name=$(python3 -c "import json;print(json.load(open('web-flasher/manifest-cyd.json')).get('release_name',''))")
+          [ -n "$name" ] && title="$TAG -- $name"
+          gh release create "$TAG" art/*.bin --title "$title" --notes-file notes.md --verify-tag
