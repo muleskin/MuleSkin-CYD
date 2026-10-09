@@ -64,10 +64,6 @@ uint8_t     netCount();
 const Net*  net(uint8_t i);
 
 bool        hasSaved();
-// A saved network's password by index, for the squad nudge to share: the one
-// it shares is whichever saved network is actually in the room, not whichever
-// is first. Into the caller's buffer, which the caller wipes.
-bool        savedPassAt(uint8_t i, char* out, size_t cap);
 void        forget();
 
 // The list behind those: up to SAVED_MAX networks, managed on the WIFI

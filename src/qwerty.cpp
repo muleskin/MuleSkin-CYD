@@ -1,7 +1,6 @@
 // MuleSkin-CYD — QWERTY geometry. See include/qwerty.h.
 #include "qwerty.h"
 
-#if MULESKIN_MESH
 
 namespace Qwerty {
 
@@ -151,4 +150,3 @@ void TouchFilter::move(int px, int py) {
 }
 
 } // namespace Qwerty
-#endif // MULESKIN_MESH

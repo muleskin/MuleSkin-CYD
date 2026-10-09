@@ -1,35 +1,19 @@
-// MuleSkin-CYD — the payphone: a keypad (and a QWERTY bailout) for typing.
-//
-// Two jobs, one screen. Your MuleSkin's name -- twelve letters, saved on OK --
-// and a MuleSkinMesh message -- up to 48 characters with digits and punctuation,
-// handed back to the message screen on OK to be read over before it is sent.
-// The keyboards grow the extra characters only for a message: a name has to
-// fit an advert every older board decodes, and letters are what they accept.
+// MuleSkin-CYD — the payphone's PIN pad: the lock screen's keypad, and where a
+// PIN is set. Digits only.
 #pragma once
-#if MULESKIN_MESH
 #include <TFT_eSPI.h>
 #include "detection.h"
 
-// Your MuleSkin's name, starting from the one set now.
-void uiPhoneInit(TFT_eSPI& t);
-// A message, starting from `text` (nullptr or "" for a blank one).
-void uiPhoneInitMessage(TFT_eSPI& t, const char* text);
 // `advance` is false on the second of the 3.5"'s two band passes -- the
 // same frame drawn again -- so anything that steps by the call rather
 // than by the clock must sit still for it. Other boards draw once.
 void uiPhoneTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool advance = true);
 
-// All three edges of a touch, because the QWERTY board types on the release:
-// the press previews a key, a slide follows the finger, and the release types
-// whatever was last previewed. The keypad acts on the press and ignores the
-// other two.
+// The edges of a touch; the pad acts on the press and ignores the rest.
 enum class PhoneTouch : uint8_t { DOWN, MOVE, UP };
 void uiPhoneTouch(int x, int y, uint32_t now, PhoneTouch phase);
 
 bool uiPhoneDone();
-bool uiPhoneMessageMode();
-// What was typed, if a message ended on OK; nullptr if it ended on BACK.
-const char* uiPhoneMessage();
 
 // ---- PIN entry ----
 // The same payphone, digits only, for the lock. `len` dots to fill; `prompt`
@@ -44,12 +28,10 @@ const char* uiPhonePinDigits();
 // during lockout instead of the dots.
 void        uiPhonePinReject();
 void        uiPhonePinWait(const char* msg);   // nullptr clears it
-// The line above the dots, changeable while the pad is up (the lock screen
-// says so when a message is waiting).
+// The line above the dots, changeable while the pad is up.
 void        uiPhonePinPrompt(const char* prompt);
 // The lock screen's way out for a forgotten PIN: a FORGOT button where BACK
 // would be. Two taps within five seconds -- the first says what it will do --
 // and uiPhoneDone() comes back with uiPhonePinForgot() true.
 void        uiPhonePinAllowForgot(bool allow);
 bool        uiPhonePinForgot();
-#endif

@@ -83,16 +83,14 @@ const char* takeBootNote(const char** sub, bool* good);
 
 const char* runningSlot();      // "app0" / "app1"
 const char* runningVersion();
-// A newer release this board has heard of: from the boot check over WiFi, or
-// from a squad member's hello over the mesh. `who` is the member's name, or
-// empty for the site. Ignored unless newer than what is running. RAM only:
-// the boot check runs every boot anyway.
-void        noteAvailable(const char* version, const char* who);
+// A newer release this board has heard of, from the site: the boot check, or
+// AUTO TIME's daily join. Ignored unless newer than what is running. RAM only:
+// the check runs every boot anyway.
+void        noteAvailable(const char* version);
 const char* availableVersion();   // "" when nothing newer is known
-const char* availableFrom();      // the member's name, or ""
 // What the site's manifest said about that release: its name, and the few
-// lines it wrote for a board's screen. Both empty for a version heard from a
-// squad member, whose hello carries a number and nothing else. RAM only, and
+// lines it wrote for a board's screen. Both empty for a release published
+// before the site sent them. RAM only, and
 // only ever about the version in availableVersion().
 void        noteRelease(const char* name, const char* const* lines, uint8_t n);
 const char* releaseName();        // "" when none came with it

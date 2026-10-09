@@ -213,10 +213,7 @@ void drawUpdateTab(TFT_eSPI& t, const Geom& g) {
     row(t, g, y, "Available", buf, NAVY, true);
     y += LINE;
 
-    const char* from = OtaCore::availableFrom();
-    if (from[0]) snprintf(buf, sizeof buf, "%s's board", from);
-    else         snprintf(buf, sizeof buf, "flasher.oillie.cloud");
-    row(t, g, y, "Heard from", buf, Theme::W95_DKSHADOW, true);
+    row(t, g, y, "Heard from", "flasher.oillie.cloud", Theme::W95_DKSHADOW, true);
     y += LINE + 5;
 
     const int cb = checkboxY(g);
@@ -241,13 +238,10 @@ void drawNotesTab(TFT_eSPI& t, const Geom& g) {
 
     const uint8_t n = OtaCore::newsCount();
     if (!n) {
-        // Nothing came with it, and saying so is better than an empty box.
-        // A squad member's hello carries a version and nothing else, and a
+        // Nothing came with it, and saying so is better than an empty box: a
         // release made before the site started sending its lines has none.
         para(t, g.px + 8, y, g.pw - 16, limit,
-             OtaCore::availableFrom()[0]
-                 ? "A squad member had this one, and a hello carries no notes. What changed is on the site."
-                 : "The site sent no notes with this one. What changed is on the site.");
+             "The site sent no notes with this one. What changed is on the site.");
         return;
     }
     // One bullet a line, each wrapped under its own dash.

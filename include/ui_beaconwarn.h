@@ -8,9 +8,8 @@
 // opens this instead. Turning it back OFF asks nothing.
 //
 // The two answers are equals -- ENABLE and KEEP DISABLED, the same system
-// button, neither preselected -- for the same reason MuleSkinMesh's gate is
-// built that way: a warning whose decline is dressed as the lesser choice is
-// arguing, not informing.
+// button, neither preselected: a warning whose decline is dressed as the
+// lesser choice is arguing, not informing.
 #pragma once
 #include <TFT_eSPI.h>
 #include <stdint.h>

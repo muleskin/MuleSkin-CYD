@@ -155,6 +155,8 @@ Flashed and captured over the CH340 port on 2026-09-28.
 - [x] **Mesh crypto self-test passes on the device**: `[meshtalk] crypto
       self-test PASS`. That is the mbedtls 2 -> 3 migration confirmed by the
       board itself, against frames built by an independent implementation.
+      (MuleSkinMesh has since been removed; the OTA signature check is the
+      one mbedtls 3 user left, and the OTA item below covers it.)
 - [x] **Detections fire.** `det 5` in one capture, from ambient traffic alone.
 - [x] **Performance**: 67-72 fps, `loop 69/s`, heap flat around 80 KB free
       across the capture, largest block 8.2 MB.
@@ -192,9 +194,6 @@ Ordered so that a failure early explains the failures after it.
       This is a new chip on a new core. **Check the AP count against a phone
       standing in the same place.**
 - [ ] **BLE scan sees adverts** (any phone with Bluetooth on will do)
-- [ ] **Mesh crypto self-test passes**: the console prints
-      `[meshtalk] crypto self-test PASS`. This is the on-device proof of the
-      mbedtls 2→3 migration.
 - [ ] **A real detection fires.** Per [BUILD.md](BUILD.md): any BLE device
       named `HC-05`/`HC-06` trips `SKIMMER`; walking past a Ring/Wyze/Nest/Eufy
       camera trips `CAMERA`; an AirTag trips `AIRTAG`.
@@ -202,7 +201,6 @@ Ordered so that a failure early explains the failures after it.
       (proves SD on the shared display bus)
 - [ ] **Settings persist** across a power cycle (proves the 16 MB partition
       table kept NVS where the bootloader expects it)
-- [ ] **MuleSkinMesh**: two boards see each other. Needs a second device.
 - [ ] **OTA**: an update applies and the board still boots (proves both 6 MB
       app slots and the ported ECDSA signature check)
 - [ ] **Soak**: left running for an hour without a reset or a heap collapse

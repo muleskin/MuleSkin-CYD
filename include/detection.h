@@ -1,8 +1,5 @@
 // MuleSkin-CYD — DetectionEngine public API
 #pragma once
-#if MULESKIN_MESH
-#include "muleskinmesh.h"
-#endif
 #include "state.h"
 #include "sd_log.h"
 #include "remote_id.h"
@@ -10,86 +7,6 @@
 #include <Preferences.h>
 #include <cstring>   // memcmp, for the inline isWatched()/isHunted() below
 
-#if MULESKIN_MESH
-// Phase 0: does advertising cost anything worth caring about?
-//
-// TWO questions, not one, and the second only turned up on reading
-// platformio.ini. The obvious one is duty cycle -- the BLE scan runs at a 99%
-// window, so a transmitter has to steal listening time. The one underneath it
-// is heap: the broadcaster role was compiled OUT because its overhead made
-// the CLEAR screen's frame-buffer realloc on rotate fail, and turning it back
-// on may bring that with it.
-//
-// The measurement counts ADVERTS SEEN, not detections. Detections are rare
-// and depend on what happens to walk past; adverts are thousands a minute
-// anywhere populated, so the number is stable in seconds rather than hours.
-//
-// And the two arms ALTERNATE on a short cycle rather than running once each.
-// The RF environment changes minute to minute -- a phone goes by, a bus
-// passes -- so measuring off for five minutes and then on for five compares
-// two environments, not two configurations. Alternating makes drift hit both
-// arms equally.
-namespace MeshProbe {
-    struct Stats {
-        uint16_t offRate;      // adverts/sec x10, advertising off
-        uint16_t onRate;       // adverts/sec x10, advertising on
-        int16_t  deltaPct;     // (on - off) / off, percent
-        uint16_t cycles;       // completed on-arms; the sample size
-        bool     advOn;        // which arm is running right now
-        uint16_t advMs;        // the interval being measured
-        uint32_t heapFreeKb;
-        uint32_t heapBlockKb;  // largest contiguous -- the rotate-realloc canary
-    };
-    void  begin();
-    void  tick(uint32_t now);
-    void  noteAdvert();        // called from the BLE scan callback
-    Stats stats();
-    // True once the measurement has enough arms and has stopped flipping.
-    bool  concluded();
-}
-
-// The radio half. Advertises who we are and listens for somebody else doing
-// the same. Deliberately separate from the detection pipeline: a peer must
-// never become a Detection -- the HACKER work kept bare Espressif out of the
-// signature tables precisely so MuleSkines would not flag each other, and
-// this would reintroduce that from the other side.
-namespace Mesh {
-    void begin();
-    void tick(uint32_t now);
-
-    // Called from the BLE scan callback with the raw manufacturer-data blob.
-    // Returns true if it was one of ours, so the caller can stop looking.
-    bool onManufacturerData(const uint8_t* d, size_t len, const uint8_t* mac, uint32_t now);
-
-    // The visitor, or nullptr. Goes stale on its own if the peer walks away.
-    const MuleSkinMesh::Peer* peer();
-    const uint8_t*          peerMac();
-    // How many MuleSkines have been heard in the last twenty seconds (PEER_STALE_MS) --
-    // the visitor and everybody else. For the small "+2" beside him.
-    uint8_t                 squadCount(uint32_t now);
-    // Every one of them, with what their advert said they look like -- for the
-    // SQUAD screen. Sorted by address so the order holds still frame to frame.
-    struct SquadMember {
-        uint8_t          mac[6];
-        MuleSkinMesh::Peer peer;
-        uint32_t         seen;
-    };
-    uint8_t                 squadList(uint32_t now, SquadMember* out, uint8_t cap);
-    // What that board looked like the last time its advert was heard, in
-    // range or not. False if it has never been heard this boot.
-    bool                    peerLook(const uint8_t mac[6], MuleSkinMesh::Peer& out);
-    // Make this board the visitor. The one-visitor rule still holds; this only
-    // says who wins it. The guest already here leaves on the next advert the
-    // chosen one sends, and if the chosen one goes quiet, first-come applies.
-    void                    preferPeer(const uint8_t mac[6]);
-    bool                    advertising();
-    // Our own advert payload, as the radio should send it (src/mesh.cpp).
-    size_t                  buildSelf(uint8_t* out);
-    // The radio half, called from tick(): detection.cpp on the device,
-    // sim/meshsim.cpp in the emulator.
-    void                    radioTick(uint32_t now);
-}
-#endif
 
 // The BLE scan is restarted once a minute, which is what frees NimBLE's record
 // of every device that never answered a scan request -- see scanFlushTick() in
@@ -130,12 +47,9 @@ const volatile uint32_t* advertKinds();   // [ind, direct, scan, nonconn, other]
 // The scan window, 1..100 of the 100 ms interval, changed live: WINDOW N on
 // the console. For pricing the WiFi/Bluetooth radio-time trade on the bench.
 void     setScanWindow(uint8_t w);
-// The window the scan runs at when nothing special is going on, and the
-// invite boost that lifts it to 99 for a while and puts it back. Two owners
-// (the watch's battery setting, the squad invite) with one arbiter, so the
-// invite ending never lands the watch back on a window it had moved off.
+// The window the scan runs at when nothing special is going on: the watch's
+// battery setting, or 75 on the cable.
 void     setScanWindowBase(uint8_t w);
-void     setScanBoost(bool on);
 void     setScanInterval(uint16_t ms, uint8_t window);   // bench: INTERVAL ms window
 // SCAN ACTIVE / SCAN PASSIVE / SCAN AUTO on the console: pin the scan mode
 // for a bench flood, or hand it back to the room. 0 auto, 1 active, 2 passive.

@@ -8,13 +8,11 @@
 // phone notification. The board sends; it never takes anything from the
 // phone but the connection itself.
 //
-// THE ADVERTISER. There is one, and the squad's advert already owns it. So
-// rather than a second advert (whose churn is exactly the heap fragmentation
-// detection.cpp's setAdvertising() was rewritten to stop), the mesh advert
-// itself turns connectable while PHONE ALERTS is on and no phone is
-// connected, and goes back to non-connectable the moment one is. With the
-// squad switched off it advertises the name alone, so a phone can still find
-// it.
+// THE ADVERT. Connectable, carrying the service and the name, and up only
+// while PHONE ALERTS is on and no phone is connected. It is rebuilt only when
+// that changes -- a phone connecting or leaving, the switch -- never on a
+// timer: advert churn is heap fragmentation on these boards. An update owns
+// the radio while it runs, and the advert waits it out (pauseRadio()).
 //
 // THE COST. NimBLE's peripheral role, compiled into the CYD builds for this
 // (nimble_flags_cyd in platformio.ini): about 3 KB of heap and 66 KB of
@@ -49,9 +47,15 @@ void setEnabled(bool on);
 // A phone is connected right now.
 bool connected();
 
-// The mesh advert should accept a connection now: on, registered, nobody
-// connected. Read by detection.cpp's setAdvertising() on every pass.
+// A phone may connect now: on, registered, nobody connected.
 bool wantConnectable();
+
+// From loop(): puts the advert up or takes it down when wantConnectable()
+// changes. Cheap when nothing did.
+void tick(uint32_t now);
+
+// The update radio's start and end (detection.cpp): no advert in between.
+void pauseRadio(bool paused);
 
 // "MuleSkin-XXXX", the last two bytes of the Bluetooth address.
 const char* name();

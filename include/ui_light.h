@@ -12,7 +12,6 @@ class DetectionEngine;
 enum class LightRow : uint8_t {
     ENABLED = 0,
     ALERTS,
-    MESSAGES,
     IDLE,
     IDLE_COLOR,
     BRIGHTNESS,

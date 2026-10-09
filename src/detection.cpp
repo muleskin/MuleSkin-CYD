@@ -5,6 +5,7 @@
 #include "serial_flush.h"
 #include "signatures.h"
 #include "settings.h"
+#include "phone_alerts.h"
 #include "blackbox.h"
 #include "bingo.h"
 #include "dex.h"
@@ -23,11 +24,6 @@
 #include "nimble/nimble_port.h"
 #else
 #include "nimble/porting/nimble/include/nimble/nimble_port.h"
-#endif
-#if MULESKIN_MESH
-#include "muleskinmesh.h"
-#include "muleskin.h"
-#include "settings.h"
 #endif
 #include <esp_bt.h>
 // esp_gap_bt_api.h was here and is not any more. It is a Bluetooth Classic
@@ -187,15 +183,10 @@ static volatile uint8_t s_windowReq = 0;   // a WINDOW command waiting for the n
 static bool             s_windowPending = false;
 void setScanWindow(uint8_t w) { if (w >= 1 && w <= 100) { s_windowReq = w; s_windowPending = true; } }
 static uint8_t s_baseWindow = 75;   // matches the setWindow(75) at init
-static bool    s_boosted    = false;
 void setScanWindowBase(uint8_t w) {
     if (w < 1 || w > 100 || w == s_baseWindow) return;
     s_baseWindow = w;
-    if (!s_boosted) setScanWindow(w);
-}
-void setScanBoost(bool on) {
-    s_boosted = on;
-    setScanWindow(on ? 99 : s_baseWindow);
+    setScanWindow(w);
 }
 // BENCH: INTERVAL N (ms), with the window in the same message; see scanFlushOnHost.
 static volatile uint16_t s_intervalReq = 0;
@@ -222,13 +213,6 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         const uint8_t t = adv->getAdvType();
         s_advKind[t == BLE_HCI_ADV_TYPE_ADV_IND ? 0 : t == BLE_HCI_ADV_TYPE_ADV_DIRECT_IND_HD ? 1 :
                   t == BLE_HCI_ADV_TYPE_ADV_SCAN_IND ? 2 : t == BLE_HCI_ADV_TYPE_ADV_NONCONN_IND ? 3 : 4]++;
-#if MULESKIN_MESH
-        // Counted here, once per advert, whatever handle() goes on to do
-        // with it. The measurement is of what the RADIO heard, not of what
-        // the signature tables liked, and not of how many times the library
-        // hands the same advert over (see below: up to twice).
-        MeshProbe::noteAdvert();
-#endif
         // Detection at first sight, for the one case the library holds back:
         // an active scan and a scannable advert. The library waits for that
         // device's reply before calling onResult, and a device that never
@@ -237,7 +221,7 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         // unreported. Everything else (passive, or an advert nobody asks) is
         // handed to onResult at once and is handled there. When a reply or
         // the reply timeout does come, onResult runs the same handling again
-        // with whatever the reply added (a name, a squad message); the log
+        // with whatever the reply added (a name); the log
         // keeps the entry it already has and takes the name from the reply
         // (see postBle).
         if (!scanPassiveNow() && adv->isLegacyAdvertisement() && adv->isScannable()) handle(adv);
@@ -256,42 +240,11 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         // 2.x hands back a reference to the device's own address, so the
         // pointer is good for the whole of this call.
         const uint8_t* mac = adv->getAddress().getBase()->val;
-#if MULESKIN_MESH
-        // A peer is handled here and RETURNS, so it never reaches the
-        // signature tables and can never become a Detection. Getting that
-        // wrong would have two MuleSkines alarming at each other -- the
-        // exact failure the HACKER bucket was shaped to avoid.
-        // Every manufacturer-data block, not just the first. A peer sending a
-        // message carries TWO -- its advert's, then its scan response's (see
-        // include/meshmsg.h for why the message rides there) -- in that order,
-        // which is what lets the name from the first travel with the second.
-        // v1.5.23 and earlier only ever read the first, and that is exactly
-        // what keeps them seeing a peer that is in the middle of a message.
-        if (adv->haveManufacturerData()) {
-            bool ours = false;
-            const uint8_t mdN = adv->getManufacturerDataCount();
-            for (uint8_t i = 0; i < mdN; i++) {
-                const std::string md = adv->getManufacturerData(i);
-                if (Mesh::onManufacturerData((const uint8_t*)md.data(), md.size(), mac, millis())) ours = true;
-            }
-            // A MuleSkin is not a detection, but it can be a hunt target:
-            // the SQUAD screen's HUNT aims the gauge at one. Its advert feeds
-            // the watch and hunt slots and then stops here, as before.
-            if (ours) {
-                if (g_engine) {
-                    const int8_t r = (int8_t)adv->getRSSI();
-                    g_engine->checkWatchBle(mac, r);
-                    g_engine->checkHuntBle(mac, r);
-                }
-                return;
-            }
-        }
-#endif
         // Printed order from here on (issue #22). NimBLE keeps an address
         // least-significant byte first, so every Bluetooth address this board
         // showed was backwards next to a phone app or Home Assistant. Flipped
-        // here, after the squad above: its peers name each other in NimBLE's
-        // own order, in the sealed hello, and that must not change under it.
+        // here, after everything above has read the address in NimBLE's own
+        // order.
         // Lists saved before this still match -- see IgnoreList, Regulars and
         // BlackBox::forEachDetection.
         uint8_t printed[6];
@@ -819,241 +772,6 @@ bool DetectionEngine::init() {
     return true;
 }
 
-#if MULESKIN_MESH
-namespace MeshProbe {
-
-// THE EXPERIMENT IS OVER, and this is what is left of it.
-//
-// It alternated advertising on and off in thirty-second arms to find out
-// whether transmitting costs the scanner anything. Answer, measured on
-// hardware over sixty-two arms: 68.7 adverts/sec with advertising off
-// against 68.6 with it on at a 1500ms interval. Nothing.
-//
-// It had to be torn out rather than left running, because it advertised
-// WITHOUT ASKING. Only Mesh::tick consulted Settings::meshEnabled(); the
-// probe drove the same NimBLE advertising singleton straight past it, so a
-// device told not to announce itself announced itself every other arm. On a
-// tool whose whole premise is that it does not transmit unless asked, that
-// is not a measurement artefact, it is the thing the setting exists to
-// prevent.
-//
-// It also fought Mesh for the same singleton the rest of the time, switching
-// advertising off for thirty seconds at a stretch while a peer was trying to
-// find us.
-//
-// What stays is the counter, which costs one increment per advert and
-// answers "is the radio actually hearing anything" -- worth having when a
-// peer does not turn up and the question is whether the scanner is alive.
-static uint32_t s_seen    = 0;
-static uint32_t s_windowAt = 0;
-static uint16_t s_rate     = 0;   // adverts/sec x10
-
-void noteAdvert() { s_seen++; }
-
-void begin() { s_seen = 0; s_windowAt = 0; s_rate = 0; }
-
-void tick(uint32_t now) {
-    if (!s_windowAt) { s_windowAt = now; return; }
-    const uint32_t dur = now - s_windowAt;
-    if (dur < 5000) return;                       // a five-second window
-    s_rate = (uint16_t)((uint64_t)s_seen * 10000ull / dur);
-    s_seen = 0;
-    s_windowAt = now;
-}
-
-bool concluded() { return true; }                 // it did; see above
-
-Stats stats() {
-    Stats st{};
-    st.offRate = s_rate;                          // the live rate now
-    st.onRate  = 0;
-    st.deltaPct = 0;
-    st.cycles = 0;
-    st.advOn  = Mesh::advertising();
-    st.advMs  = 1500;
-    st.heapFreeKb  = ESP.getFreeHeap() / 1024;
-    st.heapBlockKb = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) / 1024;
-    return st;
-}
-
-} // namespace MeshProbe
-#endif
-
-#if MULESKIN_MESH
-#include "meshmsg.h"
-#include "meshtalk.h"
-#include "phone_alerts.h"
-
-// MuleSkinMesh's radio half: our advert, our scan response and our own
-// address. Everything that does not touch NimBLE -- who is visiting, the
-// decoder, where a message frame goes -- is src/mesh.cpp, so that the
-// emulator compiles the same code; sim/meshsim.cpp is its radio half.
-namespace Mesh {
-
-static bool            s_advOn      = false;
-static uint32_t        s_advAt      = 0;
-// Which outgoing message the scan response carries right now; 0 is none.
-static uint32_t        s_srGen      = 0;
-static bool            s_macSet     = false;
-// The advert on the air is connectable, for PHONE ALERTS (phone_alerts.h).
-static bool            s_advConn    = false;
-static const uint16_t  ADV_MS       = 1500;
-
-bool advertising() { return s_advOn; }
-
-// The payload we last handed the stack, so an unchanged one is never handed
-// over twice.
-static uint8_t s_lastAdv[MuleSkinMesh::LEN_MAX];
-static size_t  s_lastAdvLen = 0;
-
-static void setAdvertising(bool on, uint32_t now) {
-    NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
-    if (!adv) return;
-    if (!on) { if (s_advOn) adv->stop(); s_advOn = false; return; }
-
-    // PHONE ALERTS borrows this advert rather than adding a second one: it
-    // turns connectable while a phone may connect (on, registered, nobody
-    // connected yet), and back the moment one does. With the squad off it
-    // carries the board's name alone -- nothing of the squad's -- so a phone
-    // can still find it.
-    const bool conn  = PhoneAlerts::wantConnectable();
-    const bool squad = Settings::meshTransmit();
-    uint8_t buf[MuleSkinMesh::LEN_MAX];
-    const size_t n = squad ? buildSelf(buf) : 0;
-
-    // Only touch the stack when the advert actually differs.
-    //
-    // This was every ten seconds unconditionally, and each pass built a
-    // std::string and a NimBLEAdvertisementData and pushed them into NimBLE
-    // -- roughly 360 allocation cycles an hour, into a heap that a one-hour
-    // soak showed dropping from a 17 KB largest free block to 1.4 KB. That
-    // is the fragmentation the broadcaster role was disabled to avoid in the
-    // first place, arriving by a route this file created.
-    //
-    // The point of re-advertising was that a changed outfit or name should
-    // propagate without a reboot. Comparing gets that for one memcmp and
-    // no allocation at all on the pass where nothing changed, which is
-    // every pass but the rare one.
-    // The scan response counts as part of "the advert" here: a message
-    // starting or expiring is a change, and nothing else is.
-    size_t   outLen = 0;
-    uint32_t outGen = 0;
-    const uint8_t* out = MeshTalk::outgoing(now, outLen, outGen);
-    const bool same = (n == s_lastAdvLen) && (memcmp(buf, s_lastAdv, n) == 0) &&
-                      outGen == s_srGen && conn == s_advConn;
-    if (same && s_advOn) return;
-
-    std::string md;
-    md.reserve(n + 2);
-    md.push_back((char)(MuleSkinMesh::COMPANY_ID & 0xFF));
-    md.push_back((char)(MuleSkinMesh::COMPANY_ID >> 8));
-    md.append((const char*)buf, n);
-
-    NimBLEAdvertisementData d;
-    // A connectable advert says it is discoverable, which some phones want
-    // before they offer it. Three bytes; the squad payload leaves room.
-    if (conn) d.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
-    if (n) d.setManufacturerData(md);
-    else   d.setName(PhoneAlerts::name());
-    if (s_advOn) adv->stop();
-    adv->setAdvertisementData(d);
-    // A message goes in the scan response, and turning the scan response ON
-    // is also what makes the advert scannable at all: setScanResponseData()
-    // alone stores the bytes and leaves the advert non-scannable, so nobody
-    // would ever ask for them. Off again the moment the message expires.
-    if (out) {
-        std::string sm;
-        sm.reserve(outLen + 2);
-        sm.push_back((char)(MuleSkinMesh::COMPANY_ID & 0xFF));
-        sm.push_back((char)(MuleSkinMesh::COMPANY_ID >> 8));
-        sm.append((const char*)out, outLen);
-        NimBLEAdvertisementData r;
-        r.setManufacturerData(sm);
-        adv->setScanResponseData(r);
-        adv->enableScanResponse(true);
-        // Scannable: a peer's scan request is how the message travels.
-        adv->setDiscoverableMode(BLE_GAP_DISC_MODE_GEN);
-    } else if (conn) {
-        // A connectable advert answers scan requests whatever we say, so it
-        // answers with the name -- which is also what the phone's device
-        // picker shows -- and never with a stale message.
-        NimBLEAdvertisementData r;
-        r.setName(PhoneAlerts::name());
-        adv->setScanResponseData(r);
-        adv->enableScanResponse(true);
-        adv->setDiscoverableMode(BLE_GAP_DISC_MODE_GEN);
-    } else {
-        // 2.x pushes scan-response data to the controller the moment it is
-        // set and enableScanResponse(false) only clears a flag, so the last
-        // message would go on being served to anyone who asked. So the
-        // advert goes non-scannable (non-connectable and non-discoverable
-        // is ADV_NONCONN_IND): the controller answers no scan request in
-        // that mode, so the stale reply is never sent, and no scanner pays
-        // for a request that has nothing behind it. The next message sets
-        // fresh reply data before the advert turns scannable again. (Not
-        // cleared with empty data: the library takes &payload[0] of it.)
-        adv->enableScanResponse(false);
-        adv->setDiscoverableMode(BLE_GAP_DISC_MODE_NON);
-    }
-    // Connectable only for PHONE ALERTS, above. Otherwise never: update
-    // mode's server shares this advertiser, and a stack with the peripheral
-    // role compiled in defaults to connectable.
-    adv->setConnectableMode(conn ? BLE_GAP_CONN_MODE_UND : BLE_GAP_CONN_MODE_NON);
-    // Faster while a phone may connect: at 1.5 s, sharing the radio with the
-    // scan and the WiFi sniffer, a PC on the bench caught the board in one
-    // five-second scan of three. The same advert either way, so no more
-    // allocations -- only more airtime, a third of a millisecond a go.
-    const uint16_t ms = conn ? 500 : ADV_MS;
-    adv->setMinInterval((uint16_t)(ms * 8 / 5));
-    adv->setMaxInterval((uint16_t)(ms * 8 / 5 + 16));
-    adv->start();
-
-    memcpy(s_lastAdv, buf, n);
-    s_lastAdvLen = n;
-    s_advOn = true;
-    s_srGen = outGen;
-    s_advConn = conn;
-}
-
-void radioTick(uint32_t now) {
-    // Update mode owns the advertiser; see DetectionEngine::startUpdateRadio().
-    // Resting radios have nothing to advertise with unless BLE stayed up.
-    if (g_rawMode == RawScanMode::UPDATE) return;
-    if (g_rawMode == RawScanMode::REST && g_restBle) return;
-    // Our own address goes into the nonce of every message we send, so the
-    // runtime needs it -- read once, after the stack is up, and copied out of
-    // a named NimBLEAddress rather than through a pointer into a temporary.
-    if (!s_macSet) {
-        const NimBLEAddress a = NimBLEDevice::getAddress();
-        MeshTalk::setOwnMac(a.getBase()->val);
-        s_macSet = true;
-    }
-
-    // PHONE ALERTS needs the advert too, squad or no squad.
-    const bool want = Settings::meshTransmit() || PhoneAlerts::wantConnectable();
-    // Polled rather than event-driven, but setAdvertising() now returns on a
-    // memcmp when nothing changed, so this costs one comparison every ten
-    // seconds instead of rebuilding the advert 360 times an hour. A message
-    // starting or expiring is checked every tick, though: nobody should wait
-    // ten seconds for "On my way." to go out.
-    size_t   ol = 0;
-    uint32_t og = 0;
-    MeshTalk::outgoing(now, ol, og);
-    // A phone connecting stops the advert (the controller ends a connectable
-    // one on connect), and wantConnectable() turning false is what says so:
-    // rebuilt at once, non-connectable, so the squad never loses this board.
-    if (want && (!s_advOn || (now - s_advAt) > 10000 || og != s_srGen ||
-                 PhoneAlerts::wantConnectable() != s_advConn)) {
-        setAdvertising(true, now);
-        s_advAt = now;
-    }
-    if (!want && s_advOn) setAdvertising(false, now);
-}
-
-void stopAdvertisingForUpdate() { setAdvertising(false, 0); }
-
-} // namespace Mesh
-#endif
 
 // ---- the scan-result flush --------------------------------------------------
 // The scan is restarted once a minute. Under the old library this was the
@@ -1095,11 +813,11 @@ static const uint8_t  SCAN_PRESSED_LIMIT  = 3;       // pressed flushes inside a
 // board) those records ate a 14 KB block in under a second. So the scan is
 // passive until the room has been quiet for a while, active while it stays
 // quiet, and passive again the moment it gets loud. A passive scan misses
-// only what a device says when asked: some names, and a squad message.
+// only what a device says when asked: some names.
 static const uint32_t SCAN_ACTIVE_BELOW   = 50;      // adverts/s: quiet enough to ask
 // Raised from 90 to 300 on 2.x: with the 200 ms reply timeout an active scan
 // costs about 3 KB under a 200-a-second flood (measured, the fake flood plus
-// a Flipper), so a busy room keeps its names and squad messages. Passive is
+// a Flipper), so a busy room keeps its names. Passive is
 // still the net above this, and heap pressure still forces it regardless.
 static const uint32_t SCAN_PASSIVE_ABOVE  = 300;     // adverts/s: too loud to keep asking
 // The block an active scan needs to spare before it starts. Measured on the
@@ -1650,9 +1368,8 @@ void DetectionEngine::startUpdateRadio() {
     if (g_rawMode == RawScanMode::WIFI) WiFi.scanDelete();
     g_rawMode = RawScanMode::UPDATE;
     esp_wifi_set_promiscuous(false);
-#if MULESKIN_MESH
-    Mesh::stopAdvertisingForUpdate();
-#endif
+    // PHONE ALERTS' advert shares the radio, so it stops for the duration.
+    PhoneAlerts::pauseRadio(true);
     ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_updStopEv);
 }
 
@@ -1660,6 +1377,7 @@ void DetectionEngine::stopUpdateRadio() {
     if (g_rawMode != RawScanMode::UPDATE) return;
     g_rawMode = RawScanMode::NONE;
     esp_wifi_set_promiscuous(true);
+    PhoneAlerts::pauseRadio(false);
     if (s_updEvReady) ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_updStartEv);
 }
 
@@ -1681,9 +1399,6 @@ bool DetectionEngine::restRadios(bool bleToo) {
     esp_wifi_set_promiscuous(false);
     esp_wifi_stop();
     if (bleToo) {
-#if MULESKIN_MESH
-        Mesh::stopAdvertisingForUpdate();
-#endif
         ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_updStopEv);
     }
     return true;

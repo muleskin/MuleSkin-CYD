@@ -1,15 +1,14 @@
 """Renders the README's demo clip: boot, the main screen on synthwave with
-MuleSkin as himself, a quip, a FLOCK detection and his reaction to it, and a
-visiting MuleSkin in VOID EYE walking on to say hello.
+MuleSkin as himself, a quip, and a FLOCK detection and his reaction to it.
 
     python3 make_readme_demo.py --render-only   # under WSL, after `make`
     python  make_readme_demo.py --encode-only   # wherever Pillow is installed
 
 Drives muleskinsim-live, so every screen and transition is the firmware's own
-main.cpp deciding what to draw; only the detection and the visitor are
-injected, and the one tap is staged. Seeds its own settings directory, so
-it does not depend on the GUI having been run: a board past first boot,
-MuleSkinMesh consented, the outfit chosen and earned.
+main.cpp deciding what to draw; only the detection is injected, and the
+one tap is staged. Seeds its own settings directory, so it does not depend
+on the GUI having been run: a board past first boot, the outfit chosen and
+earned.
 """
 import json, os, shutil, struct, subprocess, sys, zlib
 
@@ -24,7 +23,6 @@ GIF  = os.path.join(HERE, "..", "docs", "demo1.gif")   # docs/demo.gif is the ha
 ZOOM = 2
 MS   = 60
 BG   = 13            # RADAR, the default background
-OUTFIT_VOIDEYE = 12  # OutfitId::VOIDEYE
 RING_FRAMES = 6
 
 
@@ -74,7 +72,7 @@ class Live:
 def seed(nvs):
     os.makedirs(nvs, exist_ok=True)
     open(os.path.join(nvs, "settings.nvs"), "w").write(
-        "b colorchk 1\nb meshok 1\nb meshrx 1\nb meshtx 1\nb infoprimer 1\nb tzSet 1\nu bg %d\n" % BG)
+        "b colorchk 1\nb infoprimer 1\nb tzSet 1\nu bg %d\n" % BG)
     open(os.path.join(nvs, "muleskinpet.nvs"), "w").write("b onboarded 1\n")
 
 
@@ -126,10 +124,6 @@ def render():
     tap(160, 40)
     cap(50)
     hold(700)
-    # Another MuleSkin in range: its owner's MuleSkin, in VOID EYE, walks on and says hello.
-    live.send("P outfit %d" % OUTFIT_VOIDEYE, "P shade 2", "P name BIGFOOT", "P setup")
-    cap(70)
-    hold(1800)
     live.close()
 
     json.dump(frames, open(os.path.join(OUT, "manifest.json"), "w"), indent=0)

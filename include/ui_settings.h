@@ -31,8 +31,6 @@ enum class SettingsRow : uint8_t {
     PET,
     VIEW_DIARY,
     RESET_STATS,
-    MULESKIN_NAME,   // opens the payphone; MuleSkinMesh builds only
-    MULESKINMESH,     // announce ourselves to other MuleSkines
     APPEARANCE,     // opens the APPEARANCE page: the display rows, and the aura
     AURA,           // on the APPEARANCE page, once he is a Legend
     SYSTEM,         // opens the SYSTEM page: calibrate, colours, diagnostics, reset
@@ -69,7 +67,6 @@ enum class SettingsRow : uint8_t {
     UPDATE_CHANNEL,  // on the SYSTEM page: UPDATES STABLE / LAB
     AUTO_UPDATE,     // on the SYSTEM page: AUTO UPDATE OFF / AT NIGHT
     PHONE_ALERTS,    // beside BUZZER: alerts to a phone over Bluetooth (phone_alerts.h)
-    SQUAD_FOLLOW,    // beside it: TELL SQUAD, a WITH YOU sent to the squad as a message
     BACK,
     COUNT,
     NONE = 255

@@ -10,7 +10,6 @@
 #endif
 #include "flood_bench.h" // FLOOD N, for the bench (a no-op outside FLOOD_BENCH builds)
 #include "settings.h"
-#include "crowd_bench.h"
 #include "blackbox.h"    // BLACKBOX dumps it
 #include "ota_core.h"    // VERTEST, on bench builds
 #include "frame_push.h"  // PUSH, the frame-push switch
@@ -328,9 +327,8 @@ static const Zone ZONES[] = {
     { "AUS WESTERN", "AWST-8" },
     { "NEW ZEALAND", "NZST-12NZDT,M9.5.0,M4.1.0/3" },
     // The rest came with issue #19. Appended, never inserted: a board keeps
-    // its zone as an index in NVS and sends it to the squad as one, so a
-    // zone that moved would put every board already set to it an hour or
-    // more out. ORDER below is where they show up.
+    // its zone as an index in NVS, so a zone that moved would put every
+    // board already set to it an hour or more out. ORDER below is where they show up.
     { "MEXICO",      "CST6" },                            // no daylight saving since 2022
     { "COLOMBIA",    "<-05>5" },                          // and Peru, Ecuador, Panama, Cancun
     { "CHILE",       "<-04>4<-03>,M9.1.6/24,M4.1.6/24" },
@@ -759,10 +757,6 @@ void pollSerial() {
             serialFlush();
             volatile int* p = nullptr;
             *p = 1;
-#endif
-#if CROWD_BENCH
-        } else if (strncasecmp(line, "CROWD", 5) == 0) {
-            CrowdBench::command(line + 5);
 #endif
         } else {
             Serial.printf("[clock] unknown command. TIME <epoch seconds> sets the clock, "

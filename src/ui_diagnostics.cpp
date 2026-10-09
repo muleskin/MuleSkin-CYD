@@ -177,37 +177,6 @@ void uiDiagnosticsTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, co
     y = drawLine(t, y, Theme::GREEN, "LOG:", "%u entries, %lu lifetime",
                  (unsigned)eng.logCount(), (unsigned long)eng.lifetimeTotal());
 
-#if MULESKIN_MESH
-    // Phase 0, read without a computer. The device alternates advertising on
-    // and off in 30s arms and pools each separately, so leaving it somewhere
-    // for ten minutes gives ten samples of each rather than one of a good
-    // moment and one of a bad one.
-    {
-        y += 4;
-        const MeshProbe::Stats ms = MeshProbe::stats();
-        y = drawLine(t, y, ms.advOn ? Theme::GREEN : Theme::CYAN, "BLE SEEN:", "%u.%u /s, %s%s",
-                     (unsigned)(ms.offRate / 10), (unsigned)(ms.offRate % 10),
-                     ms.advOn ? "advertising" : "not advertising",
-                     scanPassiveNow() ? ", passive" : ", active");
-        // The seatbelt's count: adverts refused because the largest free
-        // block was under 1.5 KB when they came in. A big number here with
-        // a small HEAP line is a board that is only alive because it is
-        // ignoring the radio.
-        if (advertsDropped())
-            y = drawLine(t, y, Theme::VAPOR_PINK, "DROPPED:", "%lu adverts, no heap for them",
-                         (unsigned long)advertsDropped());
-        // What the once-a-minute scan restart gave back: the leak it closes,
-        // measured. This row used to repeat the HEAP line at the top, which
-        // already carries free and largest block. Kilobytes a restart in a busy
-        // room and a flat heap up top means the leak was NimBLE holding on to
-        // devices that never answered; zeros here and a falling heap mean it
-        // was not, and the search goes on.
-        const ScanFlushStats fs = scanFlushStats();
-        y = drawLine(t, y, Theme::VAPOR_PINK, "FLUSHED:", "%lu KB total, %lu B last (x%lu)",
-                     (unsigned long)(fs.totalFreed / 1024), (unsigned long)fs.lastFreed,
-                     (unsigned long)fs.count);
-    }
-#endif
 
     int bx, by, bw, bh;
     backButtonRect(w, h, bx, by, bw, bh);

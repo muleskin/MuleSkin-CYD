@@ -29,10 +29,9 @@ THEME_SRC = os.path.join(HERE, "..", "src", "theme.cpp")
 
 SCREENS = [
     ("clear", []), ("clear", ["--noseed"]), ("log", []), ("alert", []), ("watchalert", []),
-    ("settings", []), ("settings", ["--scroll", "8"]), ("detfilter", []), ("power", []), ("light", []), ("security", []), ("ignorelist", []), ("nudge", []), ("squadupdate", []), ("invite", ["--pose", "1"]), ("invite", ["--pose", "2"]),
+    ("settings", []), ("settings", ["--scroll", "8"]), ("detfilter", []), ("power", []), ("light", []), ("security", []), ("ignorelist", []), ("nudge", []),
     ("diary", []), ("hunt", []), ("diagnostics", []), ("colorcheck", []),
-    ("boot", []), ("phone", []), ("phone", ["--qwerty"]), ("meshmenu", []), ("meshwarn", []),
-    ("phrase", []), ("compose", []), ("update", []), ("wifipass", []),
+    ("boot", []), ("pin", []), ("update", []), ("wifipass", []),
 ]
 FIELDS = ["bg", "taskbar", "purple", "cyan", "pink", "vaporPink", "vaporPurple",
           "vaporBlue", "vaporYellow", "green", "amber", "red"]

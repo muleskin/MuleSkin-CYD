@@ -301,156 +301,17 @@ namespace MuleSkin {
     // text must outlive the bubble -- a static buffer, not a stack one.
     void announce(const char* text);
 
+    // The pet answering him (pet.cpp): a line in his own bubble, held as long
+    // as it takes to read (returned, in ms), or a laugh -- a bounce.
+    uint32_t sayLine(const char* line);
+    void     laugh(uint32_t now);
+
     // The clock's lines, when it is set. Once a day the first time CLEAR is
     // up, a hello with the date in it; on the days that count (a week, a
     // month, a hundred days, a year...) how long it has been. nullptr when
     // there is nothing to say. main.cpp announces what comes back.
     const char* takeDayLine();
 
-
-#if MULESKIN_MESH
-    // Which beat of a visit a line is wanted for. The pools live in
-    // muleskin.cpp with every other pool rather than out with the visit
-    // logic -- dialogue belongs where the dialogue is.
-    enum class VisitMoment : uint8_t { MEET, HANGOUT, PART };
-
-    // Host's side of the conversation: picks a line and says it, exactly the
-    // way watchAlertReaction() and the hunt reactions do. Returns how long
-    // the bubble will be up, so the caller can put the next line on screen
-    // as this one comes down instead of guessing at a fixed beat.
-    uint32_t visitReaction(VisitMoment m);
-
-    // How long a line of visit dialogue should stay up, from its length.
-    // A fixed beat gives a three-word answer the same nine seconds as a
-    // sentence, and that dead air is what made two MuleSkins reading their
-    // lines out look like two MuleSkins waiting for a bus.
-    uint32_t lineMs(const char* line);
-
-    // True for as long as somebody is visiting. While it is set, his idle
-    // chatter and his thirty-second watching beat both stand down.
-    //
-    // They share ONE speech bubble with the visit dialogue and neither knew
-    // about the other, so an idle line landing mid-conversation overwrote it
-    // and the next visit beat overwrote back -- which is what flickering
-    // looks like. It is also just wrong: he should not be muttering about
-    // the airwaves while there is somebody standing next to him.
-    void setVisiting(bool v);
-    bool visiting();
-
-    // Set around tick() while other MuleSkins share the scene (a visit, a
-    // crowd). His size then ignores what he is wearing: no shrinking so a
-    // hat, a horn, the werewolf's ears or a parka's hood stays under the top
-    // edge. Everybody in the scene is sized alike, and a costume poking past
-    // the top is the better trade than one MuleSkin -- and so all of them --
-    // coming out smaller because of a hat.
-    void setCompany(bool on);
-
-    // True while the OTHER one is the one talking. It buys a slow nod, which
-    // is the difference between a MuleSkin standing near a conversation and a
-    // MuleSkin in one. Cleared with setVisiting(false)'s caller.
-    void setListening(bool v);
-
-    // The guest's side. Returns a line to hand drawWaving() rather than
-    // saying it, because the guest has no mood machine to say it with.
-    const char* visitGuestLine(VisitMoment m, uint32_t seed);
-
-    // Standing-around banter, as matched PAIRS. Independent picks on both
-    // sides produced two MuleSkins talking past each other -- each line was
-    // fine and none of them were answers. Same seed, same exchange, so the
-    // reply actually replies.
-    // What the banter can be about, filled by the CLEAR screen at the start
-    // of each exchange. Anything it does not know stays at zero and the
-    // lines that need it stay in the drawer.
-    struct VisitContext {
-        uint8_t  background;      // Settings::Background
-        uint8_t  caught;          // DetectionType of the last catch, or UNKNOWN
-        uint8_t  guestOutfit;     // 0 for none
-        uint8_t  hostOutfit;
-        char     guestName[13];
-        uint16_t met;             // times this visitor has been met, from the roster
-        uint8_t  squad;           // roster size
-        uint8_t  hits;            // detections in the log this boot
-        uint16_t upHours;
-    };
-    void setVisitContext(const VisitContext& c);
-
-    uint32_t    visitHangHost(uint32_t seed);      // host says it himself
-    const char* visitHangGuest(uint32_t seed);     // the matching reply
-
-    // The third beat: a short something the host tosses back after the
-    // guest's reply. Not every exchange has one -- nullptr means this pair
-    // ends on the reply -- and the ones that do are the ones that read as
-    // two people enjoying themselves rather than two people exchanging
-    // information.
-    const char* visitHangTopper(uint32_t seed);
-
-    // Say an arbitrary visit line in the host's bubble. Returns its ms.
-    uint32_t visitSay(const char* line);
-
-    // The host cracks up: a short, fast bounce, the same one the idle
-    // flourish uses. Called when the OTHER one's line lands, which is what
-    // makes it read as a reaction rather than as a tic.
-    void visitLaugh(uint32_t now);
-
-    // Set pieces for two MuleSkins. Each drives the HOST through his mood
-    // machine for a while; the guest's half is a VisitPose handed to
-    // drawWaving(), because the guest has no mood machine.
-    //
-    // One arm across toward the other MuleSkin, reaching right -- he stands
-    // on the left. UP is a high five, DOWN a low five, LEVEL a fist bump or a
-    // hand held out with a rock, paper or scissors over it.
-    enum class Reach : uint8_t { UP, DOWN, LEVEL };
-    void visitReach(uint32_t now, uint32_t ms, Reach level);
-    // A fist pumping, for rock-paper-scissors.
-    void visitPump(uint32_t now, uint32_t ms);
-    // When somebody last did anything to him -- a tap, a detection, a screen
-    // change. How his solo nap knows it has been left alone.
-    //
-    // There was a visit nap here too -- the two of them dozing off together
-    // mid-conversation -- with visitNap()/visitWake()/visitWakeLine() behind
-    // it. It was removed: a visitor is the one time there is banter to be had
-    // and sleeping through it was the opposite of the point. He still naps
-    // alone, on his own timer further down this file's implementation.
-    uint32_t lastInteractionAt();
-    // His turn in a dance-off: the DANCE mood, for `ms`.
-    void visitDance(uint32_t now, uint32_t ms);
-    // When his last detection reaction started (0 if none this boot): how
-    // a visit notices a scare it did not cause, and gives the guest his half.
-    uint32_t lastShockAt();
-    // Lines for the set pieces. The host says his; the guest's are handed back.
-    uint32_t    visitDanceCall(uint32_t seed);
-    const char* visitDanceReply(uint32_t seed);
-    const char* visitScareLine(uint32_t seed);
-    uint32_t    visitFriendHello(uint32_t seed);        // host, to a returning visitor
-    uint32_t    visitRpsCall(uint32_t seed);            // host
-    uint32_t    visitRpsResult(uint8_t outcome, uint32_t seed);   // 0 tie, 1 he won, 2 he lost
-    uint32_t    visitSnowCall(uint32_t seed);           // host
-    const char* visitSnowReply(uint32_t seed);          // guest
-
-    // A nickname by index. nickname() only ever reports our own, and a guest
-    // arrives carrying somebody else's -- both devices ship the same table,
-    // which is the whole reason four bits was enough to send it.
-    const char* nicknameAt(uint8_t idx);
-
-    // The typed name, if there is one. Twelve is a RENDERING budget, not a
-    // storage one: the name has to fit a nameplate under a MuleSkin drawn at
-    // SMALL, which is tighter than the settings row it lives in.
-    // NOT called NAME_MAX: that is a POSIX macro out of <limits.h>, so the
-    // declaration expanded to `static const uint8_t 255 = 12;` and every
-    // translation unit that included this header failed at once.
-    static const uint8_t CUSTOM_NAME_MAX = 12;
-
-    // nullptr or "" clears it and the curated nickname comes back. Anything
-    // else is stored and becomes what nickname() reports.
-    // The raw indices, for the advert. Both devices ship the same tables,
-    // which is the whole reason four bits was enough to send an outfit.
-    uint8_t nicknameIndex();
-    uint8_t outfitIndex();
-    uint8_t shadesIndex();
-
-    const char* customName();
-    void        setCustomName(const char* n);
-#endif
 
     // Draws MuleSkin and his speech bubble, and advances his idle
     // animation/quip timers. Call every tick from the CLEAR screen.
@@ -552,16 +413,6 @@ namespace MuleSkin {
                                      LAUGH, SALUTE, BOW, HUG, SAD, GRR, CROUCH, PULL,
                                      WIGGLE, CHEER, SELFIE, HOWL, POINT, STRAIN,
                                      COVER, LOOK_AROUND, HANDS_UP };
-#if MULESKIN_MESH
-    // The host's half of an emote's beat: any VisitPose, held for `ms`. The
-    // older ones go through the same moods visitReach() and friends use.
-    void visitPose(uint32_t now, uint32_t ms, VisitPose p);
-    // Restart the yawn-and-stretch clock, for a guest told to stretch -- his
-    // cameo has no clock of its own and borrows the host's.
-    void visitStretchClock(uint32_t now);
-    // What he caught last, or UNKNOWN: the "did you see that?" emote's subject.
-    DetectionType lastCaught();
-#endif
 
     void drawWaving(TFT_eSPI& t, int cx, int baseY, uint32_t now, float scale = 1.0f,
                     const char* line = nullptr, bool talking = false, int wanderRangePx = 0,

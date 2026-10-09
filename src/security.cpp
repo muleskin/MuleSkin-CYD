@@ -2,7 +2,7 @@
 #include "security.h"
 #include "ignore_list.h"
 #include <Preferences.h>
-#include <esp_system.h>   // esp_random(), as meshtalk.cpp uses it
+#include <esp_system.h>   // esp_random()
 #include <string.h>
 
 namespace {

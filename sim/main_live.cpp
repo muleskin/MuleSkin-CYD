@@ -18,12 +18,9 @@
 //               type name for that type's first profile ("T AIRTAG")
 //   Y           every profile: one "DETS <json>" line on stdout
 //   R           report current AppState on stderr
-//   P <cmd>     the virtual MuleSkinMesh peer -- see meshsim.h for <cmd>.
-//               (P for peer: M was already touch-move.)
-//   K           the peer's pickers: one "CAT <json>" line on stdout
 //   Q           quit
 //
-// Each emitted frame is:  "FRM <w> <h> <bytes> <state> <mesh>\n" followed by
+// Each emitted frame is:  "FRM <w> <h> <bytes> <state>\n" followed by
 // <bytes> of RGB888, row-major. The state rides along in the header
 // rather than being asked for separately, so a caller never has to
 // correlate a stdout frame with a stderr reply -- they'd race, and the
@@ -40,7 +37,6 @@
 #include "detection.h"
 #include "sim_touch.h"
 #include "sim_detections.h"
-#include "meshsim.h"
 
 // Defined by the firmware's main.cpp, which this target compiles.
 void setup();
@@ -105,17 +101,12 @@ static const char* stateName(AppState s) {
         case AppState::HUNT: return "HUNT";
         case AppState::COLOR_CHECK: return "COLOR_CHECK";
         case AppState::DETECTION_FILTER: return "DETECTION_FILTER";
-        case AppState::MESH_MENU: return "MESH_MENU";
-        case AppState::MESH_WARN: return "MESH_WARN";
         case AppState::BEACON_WARN: return "BEACON_WARN";
         case AppState::SECURITY: return "SECURITY";
         case AppState::LOCKED: return "LOCKED";
         case AppState::PIN_ENTRY: return "PIN_ENTRY";
-        case AppState::SQUAD: return "SQUAD";
         case AppState::UPDATE: return "UPDATE";
         case AppState::WIFI_PASS: return "WIFI_PASS";
-        case AppState::MESH_PHRASE: return "MESH_PHRASE";
-        case AppState::MESH_COMPOSE: return "MESH_COMPOSE";
         default: return "?";
     }
 }
@@ -136,9 +127,7 @@ static void emitFrame() {
         rgb.push_back((uint8_t)((g << 2) | (g >> 4)));
         rgb.push_back((uint8_t)((b << 3) | (b >> 2)));
     }
-    // The virtual peer's status rides on the header for the same reason the
-    // state does, and last, because it is the one field with spaces in it.
-    printf("FRM %d %d %zu %s %s\n", w, h, rgb.size(), stateName(state), MeshSim::status());
+    printf("FRM %d %d %zu %s\n", w, h, rgb.size(), stateName(state));
     fwrite(rgb.data(), 1, rgb.size(), stdout);
     fflush(stdout);
 }
@@ -208,12 +197,6 @@ int main() {
             } else {
                 fprintf(stderr, "[detect] unknown profile: %s\n", arg);
             }
-        } else if (cmd == 'P') {
-            MeshSim::command(line + 1);
-        } else if (cmd == 'K') {
-            // Answered at once on stdout, so a caller reads it like a header.
-            printf("CAT %s\n", MeshSim::catalog());
-            fflush(stdout);
         } else if (cmd == 'Y') {
             printf("DETS %s\n", simProfileCatalog());
             fflush(stdout);

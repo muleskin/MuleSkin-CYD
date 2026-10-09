@@ -4,9 +4,9 @@
 // (Arduino core 2.0.14 / IDF 4.4), which carries mbedtls 2.x. The ESP32-C5
 // cannot: it needs Arduino core 3.3+ (IDF 5.5), which carries mbedtls 3.6.
 // So two mbedtls major versions are in the project at once, and the handful of
-// API changes between them land in the two files that must not be got wrong --
-// meshcrypto.cpp (MuleSkinMesh message encryption) and ota_core.cpp (the
-// signature check that decides whether a firmware image is ours).
+// API changes between them land in the file that must not be got wrong --
+// ota_core.cpp, the signature check that decides whether a firmware image is
+// ours.
 //
 // NONE OF THESE SUBSTITUTIONS CHANGE THE CRYPTOGRAPHY. Each is a rename or an
 // access-control change upstream made, not a different algorithm, curve, hash

@@ -197,7 +197,6 @@ const char* runningSlot() {
 }
 const char* runningVersion() { return FIRMWARE_VERSION; }
 static char     s_avail[16]  = "";
-static char     s_availFrom[13] = "";
 static bool     s_availSaid = true;
 // The release's own words, from the manifest. Sized for the window that
 // shows them: thirty-six characters is what the NOTES tab fits in portrait,
@@ -209,7 +208,7 @@ static uint8_t  s_newsN = 0;
 // Releases compare through Version::newer() (version_cmp.cpp, tested on the desktop).
 static bool verNewer(const char* a, const char* b) { return Version::newer(a, b); }
 
-void noteAvailable(const char* version, const char* who) {
+void noteAvailable(const char* version) {
     if (!verNewer(version, runningVersion())) return;
     if (s_avail[0] && !verNewer(version, s_avail)) return;   // already know one as new
     if (*version == 'v' || *version == 'V') version++;
@@ -217,9 +216,8 @@ void noteAvailable(const char* version, const char* who) {
     // rather than show one release's notes under another's number.
     if (strcmp(s_avail, version) != 0) { s_relName[0] = '\0'; s_newsN = 0; }
     snprintf(s_avail, sizeof s_avail, "%s", version);
-    snprintf(s_availFrom, sizeof s_availFrom, "%s", who ? who : "");
     s_availSaid = false;
-    Serial.printf("[ota] newer release known: %s%s%s\n", s_avail, s_availFrom[0] ? " via " : "", s_availFrom);
+    Serial.printf("[ota] newer release known: %s\n", s_avail);
 }
 const char* availableVersion() { return s_avail; }
 void noteRelease(const char* name, const char* const* lines, uint8_t n) {
@@ -230,7 +228,6 @@ void noteRelease(const char* name, const char* const* lines, uint8_t n) {
 const char* releaseName() { return s_relName; }
 uint8_t     newsCount()   { return s_newsN; }
 const char* newsAt(uint8_t i) { return i < s_newsN ? s_news[i] : ""; }
-const char* availableFrom()    { return s_availFrom; }
 bool takeAvailableNotice() {
     if (s_availSaid || !s_avail[0]) return false;
     s_availSaid = true;

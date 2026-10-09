@@ -27,7 +27,7 @@ ifneq ($(findstring mingw,$(shell $(CXX) -dumpmachine)),)
 CXXFLAGS += -include $(SIM)/win_compat.h
 endif
 
-TESTS := remote_id_test ibeacon_test signatures_test emitter_roundtrip_test ignore_list_test hacker_test pwnagotchi_test shim_fidelity_test muleskinmesh_test qwerty_test meshmsg_test device_info_test security_test emote_script_test blackbox_test bingo_test hunt_test bgretire_test autoquiet_test framepush_test touchfit_test logindex_test dex_test regulars_test spam_test gnss_test wigle_test wardrive_test lora_survey_test lora_msgs_test lora_json_test lora_feed_test lora_airtime_test lora_ident_test lora_enrich_test lora_channels_test lora_nodes_test lora_crypto_test lora_meshtastic_test lora_meshcore_test lora_lorawan_test lora_ham_test version_test auto_time_test radar_blip_test night_mode_test tracker_follow_test today_test sig_extra_test
+TESTS := remote_id_test ibeacon_test signatures_test emitter_roundtrip_test ignore_list_test hacker_test pwnagotchi_test shim_fidelity_test qwerty_test device_info_test security_test blackbox_test bingo_test hunt_test bgretire_test autoquiet_test framepush_test touchfit_test logindex_test dex_test regulars_test spam_test gnss_test wigle_test wardrive_test lora_survey_test lora_msgs_test lora_json_test lora_feed_test lora_airtime_test lora_ident_test lora_enrich_test lora_channels_test lora_nodes_test lora_crypto_test lora_meshtastic_test lora_meshcore_test lora_lorawan_test lora_ham_test version_test auto_time_test radar_blip_test night_mode_test tracker_follow_test today_test sig_extra_test
 
 # Only the units under test get linked in. Pulling the whole firmware
 # would drag in TFT_eSPI, NimBLE and the UI, and a test that needs a
@@ -39,18 +39,7 @@ emitter_roundtrip_test_SRCS  := $(SRC)/remote_id.cpp
 ignore_list_test_SRCS        := $(SRC)/ignore_list.cpp
 hacker_test_SRCS             := $(SRC)/signatures.cpp
 pwnagotchi_test_SRCS         := $(SRC)/signatures.cpp
-muleskinmesh_test_SRCS         := $(SRC)/muleskinmesh.cpp
-# The codec is #if MULESKIN_MESH so it stays out of every shipping board.
-# The test is the one place that wants it compiled regardless of build env.
-muleskinmesh_test_FLAGS        := -DMULESKIN_MESH=1
 qwerty_test_SRCS             := $(SRC)/qwerty.cpp
-qwerty_test_FLAGS            := -DMULESKIN_MESH=1
-# The protocol without the cipher -- see the top of meshmsg_test.cpp.
-meshmsg_test_SRCS            := $(SRC)/meshmsg.cpp $(SRC)/meshwords.cpp
-meshmsg_test_FLAGS           := -DMULESKIN_MESH=1
-# The emote scripts' tables and the setup byte's arithmetic.
-emote_script_test_SRCS       := $(SRC)/emote_script.cpp
-emote_script_test_FLAGS      := -DMULESKIN_MESH=1
 # The pages against the signature tables and the emulator's profiles.
 device_info_test_SRCS        := $(SRC)/device_info.cpp $(SRC)/signatures.cpp
 # The lock's arithmetic, through the sim's Preferences shim.
@@ -68,7 +57,6 @@ regulars_test_SRCS           := $(SRC)/regulars.cpp
 # The card: winnable, and it keeps what it earned. The clock is stubbed in
 # the test; the engine comes along for its lifetime counts.
 bingo_test_SRCS              := $(SRC)/bingo.cpp $(SIM)/detection_sim.cpp $(SRC)/remote_id.cpp
-bingo_test_FLAGS             := -DMULESKIN_MESH=1
 # An unfinished egg hunt, through the settings store. Theme and Clock are
 # stubbed in the test; settings.cpp only calls a handful of each.
 autoquiet_test_SRCS       := $(SIM)/detection_sim.cpp $(SRC)/remote_id.cpp
@@ -170,47 +158,5 @@ $(foreach t,$(TESTS),$(eval $(call TEST_rule,$(t))))
 
 clean:
 	@rm -rf $(OUT)
-
-# ---- the real cipher, opt-in ------------------------------------------------
-# meshcrypto.cpp against the host's own mbedtls. NOT in TESTS above and not run
-# by plain `make`, because it needs libmbedtls-dev and CI does not have it. A
-# test that quietly skipped itself when the header was missing would report
-# green for a check that never ran, which is worse than not having it.
-#
-#   sudo apt-get install libmbedtls-dev
-#   make -C test crypto
-#
-# It is meaningful only for the mbedtls 3 path -- which is exactly the one the
-# ESP32-C5 environment introduced and which no other test compiles. See the
-# header comment in meshcrypto_test.cpp.
-CRYPTO_SRCS := meshcrypto_test.cpp $(SRC)/meshcrypto.cpp $(SRC)/meshmsg.cpp $(SRC)/meshwords.cpp
-CRYPTO_OBJS := $(addprefix $(OUT)/crypto/,$(notdir $(CRYPTO_SRCS:.cpp=.o)))
-
-crypto: $(OUT)/meshcrypto_test
-	@$(OUT)/meshcrypto_test
-
-# Each source gets its OWN object and its own .d, which is the only way the
-# header dependencies are correct. Compiling all four in one g++ call writes a
-# single .d that every translation unit overwrites in turn, so it ends up
-# listing the last file's headers and nothing else -- meshmsg_vectors.h and
-# mbedtls_compat.h were both invisible that way, and both mutation tests of
-# this suite passed against a stale binary until it was split up.
-#
-# The TEST_rule above has the same gap (it lists only .cpp prerequisites), so
-# editing a header and re-running `make` re-runs the previous build there too.
-# Not changed here: that would alter how every other test builds.
-$(OUT)/crypto:
-	@mkdir -p $(OUT)/crypto
-
-$(OUT)/crypto/%.o: %.cpp | $(OUT)/crypto
-	$(CXX) $(CXXFLAGS) -MMD -MP -DMULESKIN_MESH=1 -c -o $@ $<
-
-$(OUT)/crypto/%.o: $(SRC)/%.cpp | $(OUT)/crypto
-	$(CXX) $(CXXFLAGS) -MMD -MP -DMULESKIN_MESH=1 -c -o $@ $<
-
-$(OUT)/meshcrypto_test: $(CRYPTO_OBJS)
-	$(CXX) -o $@ $^ -lmbedcrypto
-
--include $(CRYPTO_OBJS:.o=.d)
 
 .PHONY: crypto

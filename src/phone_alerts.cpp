@@ -21,6 +21,9 @@ const char* INFO_UUID  = "9d1f0103-2a4b-4c8e-9b1e-5357574f5441";   // read: env=
 volatile bool     s_connected  = false;
 volatile uint16_t s_connHandle = 0xFFFF;
 
+volatile bool     s_paused     = false;
+bool              s_advOn      = false;
+
 NimBLEServer*         s_server = nullptr;
 NimBLECharacteristic* s_alert  = nullptr;
 char                  s_name[16] = "MuleSkin";
@@ -75,8 +78,7 @@ bool registerService() {
     NimBLEDevice::setMTU(185);
     s_server = NimBLEDevice::createServer();
     s_server->setCallbacks(&s_serverCb, false);
-    // The mesh advert comes back on its own (wantConnectable()); the
-    // library's own re-advertising would replace it with an empty one.
+    // tick() puts the advert back after a disconnect, in its own time.
     s_server->advertiseOnDisconnect(false);
     NimBLEService* svc = s_server->createService(SVC_UUID);
     s_alert = svc->createCharacteristic(ALERT_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY, 120);
@@ -104,6 +106,37 @@ bool registerService() {
     snprintf(s_name, sizeof s_name, "MuleSkin-%02X%02X", m[1], m[0]);
     Serial.printf("[phone] service registered as %s, heap %lu\n", s_name, (unsigned long)ESP.getFreeHeap());
     return true;
+}
+
+void pauseRadio(bool paused) {
+    s_paused = paused;
+    if (paused && s_advOn) { NimBLEDevice::getAdvertising()->stop(); s_advOn = false; }
+}
+
+void tick(uint32_t) {
+    const bool want = wantConnectable() && !s_paused;
+    if (want == s_advOn) return;
+    NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+    if (!adv) return;
+    s_advOn = want;
+    // A phone connecting ends a connectable advert in the controller, so
+    // "stop" here is often a no-op; it is what makes s_advOn true again.
+    if (!want) { adv->stop(); return; }
+    NimBLEAdvertisementData d;
+    d.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
+    d.setCompleteServices(NimBLEUUID(SVC_UUID));
+    adv->setAdvertisementData(d);
+    NimBLEAdvertisementData r;
+    r.setName(s_name);
+    adv->setScanResponseData(r);
+    adv->enableScanResponse(true);
+    adv->setConnectableMode(BLE_GAP_CONN_MODE_UND);
+    adv->setDiscoverableMode(BLE_GAP_DISC_MODE_GEN);
+    // Every half second: shared with the scan and the WiFi sniffer, a slower
+    // advert was easy for a phone to miss (1.5 s: one scan in three, bench).
+    adv->setMinInterval(800);
+    adv->setMaxInterval(816);
+    adv->start();
 }
 
 void setEnabled(bool on) {
@@ -151,6 +184,8 @@ void setEnabled(bool)   {}
 bool connected()        { return false; }
 bool wantConnectable()  { return false; }
 const char* name()      { return ""; }
+void tick(uint32_t)     {}
+void pauseRadio(bool)   {}
 void alert(const Detection&, uint16_t) {}
 void note(const char*)  {}
 }

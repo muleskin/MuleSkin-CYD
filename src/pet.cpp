@@ -265,9 +265,9 @@ static void yetiTick(TFT_eSPI& t, uint32_t now, int screenW, int cx, int halfW, 
         s_yAnswered = true;
         const uint8_t roll = (uint8_t)random(0, 100);
         if (roll < 30) {
-            MuleSkin::visitLaugh(now);
+            MuleSkin::laugh(now);
         } else {
-            MuleSkin::visitSay(s_yNap ? NAP_REPLY[random(0, 3)]
+            MuleSkin::sayLine(s_yNap ? NAP_REPLY[random(0, 3)]
                                      : YETI_REPLY[random(0, YETI_REPLY_N)]);
             // And it makes him jump. Not at you -- at the small one who
             // just started talking next to him.

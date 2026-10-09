@@ -1,5 +1,4 @@
-// MuleSkin-CYD — the SQUAD UPDATE prompt. See ui_nudge.h.
-#if MULESKIN_MESH
+// MuleSkin-CYD — the AUTO UPDATE countdown. See ui_nudge.h.
 #include "ui_nudge.h"
 #include "theme.h"
 #include "settings.h"
@@ -12,7 +11,6 @@ namespace {
 const int BTN_H = 28;
 const int SLOP  = 6;
 
-char     s_from[13] = "";
 char     s_ver[16]  = "";
 uint32_t s_until    = 0;
 
@@ -39,11 +37,7 @@ void centred(TFT_eSPI& t, int y, uint16_t c, const char* s) {
 }
 } // namespace
 
-// from == nullptr: AUTO UPDATE's countdown (main.cpp), not a squad member's.
-static bool s_isAuto = false;
-void uiNudgeInit(TFT_eSPI& t, const char* from, const uint8_t ver[3], uint16_t seconds, uint32_t now) {
-    s_isAuto = (from == nullptr);
-    snprintf(s_from, sizeof s_from, "%s", from && from[0] ? from : "SOMEONE");
+void uiNudgeInit(TFT_eSPI& t, const uint8_t ver[3], uint16_t seconds, uint32_t now) {
     snprintf(s_ver, sizeof s_ver, "v%u.%u.%u", ver[0], ver[1], ver[2]);
     s_until = now + (uint32_t)seconds * 1000u;
     t.fillRect(0, 0, t.width(), t.height(), Theme::BG);
@@ -58,13 +52,12 @@ void uiNudgeTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
     (void)eng;
     const int w = t.width(), h = t.height();
     t.fillRect(0, 0, w, h, Theme::BG);
-    Theme::drawListHeading(t, s_isAuto ? "AUTO UPDATE" : "SQUAD UPDATE", Theme::VAPOR_PINK);
+    Theme::drawListHeading(t, "AUTO UPDATE", Theme::VAPOR_PINK);
 
     t.setTextSize(1);
     int y = Theme::LIST_TOP + Theme::LIST_HEADING_H + 10;
     char line[48];
-    if (s_isAuto) snprintf(line, sizeof line, "A newer release is ready: updating");
-    else          snprintf(line, sizeof line, "%s asked the squad to update", s_from);
+    snprintf(line, sizeof line, "A newer release is ready: updating");
     centred(t, y, Theme::WHITE, line);
     y += 12;
     snprintf(line, sizeof line, "to %s. This board runs %s.", s_ver, OtaCore::runningVersion());
@@ -93,4 +86,3 @@ NudgeHit uiNudgeHit(TFT_eSPI& t, int x, int y) {
     if (in(x, y, b.skipX, b.y, b.w, BTN_H)) return NudgeHit::SKIP;
     return NudgeHit::NONE;
 }
-#endif // MULESKIN_MESH

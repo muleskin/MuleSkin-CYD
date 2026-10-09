@@ -583,7 +583,6 @@ uint8_t    netCount() { return s_netN; }
 const Net* net(uint8_t i) { return i < s_netN ? &s_nets[i] : nullptr; }
 
 bool hasSaved() { readSaved(); return s_n > 0; }
-bool savedPassAt(uint8_t i, char* out, size_t cap) { readSaved(); return i < s_n && passAt(i, out, cap); }
 
 void forget() {
     Preferences p;
@@ -932,7 +931,7 @@ bool bootCheck(uint32_t budgetMs) {
                 char latest[16];
                 if (parseVersion((const char*)body, latest, sizeof latest)) {
                     Serial.printf("[ota] boot check: site has %s, running %s\n", latest, FIRMWARE_VERSION);
-                    OtaCore::noteAvailable(latest, "");
+                    OtaCore::noteAvailable(latest);
                     // Only once it is known to be newer: noteAvailable drops
                     // anything that is not, and notes without an update are
                     // notes about the version already running.
@@ -1054,7 +1053,7 @@ void tsRun(void*) {
                 body[len] = '\0';
                 char latest[16];
                 if (parseVersion((const char*)body, latest, sizeof latest)) {
-                    OtaCore::noteAvailable(latest, "");
+                    OtaCore::noteAvailable(latest);
                     if (OtaCore::availableVersion()[0]) parseRelease((const char*)body);
                     Serial.printf("[time] release check: site has v%s\n", latest);
                 }

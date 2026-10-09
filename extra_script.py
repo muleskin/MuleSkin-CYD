@@ -8,9 +8,9 @@ import subprocess
 
 
 def get_version():
-    # A bench override: SQW_VERSION=9.9.9 makes a build claim a version, so a
-    # squad update nudge from it counts as newer on a board built from the
-    # same tree. Never set in a release build.
+    # A bench override: SQW_VERSION=9.9.9 makes a build claim a version, for
+    # testing what a board does about one newer than itself. Never set in a
+    # release build.
     forced = os.environ.get("SQW_VERSION", "").strip()
     if forced:
         return forced

@@ -31,22 +31,13 @@
 #include "ui_settings.h"
 #include "ui_diary.h"
 #include "ui_hunt.h"
-#include "muleskinmesh.h"
 #include "ui_phone.h"
-#include "qwerty.h"
-#include "ui_meshmenu.h"
 #include "ui_bingo.h"
 #include "ui_dex.h"
 #include "dex.h"
 #include "regulars.h"
 #include "bingo.h"
 #include "blackbox.h"
-#include "ui_meshwarn.h"
-#include "ui_meshphrase.h"
-#include "ui_meshcompose.h"
-#include "meshtalk.h"
-#include "meshmsg.h"
-#include "meshcrypto.h"
 #include "ui_watchalert.h"
 #include "ignore_list.h"
 #include "ui_colorcheck.h"
@@ -60,9 +51,6 @@
 #include "ui_ignorelist.h"
 #include "ui_light.h"
 #include "ui_nudge.h"
-#include "ui_squadupdate.h"
-#include "ui_squad.h"
-#include "ui_invite.h"
 #include "ui_meeting.h"
 #include "ui_timesync.h"
 #include "ui_today.h"
@@ -276,29 +264,20 @@ static int renderTouchCal(TFT_eSPI& tft, int W, int H, int skip, int want,
 static void usage() {
     fprintf(stderr,
         "usage: muleskinsim <screen> [out.png] [options]\n"
-        "  screens: clear log alert settings detfilter power diary hunt watchalert colorcheck boot phone meshmenu meshwarn bingo dex touchcal icons\n"
+        "  screens: clear log alert settings detfilter power diary hunt watchalert colorcheck boot pin bingo dex touchcal icons\n"
         "  dex               --pose N opens entry N\'s card (1-17); 0 is the index\n"
         "  touchcal          the touch calibration, played by a scripted finger:\n"
         "                    --frames skips that many 66 ms frames, --sequence films\n"
         "  --portrait        render 240x320 instead of 320x240\n"
         "  --size WxH        render at another panel size, e.g. 480x320 for the 3.5in\n"
-        "  --qwerty          phone screen: the QWERTY board, not the keypad\n"
-        "  --msgs            messages on, with a phrase set\n"
-        "  --inbox N         ...and canned line N just arrived from the visitor\n"
-        "  --inboxtext TEXT  ...or this typed message did (A-Z 0-9 .,?!'-, up to 48)\n"
-        "  --phrase-mode N   phrase screen: 0 show, 1 rolled, 2 picking a word, 3 picking a letter\n"
         "  --bg N            background style 0..9 (see Settings::Background)\n"
         "  --theme N         palette index\n"
         "  --alert N         DetectionType the ALERT screen fires on\n"
         "  --first / --night / --lastfree   the ALERT card's banners\n"
         "  --noseed          no detections at all -- CLEAR's idle state\n"
         "  --pet N           companion: 0 off, 1 VAPOR SHAGGY, 2 the yeti\n"
-        "  --peer N          draw a visiting MuleSkinMesh peer in outfit N\n"
-        "  --peername NAME   give that visitor a custom name\n"
-        "  --crowd N         clear screen: N squad members in range, roaming with ours\n"
         "  --tab N           sysprops screen: 0 update, 1 notes, 2 board\n"
         "  --beacons         turn IBEACON on, which gives it a counter column\n"
-        "  --from NAME       sysprops screen: heard from that squad member, not the site\n"
         "  --frames N        animation warm-up frames before capture (default 90)\n"
         "  --onboard         let MuleSkin's first-boot walkthrough run\n"
         "  --sequence N      capture N consecutive frames instead of one\n"
@@ -312,11 +291,7 @@ int main(int argc, char** argv) {
     std::string screen  = argv[1];
     std::string outPath = (argc > 2 && argv[2][0] != '-') ? argv[2] : "muleskinsim.png";
 
-    bool portrait = false, onboard = false, showoff = false, qwerty = false;
-    // Messages: --msgs switches them on with a phrase set; --inbox N also
-    // delivers canned line N from the visitor, through the real receive path.
-    bool msgs = false;
-    int inboxLine = -1, phraseMode = -1;
+    bool portrait = false, onboard = false, showoff = false;
     std::string sizeArg;   // --size WxH: render at another panel size
     int confirmRow = -1;   // settings screen: put a confirm panel up
     int scrollBy = 0;      // settings screen: scroll down N rows first
@@ -343,20 +318,9 @@ int main(int argc, char** argv) {
     // and with detections always seeded the emulator could not render
     // the idle one at all. Same gap --alert filled from the other side.
     bool noSeed = false;
-    // SPIKE: --peer N draws a visiting MuleSkin in outfit N beside our own,
-    // both at SMALL. No radio involved -- the point is to find out whether
-    // two of him fit and whether the renderer survives being called twice.
-    int peerOutfit = -1;
-    // A custom name for the visitor, so the nameplate under his feet shows
-    // the thing custom names exist for: a name that travelled here from
-    // somebody else's device.
-    std::string peerName;
-    int crowdN = 0;
     int tabIdx = 0;
     bool beacons = false;
-    std::string heardFrom;
-    std::string inboxText;
-    // --type feeds the payphone a tap sequence: digits are key presses,
+    // --type feeds the PIN pad a tap sequence: digits are key presses,
     // "." waits past the multi-tap window. Typing is the feature; a screen
     // that only renders proves nothing about it.
     std::string typeSeq;
@@ -364,10 +328,6 @@ int main(int argc, char** argv) {
     for (int i = 2; i < argc; i++) {
         std::string a = argv[i];
         if (a == "--portrait") portrait = true;
-        else if (a == "--qwerty") qwerty = true;
-        else if (a == "--msgs") msgs = true;
-        else if (a == "--inbox" && i + 1 < argc) inboxLine = atoi(argv[++i]);
-        else if (a == "--phrase-mode" && i + 1 < argc) phraseMode = atoi(argv[++i]);
         else if (a == "--onboard") onboard = true;
         else if (a == "--bg" && i + 1 < argc) bg = atoi(argv[++i]);
         else if (a == "--theme" && i + 1 < argc) themeIdx = atoi(argv[++i]);
@@ -385,13 +345,8 @@ int main(int argc, char** argv) {
         else if (a == "--night") alertNight = true;
         else if (a == "--lastfree") alertLastFree = true;
         else if (a == "--noseed") noSeed = true;
-        else if (a == "--peer" && i + 1 < argc) peerOutfit = atoi(argv[++i]);
-        else if (a == "--peername" && i + 1 < argc) peerName = argv[++i];
-        else if (a == "--crowd" && i + 1 < argc) crowdN = atoi(argv[++i]);
         else if (a == "--tab" && i + 1 < argc) tabIdx = atoi(argv[++i]);
         else if (a == "--beacons") beacons = true;
-        else if (a == "--from" && i + 1 < argc) heardFrom = argv[++i];
-        else if (a == "--inboxtext" && i + 1 < argc) inboxText = argv[++i];
         else if (a == "--type" && i + 1 < argc) typeSeq = argv[++i];
         else if (a == "--scroll" && i + 1 < argc) scrollBy = atoi(argv[++i]);
         else if (a == "--tap" && i + 1 < argc && tapN < 6) {
@@ -476,71 +431,6 @@ int main(int argc, char** argv) {
         for (int k = 0; k < 8 && (int)MuleSkin::petChoice() != petIdx; k++) MuleSkin::cyclePet();
     }
 
-    MuleSkinMesh::Peer guest{};
-    if (peerOutfit >= 0) {
-        guest.nick = 4; guest.outfit = (uint8_t)peerOutfit; guest.shade = 1;
-        guest.custom = !peerName.empty();
-        snprintf(guest.name, sizeof(guest.name), "%s", peerName.c_str());
-        uiClearSetGuest(&guest);
-    }
-
-    // Messages go through the real runtime and the real receive path; only
-    // the cipher is a stand-in (sim/meshcrypto_sim.cpp). Set, not toggled,
-    // because the NVS shim may remember a previous run.
-    MeshTalk::begin();
-    {
-        const bool want = msgs || inboxLine >= 0 || !inboxText.empty();
-        if (Settings::messagesOn() != want) Settings::toggleMessages();
-        if (want) MeshTalk::setPhrase("GIBSON MOTHMAN PHREAK NESSIE ZEROCOOL");
-    }
-    if (inboxLine >= 0) {
-        const uint8_t from[6] = { 0x24, 0x0A, 0xC4, 0xBF, 0x00, 0x7E };
-        uint8_t f[MeshMsg::CANNED_FRAME_LEN];
-        const size_t n = MeshMsg::sealCanned(MeshCrypto::impl(), from, 1,
-                                             (uint8_t)inboxLine, f, sizeof f);
-        MeshTalk::onFrame(from, f, n, peerName.empty() ? "BIGFOOT" : peerName.c_str());
-        MeshTalk::tick(millis());
-    }
-    if (!inboxText.empty()) {
-        // Every part, through the same receive path a board's scan feeds.
-        const uint8_t from[6] = { 0x24, 0x0A, 0xC4, 0xBF, 0x00, 0x7E };
-        const uint8_t total = MeshMsg::textParts(inboxText.c_str());
-        if (!total) fprintf(stderr, "--inboxtext: not a message\n");
-        for (uint8_t p = 0; p < total; p++) {
-            uint8_t f[MeshMsg::TEXT_FRAME_LEN];
-            const size_t n = MeshMsg::sealTextPart(MeshCrypto::impl(), from, 10 + p,
-                                                   inboxText.c_str(), p, total, f, sizeof f);
-            MeshTalk::onFrame(from, f, n, peerName.empty() ? "BIGFOOT" : peerName.c_str());
-        }
-        MeshTalk::tick(millis());
-    }
-
-    if (crowdN > 0) {
-        // The same seeding the roster uses: an advert so Mesh knows the look,
-        // a HELLO so the board counts them as squad, all heard just now so
-        // every one of them is in range. CROWD is raised until they all fit.
-        if (!Settings::meshDetect()) Settings::cycleMeshDetect();
-        if (!Settings::messagesOn()) Settings::toggleMessages();
-        MeshTalk::setPhrase("GIBSON MOTHMAN PHREAK NESSIE ZEROCOOL");
-        for (int g = 0; g < 10 && (Settings::meshCrowd() < crowdN + 1); g++) Settings::cycleMeshCrowd();
-        static const char* const NAMES[7] = { "BIGFOOT", nullptr, "YETI", "MOTHMAN", nullptr, "NESSIE", "WENDIGO" };
-        uint32_t ctr = 100;
-        for (int k = 0; k < crowdN && k < 7; k++) {
-            const uint8_t mac[6] = { 0x24, 0x0A, 0xC4, (uint8_t)(k + 1), 0x00, (uint8_t)(k + 1) };
-            MuleSkinMesh::Peer p{};
-            p.nick = (uint8_t)(3 + k * 2); p.outfit = (uint8_t)((k * 5 + 1) % MuleSkin::outfitCount()); p.shade = (uint8_t)(k % 4);
-            if (NAMES[k]) { p.custom = true; snprintf(p.name, sizeof p.name, "%s", NAMES[k]); }
-            uint8_t ad[MuleSkinMesh::LEN_MAX + 2] = { (uint8_t)(MuleSkinMesh::COMPANY_ID & 0xFF), (uint8_t)(MuleSkinMesh::COMPANY_ID >> 8) };
-            const size_t an = MuleSkinMesh::encode(p, ad + 2);
-            Mesh::onManufacturerData(ad, an + 2, mac, millis());
-            uint8_t f[MeshMsg::FRAME_MAX];
-            const uint8_t hv[3] = { 1, 7, 9 };
-            const size_t n = MeshMsg::sealHello(MeshCrypto::impl(), mac, ctr++, hv, f, sizeof f);
-            MeshTalk::onFrame(mac, f, n, NAMES[k] ? NAMES[k] : "");
-        }
-        MeshTalk::tick(millis());
-    }
-
     // MULESKINSIM_LEGEND=1: the Legend look, aura and all, without the catches.
     if (getenv("MULESKINSIM_LEGEND")) MuleSkin::previewLegend(true);
     // MULESKINSIM_PRIVACY=1: PRIVACY MODE on, for shots of the masked screens.
@@ -591,7 +481,7 @@ int main(int argc, char** argv) {
 
     auto tick = [&](uint32_t t) {
         SimClock::nowMs = t;
-        if      (screen == "clear")    { uiClearEmoteTick(t); uiClearTick(frame, t, engine, true); }
+        if      (screen == "clear")    uiClearTick(frame, t, engine, true);
         else if (screen == "log") {
             const bool info = (infoType >= 0);
             const DetectionType it = info ? (DetectionType)infoType : DetectionType::UNKNOWN;
@@ -610,14 +500,9 @@ int main(int argc, char** argv) {
         else if (screen == "diary")    uiDiaryTick(frame, t, engine);
         else if (screen == "zonecard") { uiClearTick(frame, t, engine, true); uiZoneCardDraw(frame, t); }
         else if (screen == "hunt")     uiHuntTick(frame, t, engine);
-        else if (screen == "phone")    uiPhoneTick(frame, t, engine);
+        else if (screen == "pin")      uiPhoneTick(frame, t, engine);
         else if (screen == "bingo")    uiBingoTick(frame, t, engine);
         else if (screen == "dex")      uiDexTick(frame, t, engine);
-        else if (screen == "meshmenu") uiMeshMenuTick(frame, t, engine);
-        else if (screen == "roster")   uiSquadTick(frame, t, engine);
-        else if (screen == "meshwarn") uiMeshWarnTick(frame, t, engine);
-        else if (screen == "phrase")   uiMeshPhraseTick(frame, t, engine);
-        else if (screen == "compose")  uiMeshComposeTick(frame, t, engine);
         else if (screen == "watchalert") uiWatchAlertTick(frame, t, engine, true);
         else if (screen == "colorcheck") uiColorCheckTick(frame, t);
         else if (screen == "icons") {
@@ -681,8 +566,6 @@ int main(int argc, char** argv) {
         else if (screen == "boot")     uiBootTick(frame, t);
         else if (screen == "update")   uiUpdateTick(frame, t);
         else if (screen == "nudge")    uiNudgeTick(frame, t, engine);
-        else if (screen == "squadupdate") uiSquadUpdateTick(frame, t, engine);
-        else if (screen == "invite")   uiInviteTick(frame, t, engine);
         else if (screen == "meeting")  uiMeetingTick(frame, t);
         else if (screen == "timesync") uiTimeSyncTick(frame, t);
         else if (screen == "today")    uiTodayTick(frame, t);
@@ -795,10 +678,7 @@ int main(int argc, char** argv) {
     else if (screen == "icons")      {}
     else if (screen == "boot")       uiBootInit(frame);
     else if (screen == "update")     uiUpdateInit(frame);
-    else if (screen == "nudge")      { const uint8_t v[3] = { 1, 7, 6 };
-                                       // MULESKINSIM_AUTOUPDATE=1: the AUTO UPDATE countdown instead of a squad nudge
-                                       uiNudgeInit(frame, getenv("MULESKINSIM_AUTOUPDATE") ? nullptr : "BIGFOOT", v, 30, 0); }
-    else if (screen == "squadupdate") uiSquadUpdateInit(frame);
+    else if (screen == "nudge")      { const uint8_t v[3] = { 1, 7, 6 }; uiNudgeInit(frame, v, 30, 0); }
     else if (screen == "meeting")    {
         uiMeetingInit(frame);
         // MULESKINSIM_MEETING_TAPS=N: N taps on the sign (1 = 15 min, 2 = 30, 3 = 60).
@@ -816,28 +696,13 @@ int main(int argc, char** argv) {
                 Today::add(s, 126, 281, h, (uint8_t)(1 + (h * 7 + k * 3) % 13), 1791500000u + h * 3600u + k * 60u, 126, 281);
         }
     }
-    else if (screen == "invite") {
-        // --pose N picks the page: 0 offering, 1 asked, 2 code, 3 sending, 4 joined,
-        // 5 failed, 6 waiting, 7 done, 8 done with the other board's answer.
-        // Even poses after 5 are the inviter's side.
-        uiInviteInit(frame);
-        static const MeshTalk::InviteState PAGES[] = { MeshTalk::InviteState::OFFERING, MeshTalk::InviteState::ASKED,
-            MeshTalk::InviteState::CODE, MeshTalk::InviteState::SENDING, MeshTalk::InviteState::JOINED, MeshTalk::InviteState::FAILED,
-            MeshTalk::InviteState::WAITING, MeshTalk::InviteState::DONE };
-        const bool answered = poseIdx == 8;
-        const int p = answered ? 7 : (poseIdx >= 0 && poseIdx < 8) ? poseIdx : 2;
-        uiInviteDemo(PAGES[p], 4821, p == 1 || p == 4 || p == 6 ? "BIGFOOT" : "YETI", p == 0 || p == 3 || p == 5 || p == 7,
-                     answered);
-    }
     else if (screen == "wifipass")   uiWifiPassInit(frame, "MuleSkinNet");
     else if (screen == "petunlock")  uiPetUnlockInit(frame);
     else if (screen == "unlock")     uiOutfitUnlockInit(frame, (uint8_t)(outfitIdx < 0 ? 2 : outfitIdx));
     else if (screen == "sysprops") {
-        // The real path: a version arrives, then the release's own lines if
-        // it came from the site. --from makes it a squad member's hello,
-        // which carries a number and no notes.
-        OtaCore::noteAvailable("1.24.1", heardFrom.c_str());
-        if (heardFrom.empty()) {
+        // The real path: a version arrives, then the release's own lines.
+        OtaCore::noteAvailable("1.24.1");
+        {
             static const char* const NEWS[2] = {
                 "No more phantom Flock alerts",
                 "Nameless gadgets stay nameless",
@@ -900,99 +765,18 @@ int main(int argc, char** argv) {
             uiBingoHitTest(frame, bar.x[1] + bar.w[1] / 2, bar.y + bar.h / 2, frame.width(), frame.height());
         }
     }
-    else if (screen == "meshmenu")   uiMeshMenuInit(frame);
-    else if (screen == "roster") {
-        // Three members, through the real paths: an advert each so Mesh knows
-        // their look, then a sealed HELLO each so MeshTalk puts them on the
-        // roster. --pose 1 marks the first of them as still in range.
-        if (!Settings::meshDetect()) Settings::cycleMeshDetect();
-        if (!Settings::messagesOn()) Settings::toggleMessages();
-        MeshTalk::setPhrase("GIBSON MOTHMAN PHREAK NESSIE ZEROCOOL");
-        struct Seed { uint8_t mac[6]; uint8_t nick, outfit, shade; const char* name; uint8_t met; };
-        static const Seed SEEDS[] = {
-            { { 0x24, 0x0A, 0xC4, 0x01, 0x00, 0x01 }, 4, 12, 2, "BIGFOOT", 7 },
-            { { 0x24, 0x0A, 0xC4, 0x02, 0x00, 0x02 }, 6,  3, 1, nullptr,   2 },
-            { { 0x24, 0x0A, 0xC4, 0x03, 0x00, 0x03 }, 9,  5, 0, "YETI",    1 },
-        };
-        // Seeded in the past, so that by render time only the one advertised
-        // again below is still in range.
-        const uint32_t renderNow = SimClock::nowMs;
-        SimClock::nowMs = renderNow - 3u * 3600000u;
-        uint32_t ctr = 100;
-        for (const Seed& sd : SEEDS) {
-            MuleSkinMesh::Peer p{};
-            p.nick = sd.nick; p.outfit = sd.outfit; p.shade = sd.shade;
-            if (sd.name) { p.custom = true; snprintf(p.name, sizeof p.name, "%s", sd.name); }
-            uint8_t ad[MuleSkinMesh::LEN_MAX + 2] = { (uint8_t)(MuleSkinMesh::COMPANY_ID & 0xFF), (uint8_t)(MuleSkinMesh::COMPANY_ID >> 8) };
-            const size_t an = MuleSkinMesh::encode(p, ad + 2);
-            Mesh::onManufacturerData(ad, an + 2, sd.mac, millis());
-            // met N times: N hellos, each after the six-minute freshness ran out.
-            for (uint8_t k = 0; k < sd.met; k++) {
-                uint8_t f[MeshMsg::FRAME_MAX];
-                const uint8_t hv[3] = { 1, 7, 9 };
-                const size_t n = MeshMsg::sealHello(MeshCrypto::impl(), sd.mac, ctr++, hv, f, sizeof f);
-                MeshTalk::onFrame(sd.mac, f, n, sd.name ? sd.name : "");
-                SimClock::nowMs += 7 * 60000;
-                MeshTalk::tick(millis());
-            }
-        }
-        SimClock::nowMs = renderNow;
-        MeshTalk::tick(millis());
-        // Only the first is still around: the others were heard long ago.
-        if (poseIdx == 1) {
-            MuleSkinMesh::Peer p{}; p.nick = 4; p.outfit = 12; p.shade = 2; p.custom = true;
-            snprintf(p.name, sizeof p.name, "%s", "BIGFOOT");
-            uint8_t ad[MuleSkinMesh::LEN_MAX + 2] = { (uint8_t)(MuleSkinMesh::COMPANY_ID & 0xFF), (uint8_t)(MuleSkinMesh::COMPANY_ID >> 8) };
-            const size_t an = MuleSkinMesh::encode(p, ad + 2);
-            Mesh::onManufacturerData(ad, an + 2, SEEDS[0].mac, millis());
-        }
-        uiSquadInit(frame, true);
-    }
-    else if (screen == "phrase")     {
-        uiMeshPhraseInit(frame);
-        if (phraseMode >= 0) uiMeshPhraseDemo((uint8_t)phraseMode);
-    }
-    else if (screen == "compose")    uiMeshComposeInit(frame);
-    else if (screen == "phone")      {
-        // Set rather than toggled: the NVS shim may remember a previous run.
-        if (Settings::phoneQwerty() != qwerty) Settings::togglePhoneQwerty();
-        uiPhoneInit(frame);
+    else if (screen == "pin")        {
+        // The lock screen's pad. --type N... presses digit keys, at the key
+        // centres ui_phone.cpp lays out.
+        uiPhoneInitPin(frame, 4, "ENTER PIN", false);
         uint32_t tnow = now;
-        if (!qwerty) {
-            // Key centres, computed the same way ui_phone.cpp lays them out.
-            for (size_t i = 0; i < typeSeq.size(); i++) {
-                if (typeSeq[i] == '.') { tnow += 900; continue; }
-                const int k = typeSeq[i] - '0';
-                if (k < 0 || k > 11) continue;
-                const int kx = 78 + (164 - (48 * 3 + 3 * 2)) / 2 + (k % 3) * 51 + 24;
-                const int ky = 8 + 60 + (k / 3) * 33 + 15;
-                uiPhoneTouch(kx, ky, tnow, PhoneTouch::DOWN);
-                tnow += 120;
-            }
-        } else {
-            // Letters typed as real taps, press then release, at key centres
-            // from the same Qwerty::layout the screen draws. A '^' holds the
-            // NEXT key down without releasing it, so a frame can show the
-            // preview box and the armed key.
-            Qwerty::Key keys[Qwerty::KEY_N];
-            const uint8_t kn = Qwerty::layout(frame.width(), Qwerty::BAND_TOP,
-                                              frame.height() - Qwerty::BAND_BOTTOM_INSET, keys);
-            tick(tnow);                  // the screen lays its keys out on draw
-            bool hold = false;
-            for (size_t i = 0; i < typeSeq.size(); i++) {
-                char c = typeSeq[i];
-                if (c == '^') { hold = true; continue; }
-                if (c >= 'a' && c <= 'z') c = (char)(c - 32);
-                for (uint8_t k = 0; k < kn; k++) {
-                    if (keys[k].ch != c) continue;
-                    const int cx = keys[k].x + keys[k].w / 2, cy = keys[k].y + keys[k].h / 2;
-                    uiPhoneTouch(cx, cy, tnow, PhoneTouch::DOWN);
-                    if (!hold) uiPhoneTouch(cx, cy, tnow, PhoneTouch::UP);
-                    break;
-                }
-                hold = false;
-                tnow += 120;
-            }
+        for (size_t i = 0; i < typeSeq.size(); i++) {
+            const int k = typeSeq[i] - '0';
+            if (k < 0 || k > 11) continue;
+            const int kx = 78 + (164 - (48 * 3 + 3 * 2)) / 2 + (k % 3) * 51 + 24;
+            const int ky = 8 + 60 + (k / 3) * 33 + 15;
+            uiPhoneTouch(kx, ky, tnow, PhoneTouch::DOWN);
+            tnow += 120;
         }
     }
     else if (screen == "hunt")       {

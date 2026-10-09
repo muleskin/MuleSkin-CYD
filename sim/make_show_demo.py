@@ -135,7 +135,6 @@ CLIPS = {
     # so the corner clock and the WATCH settings are the notes' to describe.
     "MuleSkin-squared": [
         ("clear",  60, 36, ["--noseed", "--bg", "7"],                                  {}, 1500, "MuleSkin. ON A WATCH."),
-        ("clear",  60, 36, ["--peer", "3", "--peername", "POOTS", "--noseed", "--bg", "6"], {}, 1600, "SQUAD VISITS STAY PUT NOW"),
         ("clear", 716, 32, ["--showoff", "--noseed", "--bg", "10"],                    {},  900, "240 BY 240. HE FITS. MOSTLY."),
     ],
     # v1.19.1 "Crash Override": the WiFi update that finishes, the label he
@@ -143,7 +142,6 @@ CLIPS = {
     "crash-override": [
         ("sysprops", 20, 24, ["--tab", "0"],                                                  {}, 1500, "THE WIFI UPDATE FINISHES NOW. ALL OF IT."),
         ("sysprops", 20, 24, ["--tab", "0"],                                                  {}, 1500, "ON 1.13 TO 1.19? DO THIS ONE BY USB OR BLUETOOTH"),
-        ("clear",    60, 36, ["--peer", "14", "--peername", "STOMPY", "--noseed", "--bg", "6"], {}, 1500, "THE SHARK SUIT SURVIVES THE TRIP"),
     ],
     # v1.19.0 "Neighbourhood Watch": the regulars, the nemesis, what he
     # notices, the seven moves, the shark. The moves come from SHOW OFF: the
@@ -187,8 +185,6 @@ CLIPS = {
     # v1.16.1 "Good Company": the pet was standing on the wrong MuleSkin, and
     # the 3.5" reached the flasher's picker without reaching its files.
     "good-company": [
-        ("clear", 400, 44, ["--peer", "2", "--peername", "GUEST", "--pet", "1"], {},  900, "A VISITOR, AND THE PET THAT FOLLOWED THE WRONG ONE"),
-        ("clear", 460, 44, ["--peer", "2", "--peername", "GUEST", "--pet", "1"], {},  900, "IT RIDES ITS OWN MULESKIN'S BOUNCE AGAIN"),
         ("boot",   20, 22, [],                 {}, 1500, "AND THE 3.5 INCH IS ON THE FLASHER FOR REAL"),
     ],
     # v1.16.0 "The Big Screen": the 3.5" ships, and it is the screen itself

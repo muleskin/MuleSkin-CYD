@@ -27,20 +27,6 @@ void SdLog::wipe() {}
 void SdLog::openDaily() {}
 
 // ---- DetectionEngine -------------------------------------------------
-#if MULESKIN_MESH
-// The emulator has no radio, so the probe has nothing to count. Stubs keep
-// the diagnostics screen renderable there without an #if around every row.
-namespace MeshProbe {
-    void  begin() {}
-    void  tick(uint32_t) {}
-    void  noteAdvert() {}
-    Stats stats() { return Stats{}; }
-    bool  concluded() { return false; }
-}
-
-// Mesh itself is no longer stubbed: src/mesh.cpp is compiled as-is, and
-// sim/meshsim.cpp stands in for the radio underneath it.
-#endif
 
 bool DetectionEngine::init() { return true; }
 void DetectionEngine::loop() {}
@@ -56,7 +42,6 @@ static const volatile uint32_t s_kinds0[5] = { 0, 0, 0, 0, 0 };
 const volatile uint32_t* advertKinds() { return s_kinds0; }
 void     setScanWindow(uint8_t) {}
 void     setScanWindowBase(uint8_t) {}
-void     setScanBoost(bool) {}
 void     setScanInterval(uint16_t, uint8_t) {}
 void     setScanPin(uint8_t)    {}
 

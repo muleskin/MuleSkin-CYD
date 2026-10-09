@@ -1,10 +1,10 @@
 // MuleSkin-CYD — SYSTEM PROPERTIES: the window that says an update is out.
 //
 // It stands in front of the main screen on the first frame after the intro,
-// whenever the boot check or a squad member turned up something newer. It
-// exists because the old announcement was a line MuleSkin spoke, and two
-// boards in the room talking to each other painted over it before it could
-// be read. A window waits instead: nothing else draws until it is answered.
+// whenever the boot check turned up something newer. It exists because the
+// old announcement was a line MuleSkin spoke, and his other chatter painted
+// over it before it could be read. A window waits instead: nothing else
+// draws until it is answered.
 //
 // Three tabs, each backed by something the board actually knows -- a tab
 // with nothing behind it would be decoration:

@@ -13,9 +13,9 @@ headlines in Orbitron.
 
 > **A fork of [SquachWatch-CYD](https://github.com/skizzophrenic/SquachWatch-CYD)
 > by [skizzophrenic](https://github.com/skizzophrenic).** The detection engine,
-> the board ports, the mesh and most of what follows are their work; this fork
-> rebrands it as MuleSkin and reworks the look and the main screen. Like the
-> original, it is GPL-3.0.
+> the board ports and most of what follows are their work; this fork rebrands
+> it as MuleSkin, reworks the look and the main screen, and leaves out the
+> board-to-board squad mesh. Like the original, it is GPL-3.0.
 
 <p align="center">
   <img src="docs/demo.gif" width="280"
@@ -193,9 +193,6 @@ the zone it shows so you can see when it's right; and **TIME ZONE** on the
 SYSTEM page changes it later. Daylight saving takes care of itself. Without
 a saved network the clock can still be set over serial with a `TIME <epoch>`
 line at 2,000,000 baud, and `ZONE US EASTERN` sets the zone the same way.
-And every squad hello carries the sender's clock and zone, so a board with
-neither takes them from the first member it hears: update one board by USB
-and the rest of the squad know the time within a minute of meeting it.
 Until the clock is set, timestamps count from boot. The board keeps a
 note of the time in flash every ten minutes, and a cold boot with no clock
 starts from that note: not the right time, since nobody knows how long the
@@ -235,15 +232,14 @@ a WS2812 on the Freenove ESP32-S3 2.8")
 tells you what the screen is doing without the screen. A slow breathe in the
 theme's colour when nothing is happening; three flashes and a hold in the
 detection's own colour when something is, for as long as the alert card is
-up; a double-blink for an unread message; a blip when a squad member walks
-on; cyan while an update downloads and green or red for how it went. It goes
+up; cyan while an update downloads and green or red for how it went. It goes
 dark on the lock screen and through a wipe, so a duress restart looks like any
 other restart from the back too.
 
-**Settings → APPEARANCE → STATUS LIGHT**: the master switch, alerts and
-messages on or off, idle breathe or solid or off, an idle colour that follows
-the theme, the background, or one of nine fixed colours, brightness in seven
-steps, and a TEST row that plays the lot in six seconds. Boards whose LED pins
+**Settings → APPEARANCE → STATUS LIGHT**: the master switch, alerts on or
+off, idle breathe or solid or off, an idle colour that follows the theme, the
+background, or one of nine fixed colours, brightness in seven steps, and a
+TEST row that plays an alert and the idle in four seconds. Boards whose LED pins
 have not been checked (the AWOK and the 3.5") compile it out and say so on
 that screen.
 
@@ -268,123 +264,16 @@ what the board is alerting about and nothing else, and the board takes
 nothing back from it. To make room, the CYD builds no longer offer firmware
 updates over Bluetooth; USB and WiFi updates are unchanged.
 
-## MuleSkinMesh
-
-> **Work in progress.** It is in this release because it works — two boards
-> find each other — but it has had days of testing, not months. Both halves are **off** until you turn them on, and one
-> of them costs you something; the device asks before it lets you near the
-> switch.
-
-Two MuleSkines in range of each other notice: each hears the other's
-twenty-byte BLE advert, which carries its name and version. (This build
-does not draw the other board as a visitor -- the mascot is switched off --
-so there are no on-screen visits.) The name is one row, **NAME** under
-MULESKINMESH: a curated one until somebody types one on the payphone, where
-**SHUFFLE** steps through the curated list for anyone who would rather not
-type.
-
-It is deliberately not a network. No pairing, no connection, no
-acknowledgement, no retry — a broadcast that says who is here, and anybody in
-earshot may or may not catch it. A peer is recognised inside the scan callback
-and returns before the signature tables ever see it, so two of these can never
-set each other off.
-
-**Settings → MULESKINMESH**, and it asks first. `DETECT` is receive-only: your
-board hears other boards and broadcasts nothing at all. `TRANSMIT` is the
-half that makes you visible, and a full-screen warning stands in front of that
-menu spelling out what goes out, how often, and what somebody with a scanner
-can reconstruct from it — a fixed address that never changes is a trail of
-where you have been. Nothing is transmitted until you have read that and
-chosen YES.
-
-That warning is not a formality. Broadcasting a stable identifier at strangers
-is the exact behaviour this device exists to catch other people's hardware
-doing. Offering it is defensible; switching it on quietly would not be.
-
-### Messages
-
-Two MuleSkines that share a five-word phrase can message each other: one
-of 24 ready-made lines, or up to 48 characters typed on the payphone or the
-QWERTY board, and nothing is sent until you have confirmed it. The message
-screen -- **Settings → MULESKINMESH → SQUAD → REPLY** -- shows the latest one
-in **red** with the sender's name, and the status light double-blinks while
-one is unread.
-
-**Settings → MULESKINMESH → MESSAGES**, then **PHRASE**: one of you ROLLs five
-words and reads them out, the other ENTERs the same five. Setting a phrase
-freezes the screen for about three seconds on purpose — it is 20,000 rounds of
-PBKDF2, which every guess at your phrase has to pay too. A seven-card tutorial
-runs the first time MESSAGES is switched on, and the **?** on the message
-screen replays it; it never transmits anything.
-
-Messages are AES-128-CCM, keyed from the phrase, with a nonce that cannot
-repeat even across a crash, and every board checks its cipher against frames
-made by an independent implementation at each boot. What stays visible is
-that you sent something, and when: the contents are encrypted, the fact of a
-message is not.
-
-### Joining without typing
-
-<p align="center">
-  <img src="docs/squad-invite.gif" width="640"
-       alt="Two boards side by side: one taps ADD TO SQUAD, the other's board asks and accepts, both show the same four digits, the phrase goes over, and the second board is in without typing anything.">
-</p>
-
-The typed phrase is the reliable way in and always will be. The convenient
-way is **ADD**, beside INVITE and HUNT on the SQUAD screen. Pick a board in
-range and tap it; their board asks them whether
-they want in. Both screens then show the same four digits, which the two of
-you compare out loud, and the phrase goes across sealed under a key that
-exists for that one exchange and no other. The digits are derived from both
-boards' keys, so a third board in the middle pretending to be each of you to
-the other leaves the two screens disagreeing — say NO and nothing was sent.
-The new member's board answers with a sealed hello the moment it has the
-phrase, the inviter's shows **ADDED**, and both drop back to the main screen
-on their own. If nothing comes back, the inviter's screen says so and offers
-to show the phrase for typing.
-
-Boards that have shown they hold your phrase read **MEMBER** on that screen,
-and ADD only offers itself to strangers. Anyone with the phrase can invite
-anyone; the phrase is the membership, and leaving somebody out means a new
-phrase on every board.
-
-### Your squad
-
-**Settings → MULESKINMESH → SQUAD** is the roster: everybody who has ever been
-heard holding your phrase, here or not, up to sixteen, kept across restarts.
-Each member shows with how many separate times you have met, those in range
-first. INVITE works when they
-are here, AWAY says when they are not, and FORGET drops them after asking
-once; they come back the next time they are heard with the phrase. A new
-phrase clears the roster, because a new phrase is a new squad.
-
-**TELL SQUAD** (Settings, off by default) sends each WITH YOU to the squad
-too, as an ordinary message, for example "AIRTAG WITH ME 23 MIN". Every
-member's board shows it, whatever firmware it runs. It waits for any message
-you are sending to finish first.
-
-### Fox hunt
-
-**HUNT** on either SQUAD screen aims HUNT MODE's signal gauge at that board.
-It is the same meter the detector uses for a tag: no compass, so you turn
-your body and walk toward where the needle does not fall. Two readings in a
-row at arm's length and the gauge says **CAUGHT!** and the light on the back
-flashes green. The fox needs TRANSMIT on; the hunters need
-DETECT on, which they have if they can see the SQUAD screen at all.
-
-**SHOW PHRASE** on the PHRASE screen is on by default. Off, the five words
-become dashes, the board never prints them, and the only way into the squad
-from that board's side is ADD TO SQUAD, in person.
+## Updates
 
 ### Knowing there is an update
 
-Two ways, neither of which installs anything. At boot, a board with a saved
-WiFi network joins it for about a second, asks flasher.oillie.cloud for the latest
-version of its own build, and lets go again, all before Bluetooth starts;
-**UPDATE CHECK** on the SYSTEM page turns that off. And every board's hello
-to its squad carries its version, so a board that hears a member running
-something newer knows without touching WiFi. Either way the SYSTEM row reads
-UPDATE, and UPDATE FIRMWARE names the version until you install it.
+Nothing installs on its own unless you ask it to. At boot, a board with a
+saved WiFi network joins it for about a second, asks flasher.oillie.cloud for
+the latest version of its own build, and lets go again, all before Bluetooth
+starts; **UPDATE CHECK** on the SYSTEM page turns that off. When there is a
+newer one, the SYSTEM row reads UPDATE, and UPDATE FIRMWARE names the version
+until you install it.
 
 **AUTO UPDATE** on the SYSTEM page (off by default) installs it for you, at
 night: during NIGHT DIM's hours (1 to 5 AM without them), from the main
@@ -404,36 +293,16 @@ is there and otherwise the strongest saved one that is, so home and work both
 just work. The update flow does the same, and only shows its own list when
 none of the saved networks is in range. REMOVE takes one off the list.
 
-### Smaller things
+## Smaller things
 
 - **Arrows on NEARBY.** Each device shows a green up-arrow when it has come
   closer since its last reading and a red down-arrow when it has moved away;
   under four dB of change shows nothing, which is what a still device does.
 - **First of its kind.** The first time this board ever catches a type, the
   card says so.
-- **FILL on the message screen.** Eight openings that end in a blank, MEET AT,
-  I'M AT, BACK IN and the rest; pick one and the keyboard opens with it typed.
-- **Read receipts.** When a squad member opens your message their board says
-  so, and yours shows a READ toast with their name. A reader with TRANSMIT off
-  can't send one, so you see sent and never read, which is the truth.
 - **SNOOZE on an alert.** Quiets that one device until the board restarts. It
   is still scanned, counted and logged; only the alert stops. IGNORE is the
   same thing kept for good.
-
-### Updating the squad
-
-**Settings → SYSTEM → UPDATE FIRMWARE → UPDATE SQUAD** tells every board in
-range with your phrase to install the version this one is running. Each of
-them shows a thirty-second countdown with SKIP, joins WiFi, installs the
-signed release from flasher.oillie.cloud, restarts, and reports back by name to
-the board that asked. The sender can share its own saved network with the
-nudge, sealed with the phrase; the receiving boards use it once and forget it.
-
-A board listens because it holds your phrase, which is the same trust it
-already gives you for messages and the invite; **REMOTE UPDATE** on its
-SECURITY screen turns that off for anyone who wants it off. A locked board
-ignores the whole thing regardless. So the order on release day is: update
-one board by hand, then UPDATE SQUAD from it.
 
 ## Project layout
 
@@ -460,8 +329,6 @@ MuleSkin-CYD/
 │   ├── clock.h                   (wall clock: NTP at the boot check, zones, the calendar)
 │   ├── ignore_list.h             (per-device alert suppression)
 │   ├── status_light.h            (the RGB LED and its rules)
-│   ├── meshmsg.h                 (sealed frames: messages, emotes, nudges, invites)
-│   ├── muleskinmesh.h              (the MuleSkinMesh wire format -- read first)
 │   ├── settings.h
 │   ├── muleskin.h                 (the mascot -- switched off: MASCOT_SHOWN)
 │   ├── bangers_font.h            (generated 1bpp headline face: Orbitron)
@@ -479,9 +346,7 @@ MuleSkin-CYD/
 │   ├── clock.cpp
 │   ├── ignore_list.cpp
 │   ├── pet.cpp
-│   ├── muleskinmesh.cpp            (MuleSkinMesh encode/decode, no radio)
-│   ├── meshtalk.cpp              (messages, the squad update, the invite)
-│   ├── meshcrypto.cpp            (AES-CCM, PBKDF2, and X25519 for invites)
+│   ├── phone_alerts.cpp          (PHONE ALERTS: alerts to a phone over Bluetooth)
 │   ├── status_light.cpp
 │   ├── sd_log.cpp
 │   └── ui_*.cpp
@@ -494,7 +359,6 @@ MuleSkin-CYD/
     ├── Makefile                  (`make` builds the simulator)
     ├── *.h                       (Arduino/TFT_eSPI/NVS shims)
     ├── make_readme_demo.py       (renders a simulator clip, docs/demo1.gif)
-    ├── make_invite_demo.py       (renders the ADD TO SQUAD clip above)
     └── make_social.py            (renders the repo's social preview card)
 ```
 

@@ -42,11 +42,10 @@ void        tick(uint32_t now)                 { if (s_restart && now >= s_resta
 const char* takeBootNote(const char**, bool*)  { return nullptr; }
 const char* runningSlot()                      { return "app0"; }
 const char* runningVersion()                   { return "v1.7.1"; }   // reads naturally in the release clip
-static char s_avail[16] = "", s_availFrom[13] = "";
+static char s_avail[16] = "";
 static bool s_availSaid = true;
-void noteAvailable(const char* v, const char* who) {
+void noteAvailable(const char* v) {
     snprintf(s_avail, sizeof s_avail, "%s", (v && (*v == 'v')) ? v + 1 : (v ? v : ""));
-    snprintf(s_availFrom, sizeof s_availFrom, "%s", who ? who : "");
     s_availSaid = false;
 }
 static char    s_relName[20] = "";
@@ -61,7 +60,6 @@ const char* releaseName()        { return s_relName; }
 uint8_t     newsCount()          { return s_newsN; }
 const char* newsAt(uint8_t i)    { return i < s_newsN ? s_news[i] : ""; }
 const char* availableVersion()   { return s_avail; }
-const char* availableFrom()      { return s_availFrom; }
 bool        takeAvailableNotice(){ if (s_availSaid || !s_avail[0]) return false; s_availSaid = true; return true; }
 const char* buildName()                        { return "sim"; }
 uint32_t    maxImageSize()                     { return 1966080; }
@@ -182,7 +180,6 @@ bool timeSyncStart() {
 bool        timeSyncBusy()    { return s_ts == TimeSync::JOINING || s_ts == TimeSync::ASKING; }
 TimeSync    timeSyncState()   { return s_ts; }
 const char* timeSyncNetwork() { return s_ts == TimeSync::JOINING ? "" : "MuleSkinNet"; }
-bool        savedPassAt(uint8_t i, char* out, size_t cap) { if (i >= savedCount() || !cap) return false; snprintf(out, cap, "hunter2"); return true; }
 void        forget()    { s_saved = false; s_n = 0; }
 uint8_t     savedCount()           { return s_saved ? s_n : 0; }
 const char* savedSsidAt(uint8_t i) { return i < savedCount() ? s_list[i].ssid : ""; }

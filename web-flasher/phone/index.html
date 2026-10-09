@@ -74,7 +74,6 @@
 const SVC   = '9d1f0101-2a4b-4c8e-9b1e-5357574f5441';
 const ALERT = '9d1f0102-2a4b-4c8e-9b1e-5357574f5441';
 const INFO  = '9d1f0103-2a4b-4c8e-9b1e-5357574f5441';
-const MESH_COMPANY = 0xFFFF;   // include/muleskinmesh.h
 
 const NICE = {
   FLOCK:'Flock camera', AXON:'Axon device', META:'Camera glasses', SKIMMER:'Possible skimmer',
@@ -191,7 +190,7 @@ $('connectBtn').addEventListener('click', async () => {
   }
   try {
     device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: 'MuleSkin-' }, { manufacturerData: [{ companyIdentifier: MESH_COMPANY }] }],
+      filters: [{ services: [SVC] }, { namePrefix: 'MuleSkin-' }],
       optionalServices: [SVC]
     });
   } catch (e) { return; }   // picker cancelled

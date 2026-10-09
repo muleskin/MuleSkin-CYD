@@ -19,10 +19,6 @@ static inline uint32_t tempo(uint32_t ms) { return ms * s_tempoPct / 100; }
 #include "clock.h"
 #include "dex.h"
 #include "void_eye.h"
-#if MULESKIN_MESH
-#include "emote_script.h"   // spokenName, for the banter
-#include "muleskinmesh.h"     // OUTFIT_N, checked against OutfitId::COUNT below
-#endif
 #include <Arduino.h>
 #include <Preferences.h>
 // -DSQW_MULESKIN_LAPS splits his draw time onto the [frame] line's x slots:
@@ -623,18 +619,6 @@ static uint32_t s_bestClearMs      = 0;  // longest-ever gap between detections
 static uint32_t s_bestSessionCount = 0;  // most detections seen in one boot
 static uint8_t  s_firstType        = (uint8_t)DetectionType::UNKNOWN;
 static uint8_t  s_shadeIdx         = 0;
-#if MULESKIN_MESH
-// Declared here with the other persisted prefs rather than beside its
-// accessors: ensurePrefsLoaded() reads it far earlier in the file.
-//
-// Gated with the rest of the feature. The plan says a typed name stands on
-// its own merits whether or not MuleSkinMesh ever ships -- and it does -- but
-// nothing in a non-mesh build can SET one, so shipping the storage there
-// would be dead weight AND would break the guarantee that a shipping binary
-// is untouched by this work. Promoting it out of the flag is one deliberate
-// edit on the day that becomes true.
-static char     s_customName[CUSTOM_NAME_MAX + 1] = {0};
-#endif
 static uint8_t  s_nickIdx          = 0;
 static uint8_t  s_outfitIdx        = 0;
 static bool     s_allOutfitsUnlocked = false;  // hidden button-sequence easter egg
@@ -1083,12 +1067,6 @@ static const OutfitDef OUTFITS[] = {
 };
 static const uint8_t OUTFITS_N = sizeof(OUTFITS) / sizeof(OUTFITS[0]);
 static_assert(OUTFITS_N == (uint8_t)OutfitId::COUNT, "OUTFITS must match OutfitId");
-#if MULESKIN_MESH
-// The mesh clamps a visitor's outfit index to what this build can draw. If
-// a new outfit lands here without that count moving, the newest outfit
-// wraps to NONE on every visit -- which is how the shark suit went missing.
-static_assert(MuleSkinMesh::OUTFIT_N == (uint8_t)OutfitId::COUNT, "MuleSkinMesh::OUTFIT_N must match OutfitId::COUNT");
-#endif
 
 // Was a prefix count -- "how many from the front of the list qualify" --
 // which only works while every outfit is gated on the same ascending
@@ -1400,9 +1378,6 @@ static void ensurePrefsLoaded() {
     s_bestSessionCount = s_petPrefs.getUInt("bestSess", 0);
     s_firstType       = s_petPrefs.getUChar("firstType", (uint8_t)DetectionType::UNKNOWN);
     s_shadeIdx        = s_petPrefs.getUChar("shadeIdx", 0);
-#if MULESKIN_MESH
-    s_petPrefs.getString("cname", s_customName, sizeof(s_customName));
-#endif
     s_nickIdx         = s_petPrefs.getUChar("nick", 0);
     s_outfitIdx       = s_petPrefs.getUChar("outfitIdx", 0);
     s_allOutfitsUnlocked = s_petPrefs.getBool("allOutfits", false);
@@ -2202,13 +2177,6 @@ DetectionType firstDetectionType() {
 
 // ---- Cosmetics ----
 const char* nickname() {
-#if MULESKIN_MESH
-    // A typed name wins over the curated list. Everything that shows a name
-    // -- the settings row, the nameplate, a peer's advert -- goes through
-    // here, so there is one answer to "what is he called".
-    ensurePrefsLoaded();
-    if (s_customName[0]) return s_customName;
-#endif
     ensurePrefsLoaded();
     return NICKNAMES[s_nickIdx % NICKNAMES_N];
 }
@@ -2428,6 +2396,22 @@ const char* takeDayLine() {
 
 void announce(const char* text) { if (text && text[0]) say(text, 6000); }
 
+// Reading time, not a metronome: a short line goes quickly, a long one stays.
+uint32_t sayLine(const char* line) {
+    uint32_t n = 0;
+    while (line && line[n]) n++;
+    uint32_t ms = 1200 + n * 65;
+    if (ms < 1800) ms = 1800;
+    if (ms > 4000) ms = 4000;
+    say(line, ms);
+    return ms;
+}
+
+void laugh(uint32_t now) {
+    mood      = Mood::BOUNCE;   // 9px at 220ms -- the idle flourish's bounce
+    moodUntil = now + tempo(1500);
+}
+
 void unlockPet() {
     ensurePrefsLoaded();
     if (s_petUnlocked) return;                  // already had him; stay quiet
@@ -2645,611 +2629,6 @@ static const char* const WINK_LINES[] = {
     "Still here. Still watching.",
 };
 
-#if MULESKIN_MESH
-// ---- MuleSkinMesh: the conversation two MuleSkins have -------------------
-//
-// Four beats, because a visit has a shape: somebody turns up, somebody
-// answers, they stand around, somebody leaves. Split into host and guest
-// pools rather than one shared bank so the two never say the same kind of
-// thing at each other -- the host is at home and the guest is passing
-// through, and the lines should not be interchangeable.
-//
-// Only ever ONE bubble on screen at a time, alternating. Two MuleSkins with
-// two speech bubbles on a 240px-tall screen is not a conversation, it is a
-// pile-up; taking turns is what makes it read as talking.
-void setVisiting(bool v) { s_visiting = v; }
-static bool s_company = false;
-void setCompany(bool on) { s_company = on; }
-bool visiting() { return s_visiting; }
-void setListening(bool v) { s_listening = v; }
-
-static const char* const MEET_HOST_LINES[] = {
-    "Oh -- company.",
-    "Well. Look who found us.",
-    "Huh. Same shades and everything.",
-    "Didn't think there were more of me.",
-    "Company. The good kind.",
-    "Someone else is watching too.",
-    "Two of us now. Better odds.",
-    "Look at that. Reinforcements.",
-    "Hey. You're one of mine.",
-    "Wasn't expecting that.",
-    "Another one. Hey.",
-    "Now there's a sight.",
-    "Didn't hear you come up.",
-    "Look what the airwaves dragged in.",
-    "Room for two up here.",
-    "You're a long way from home.",
-    "Well I'll be.",
-    "Two shadows now.",
-    "You made good time.",
-    "Wondered when you'd show.",
-    "That's a familiar shape.",
-    "Hey. Nice of you.",
-    "I know that walk.",
-    "Come on up.",
-    "Wasn't sure you were real.",
-    "You brought weather with you.",
-    "Been a while since anybody came by.",
-    "Good. I was getting weird.",
-    "Somebody else with sense.",
-    "Stand where you like.",
-    "You look like the last one.",
-    "There goes the quiet.",
-    "Well. That's new.",
-    "Knew somebody was out there.",
-};
-static const char* const MEET_GUEST_LINES[] = {
-    "Heard there was someone watching.",
-    "Room for one more?",
-    "Saw your signal. Had to say hi.",
-    "Nice setup you've got.",
-    "Same job, different pocket.",
-    "Just passing through.",
-    "Figured I'd check in.",
-    "Been walking a while.",
-    "Good spot for it.",
-    "You get many visitors?",
-    "Quiet round here?",
-    "Don't mind me.",
-    "Mind if I stand here a bit?",
-    "Somebody said you were watching.",
-    "Heard you from down the road.",
-    "You've got a better sunset than me.",
-    "Followed the signal in.",
-    "You're hard to miss.",
-    "Thought I heard family.",
-    "Long walk. Worth it.",
-    "This the good side of the hill?",
-    "Nobody told me you were tall.",
-    "I'll only stay a minute.",
-    "Been looking for one of you.",
-    "Your porch light's on.",
-    "Sorry. Didn't knock.",
-    "You always stand out here?",
-    "I go where it's quiet.",
-    "That's a good pair of shades.",
-    "Made it before dark.",
-    "Somebody has to check on you.",
-    "I was in the neighbourhood.",
-    "You're further out than I thought.",
-    "Nice night to be nobody.",
-};
-// Standing-around banter, written as PAIRS.
-//
-// The two sides used to draw from separate pools independently, and it read
-// exactly like that: two MuleSkins taking turns saying unrelated true things.
-// Every line was fine on its own and not one of them was an answer, which is
-// the difference between dialogue and alternating monologue.
-//
-// The host speaks first and the guest replies from the SAME entry, so the
-// reply has something to reply to.
-//
-// The third column is the topper: a short something the host throws back
-// after the answer. Two-line exchanges are correct and a bit stiff -- real
-// company is one of them getting the last word and both of them enjoying it.
-// nullptr where the pair is better off ending on the reply, so the rhythm
-// varies instead of thudding into a punchline every time.
-struct Exchange { const char* host; const char* guest; const char* topper; };
-static const Exchange HANG_EXCHANGES[] = {
-    { "Quiet out here.",                "Suits me fine.",
-      "Yeah. Me too."                        },
-    { "You come far?",                  "Farther than I meant to.",
-      "It does that."                        },
-    { "Nothing on my end.",             "Nor mine. Good.",
-      nullptr                                },
-    { "You always this chatty?",        "You started it.",
-      "I did, didn't I."                     },
-    { "Nice night for it.",             "Every night's a night for it.",
-      "Ha. Fair."                            },
-    { "Seen anything worth reporting?", "Not since Tuesday.",
-      "Tuesday's like that."                 },
-    { "I like the hat.",                "I like that you noticed.",
-      "I notice everything."                 },
-    { "Long way from the woods.",       "The woods moved.",
-      "They do that."                        },
-    { "Two of us. Better odds.",        "Better company, anyway.",
-      nullptr                                },
-    { "How's the signal your side?",    "Loud. Nothing useful.",
-      "Sounds about right."                  },
-    { "You get used to the waiting.",   "I never did.",
-      "Honestly? Me either."                 },
-    { "Don't let me keep you.",         "You're not.",
-      "Good."                                },
-    { "Rough patch of airwaves.",       "Tell me about it.",
-      "I just did."                          },
-    { "Anybody following you?",         "Not that I noticed. Now I'll worry.",
-      "Sorry. Sort of."                      },
-    { "Standing around's underrated.",  "It really is.",
-      nullptr                                },
-    { "Do you sleep?",                  "Define sleep.",
-      "That's a no, then."                   },
-    { "Somebody's got to watch.",       "Might as well be us.",
-      "Might as well."                       },
-    { "You hear that?",                 "No. And that's the problem.",
-      "See, you get it."                     },
-    { "Good spot, this.",               "Better with two.",
-      nullptr                                },
-    { "I'd offer you something.",       "You've got nothing.",
-      "It's the thought."                    },
-    { "Comfortable silence?",           "My favourite kind.",
-      "We're terrible at it."                },
-    { "Four eyes beat two.",            "That's the theory.",
-      "Let's test it."                       },
-    { "Bet you've got stories.",        "One or two.",
-      "Keep them. I'll ask later."           },
-    { "You ever get spotted?",          "Once. Ran.",
-      "Smart."                               },
-    { "This your usual route?",         "It is now.",
-      nullptr                                },
-    { "How's the reception?",           "Better since you turned up.",
-      "Now you're just being nice."          },
-    { "Left or right? Pick.",           "Whichever's quieter.",
-      "They're both quiet."                  },
-    { "We look ridiculous.",            "Speak for yourself.",
-      "Ha. Fair."                            },
-    { "Nobody's watching us, right?",   "That's the joke, isn't it.",
-      "Ha. Yeah."                            },
-    { "Think there's more of us?",      "Has to be.",
-      "Has to be."                           },
-    { "You ever count them?",           "Every one.",
-      "Same."                                },
-    { "Whose sky is this?",             "Nobody's. That's the appeal.",
-      nullptr                                },
-    { "Ever want a day off?",           "And miss this?",
-      "Ha."                                  },
-    { "You take sugar?",                "In what?",
-      "Good point."                          },
-    { "What's your range?",             "Further than my patience.",
-      "Relatable."                           },
-    { "How do you pass the time?",      "Badly.",
-      "Honest."                              },
-    { "You from around here?",          "From further in.",
-      nullptr                                },
-    { "Reckon they know?",              "They never do.",
-      "Good."                                },
-    { "That your best hat?",            "It's my only hat.",
-      "It's a good hat."                     },
-    { "You get bored?",                 "Only when it's safe.",
-      "So, never."                           },
-    { "Anything ever happen?",          "Once. Enough.",
-      nullptr                                },
-    { "You talk to yourself?",          "Constantly.",
-      "Same. It helps."                      },
-    { "How's your battery?",            "Don't ask me that.",
-      "Sorry."                               },
-    { "You always this early?",         "I never left.",
-      "Ha. Fair."                            },
-    { "Want the good spot?",            "You're in it.",
-      "I know."                              },
-    { "Only two of us, you think?",     "Tonight, maybe.",
-      nullptr                                },
-    { "Do you ever wave back?",         "Only at you.",
-      "Careful now."                         },
-    { "Quiet's holding.",               "Long may it.",
-      "Long may it."                         },
-    // Setup and undercut: one of them calm and ornate, the other gleeful
-    // and short. Which is which changes with who's hosting.
-    { "Quiet night. Suspiciously quiet.",            "I could fix that.",
-      "Please don't."                                   },
-    { "I've seen things that would curl your fur.",  "Was it the printer?",
-      "It was the printer."                             },
-    { "Great galloping gateways, is that a doorbell?", "Can we arrest it?",
-      "We can look at it sternly."                      },
-    { "In my professional opinion, nothing's happening.", "Your opinion's not professional.",
-      "It's freelance."                                 },
-    { "I've filed the evening under 'uneventful'.",  "I filed it under 'yet'.",
-      "That's not a category."                          },
-    { "I sense a great disturbance in the WiFi.",    "That's the microwave.",
-      "The microwave is a person of interest."          },
-    { "Two of us. The neighborhood's safest block.",  "The neighborhood should be worried.",
-      "The neighborhood should be thrilled."            },
-    { "Somewhere out there a tracker's thinking about us.", "Let it come.",
-      "Let it come slowly. I'm comfortable."             },
-    { "If this were a case I'd call it closed.",      "You'd call it lunch.",
-      "Same thing."                                     },
-    { "Holy hopping hotspots. Nothing again.",        "I love nothing. Nothing's the best.",
-      "Nothing pays the same as something."             },
-    { "Any last words before another quiet hour?",   "Crime!",
-      "You always say that."                            },
-    { "My gut says something's coming.",             "Your gut's been wrong since Tuesday.",
-      "My gut has a record, yes."                       },
-    { "The suspect's a smart bulb.",                 "Book it.",
-      "On what charge?"                                 },
-    { "Stay frosty.",                                "I'm a screen, I'm always frosty.",
-      "That's the spirit. Or a bug."                    },
-};
-static const uint8_t HANG_EXCHANGES_N =
-    sizeof(HANG_EXCHANGES) / sizeof(HANG_EXCHANGES[0]);
-
-// ---- banter about something ---------------------------------------------
-//
-// The pairs above are about nothing in particular, which is most of what
-// standing around is. These are about the thing on screen: the snow, the
-// other one's hat, what was caught earlier, how many times this visitor
-// has turned up. Every other exchange, if anything applies, one of these
-// goes instead. %s is the one word the situation supplies.
-enum class Ctx : uint8_t { BG, CAUGHT, GUEST_OUTFIT, HOST_OUTFIT, RETURNING, REGULAR, SQUAD, NAME, QUIET, BUSY, LONG_UP };
-struct CtxExchange { Ctx ctx; uint8_t bg; const char* host; const char* guest; const char* topper; };
-static const CtxExchange CTX_EXCHANGES[] = {
-    // the weather, by Settings::Background value
-    { Ctx::BG, 7,  "Cold enough for you?",        "I'm mostly fur.",              "Show-off." },
-    { Ctx::BG, 7,  "Snow's settling.",            "On you, mostly.",              nullptr },
-    { Ctx::BG, 7,  "Ever eat it?",                "The snow? Constantly.",        "Respect." },
-    { Ctx::BG, 10, "That sun ever set?",          "Not once. I've watched.",      "Grim." },
-    { Ctx::BG, 10, "Nice grid.",                  "Don't look down.",             nullptr },
-    { Ctx::BG, 10, "Very eighties.",              "You were there?",              "I'm timeless." },
-    { Ctx::BG, 1,  "Ever count them?",            "Lost it at four hundred.",     "Rookie." },
-    { Ctx::BG, 1,  "Make a wish.",                "Did. You showed up.",          "Cheap wish." },
-    { Ctx::BG, 1,  "Which one's home?",           "The dim one.",                 "Same." },
-    { Ctx::BG, 0,  "Can you read that?",          "Blonde, brunette, redhead.",   "Stop it." },
-    { Ctx::BG, 0,  "Rain's heavy tonight.",       "It's code. It's always code.", nullptr },
-    { Ctx::BG, 2,  "Why toasters?",               "Why anything?",                "Deep." },
-    { Ctx::BG, 2,  "One's coming in low.",        "Duck.",                        nullptr },
-    { Ctx::BG, 3,  "What do they think about?",   "Bubbles, mostly.",             "Relatable." },
-    { Ctx::BG, 3,  "The fish are watching.",      "Let them.",                    nullptr },
-    { Ctx::BG, 4,  "You type all that?",          "It types itself.",             "Show-off." },
-    { Ctx::BG, 5,  "Catch one?",                  "Tried. Bit me.",               "Fireflies don't bite." },
-    { Ctx::BG, 5,  "Pretty out here.",            "Don't tell anyone.",           nullptr },
-    { Ctx::BG, 6,  "Warm enough?",                "Toasty.",                      nullptr },
-    { Ctx::BG, 6,  "Who lit that?",               "Not saying.",                  "Arsonist." },
-    { Ctx::BG, 8,  "Music's good.",               "It's the airwaves.",           "Still good." },
-    { Ctx::BG, 9,  "Where's it go?",              "Further.",                     "Helpful." },
-    { Ctx::BG, 9,  "Ever reach the end?",         "There's an end?",              nullptr },
-    // what was caught earlier
-    { Ctx::CAUGHT, 0, "Saw a %s earlier.",         "Course you did.",              nullptr },
-    { Ctx::CAUGHT, 0, "%s, not long ago.",         "They're everywhere now.",      "Aren't they." },
-    { Ctx::CAUGHT, 0, "Anything good today?",      "You had a %s. I felt it.",     "Big one." },
-    { Ctx::CAUGHT, 0, "That %s still about?",      "Gone quiet.",                  "They do that." },
-    // the other one's outfit, and mine
-    { Ctx::GUEST_OUTFIT, 0, "Nice %s.",             "This old thing.",              nullptr },
-    { Ctx::GUEST_OUTFIT, 0, "Where'd you get the %s?", "Earned it.",                "Sure you did." },
-    { Ctx::GUEST_OUTFIT, 0, "Is that a %s?",        "You know it is.",              "Bold." },
-    { Ctx::HOST_OUTFIT,  0, "Too much, the %s?",    "Never.",                       "Good answer." },
-    { Ctx::HOST_OUTFIT,  0, "You like the %s?",     "It's a look.",                 "It's MY look." },
-    // a regular
-    { Ctx::RETURNING, 0, "You again.",              "Me again.",                    "Good." },
-    { Ctx::RETURNING, 0, "Back so soon?",           "Missed the spot.",             "It missed you." },
-    { Ctx::REGULAR,   0, "That's %s times now.",    "Who's counting?",              "Me. It's my job." },
-    { Ctx::REGULAR,   0, "%s visits. We need a table.", "And a tab.",               nullptr },
-    // the squad
-    { Ctx::SQUAD, 0, "Squad's up to %s.",           "Getting crowded.",             "Good crowded." },
-    { Ctx::SQUAD, 0, "%s of us now.",               "Better odds.",                 nullptr },
-    // their name
-    { Ctx::NAME, 0, "%s. Good name.",               "Picked it myself.",            "Suits you." },
-    { Ctx::NAME, 0, "%s, right?",                   "Since you ask.",               nullptr },
-    // the day
-    { Ctx::QUIET, 0, "Nothing all day.",            "Nothing's good.",              "Nothing's boring." },
-    { Ctx::QUIET, 0, "Quiet one.",                  "Suspiciously.",                "Now you've said it." },
-    { Ctx::BUSY,  0, "%s hits today.",              "Busy patch.",                  "Too busy." },
-    { Ctx::BUSY,  0, "Counted %s already.",         "Somebody's popular.",          "Not us." },
-    { Ctx::LONG_UP, 0, "Been up %s hours.",         "Sleep's for the weak.",        "I'm very weak." },
-    { Ctx::LONG_UP, 0, "%s hours and counting.",    "You blink, I'll watch.",       nullptr },
-};
-static const uint8_t CTX_EXCHANGES_N = sizeof(CTX_EXCHANGES) / sizeof(CTX_EXCHANGES[0]);
-
-static VisitContext s_vctx = {};
-void setVisitContext(const VisitContext& c) { s_vctx = c; }
-
-static bool ctxApplies(const CtxExchange& e) {
-    switch (e.ctx) {
-        case Ctx::BG:           return s_vctx.background == e.bg;
-        case Ctx::CAUGHT:       return s_vctx.caught != (uint8_t)DetectionType::UNKNOWN && s_vctx.caught < (uint8_t)DetectionType::COUNT;
-        case Ctx::GUEST_OUTFIT: return s_vctx.guestOutfit != 0;
-        case Ctx::HOST_OUTFIT:  return s_vctx.hostOutfit != 0;
-        case Ctx::RETURNING:    return s_vctx.met >= 2 && s_vctx.met < 5;
-        case Ctx::REGULAR:      return s_vctx.met >= 5;
-        case Ctx::SQUAD:        return s_vctx.squad >= 3;
-        case Ctx::NAME:         return s_vctx.guestName[0] != 0;
-        case Ctx::QUIET:        return s_vctx.hits == 0 && s_vctx.upHours >= 1;
-        case Ctx::BUSY:         return s_vctx.hits >= 20;
-        case Ctx::LONG_UP:      return s_vctx.upHours >= 3;
-    }
-    return false;
-}
-
-// The one word the situation supplies for %s.
-static const char* ctxArg(Ctx c, char* num, size_t cap) {
-    switch (c) {
-        case Ctx::CAUGHT:       return EmoteScript::spokenName(s_vctx.caught);
-        case Ctx::GUEST_OUTFIT: return outfitNameAt(s_vctx.guestOutfit);
-        case Ctx::HOST_OUTFIT:  return outfitNameAt(s_vctx.hostOutfit);
-        case Ctx::NAME:         return s_vctx.guestName;
-        case Ctx::REGULAR:      snprintf(num, cap, "%u", (unsigned)s_vctx.met);     return num;
-        case Ctx::SQUAD:        snprintf(num, cap, "%u", (unsigned)s_vctx.squad);   return num;
-        case Ctx::BUSY:         snprintf(num, cap, "%u", (unsigned)s_vctx.hits);    return num;
-        case Ctx::LONG_UP:      snprintf(num, cap, "%u", (unsigned)s_vctx.upHours); return num;
-        default:                return "";
-    }
-}
-
-static void ctxFill(char* out, size_t cap, const char* tmpl, const char* arg) {
-    if (!tmpl) { out[0] = '\0'; return; }
-    if (strstr(tmpl, "%s")) snprintf(out, cap, tmpl, arg);
-    else                     snprintf(out, cap, "%s", tmpl);
-}
-
-// The exchange chosen for a seed, kept so the three beats agree. The host
-// line is always asked for first, which is what fills it.
-static uint32_t s_ctxSeed = 0xFFFFFFFFu;
-static bool     s_ctxOn   = false;
-static char     s_ctxHost[40], s_ctxGuest[40], s_ctxTop[40];
-
-static bool ctxPick(uint32_t seed) {
-    s_ctxSeed = seed;
-    s_ctxOn   = false;
-    if (seed % 3) return false;                 // two in three exchanges are about nothing
-    uint8_t cands[CTX_EXCHANGES_N];
-    uint8_t n = 0;
-    for (uint8_t i = 0; i < CTX_EXCHANGES_N; i++) if (ctxApplies(CTX_EXCHANGES[i])) cands[n++] = i;
-    if (!n) return false;
-    // Not the same one twice running, and a stride through the list rather
-    // than a walk, so with three candidates the weather is not the only
-    // subject three times in a row.
-    static uint8_t last = 0xFF;
-    uint8_t k = (uint8_t)((seed / 3 * 7) % n);
-    if (n > 1 && cands[k] == last) k = (uint8_t)((k + 1) % n);
-    last = cands[k];
-    const CtxExchange& e = CTX_EXCHANGES[last];
-    char num[8];
-    const char* arg = ctxArg(e.ctx, num, sizeof num);
-    ctxFill(s_ctxHost,  sizeof s_ctxHost,  e.host,   arg);
-    ctxFill(s_ctxGuest, sizeof s_ctxGuest, e.guest,  arg);
-    ctxFill(s_ctxTop,   sizeof s_ctxTop,   e.topper, arg);
-    s_ctxOn = true;
-    Serial.printf("[visit] banter: %s / %s / %s\n", s_ctxHost, s_ctxGuest, s_ctxTop[0] ? s_ctxTop : "-");
-    return true;
-}
-
-// The standalone HANGOUT pools that used to sit here are gone. Both sides
-// drawing from their own bank independently is precisely the thing the
-// paired table above replaced, and leaving the old pools in as a fallback
-// would only mean a path that can still produce it.
-static const char* const PART_HOST_LINES[] = {
-    "Take it easy out there.",
-    "Stay sharp.",
-    "Come back sometime.",
-    "See you around.",
-    "That was nice.",
-    "Watch yourself.",
-    "Mind how you go.",
-    "Don't be a stranger.",
-    "Go on then.",
-    "Safe signals.",
-    "Don't get seen.",
-    "Go careful.",
-    "You know where I am.",
-    "Anytime. Seriously.",
-    "That went quick.",
-    "Take the low road.",
-    "Say hi to the others.",
-    "Right. Back to it.",
-};
-static const char* const PART_GUEST_LINES[] = {
-    "Back to it, then.",
-    "Keep your eyes open.",
-    "Been good. Later.",
-    "Same time next signal.",
-    "Don't get followed.",
-    "Later, big guy.",
-    "Thanks for the company.",
-    "I'll leave you to it.",
-    "Good watching.",
-    "Keep it quiet out there.",
-    "That was a good one.",
-    "I'll find my way.",
-    "Don't wait up.",
-    "Back into the dark, then.",
-    "You were good company.",
-    "Watch the sky for me.",
-    "Next time I'll stay longer.",
-    "See you on the airwaves.",
-};
-#define POOL_N(a) (uint8_t)(sizeof(a) / sizeof((a)[0]))
-
-// Reading time, not a metronome. 4600 ms flat gave "Good." the same beat as
-// a full sentence, and the leftover seconds were the dead air that made a
-// conversation look like two statues taking turns.
-uint32_t lineMs(const char* line) {
-    uint32_t n = 0;
-    while (line && line[n]) n++;
-    uint32_t ms = 1200 + n * 65;
-    if (ms < 1800) ms = 1800;
-    if (ms > 4000) ms = 4000;
-    return ms;
-}
-
-uint32_t visitSay(const char* line) {
-    const uint32_t ms = lineMs(line);
-    say(line, ms);
-    return ms;
-}
-
-void visitLaugh(uint32_t now) {
-    mood      = Mood::BOUNCE;   // 9px at 220ms -- the idle flourish's bounce
-    moodUntil = now + tempo(1500);
-}
-
-void visitReach(uint32_t now, uint32_t ms, Reach level) {
-    mood              = Mood::HIGHFIVE;
-    moodUntil         = now + ms;
-    s_hostReachLevel  = (uint8_t)level;
-}
-
-void visitPump(uint32_t now, uint32_t ms) {
-    mood      = Mood::PUMP;
-    moodUntil = now + ms;
-}
-
-uint32_t lastInteractionAt() { return lastInteraction; }
-
-void visitDance(uint32_t now, uint32_t ms) {
-    mood      = Mood::DANCE;
-    moodUntil = now + ms;
-}
-
-void visitPose(uint32_t now, uint32_t ms, VisitPose p) {
-    s_hostReact = -1;
-    switch (p) {
-        case VisitPose::NONE:        return;
-        case VisitPose::HIGH_FIVE:   visitReach(now, ms, Reach::UP);    return;
-        case VisitPose::LOW_FIVE:    visitReach(now, ms, Reach::DOWN);  return;
-        case VisitPose::FIST:        visitReach(now, ms, Reach::LEVEL); return;
-        case VisitPose::LAUGH:       mood = Mood::BOUNCE;  break;
-        case VisitPose::PUMP:        mood = Mood::PUMP;    break;
-        case VisitPose::DANCE:       mood = Mood::DANCE;   break;
-        case VisitPose::SLEEPY:      mood = Mood::SLEEPY;  break;
-        case VisitPose::STRETCH:     mood = Mood::STRETCH; s_stretchStart = now; break;
-        case VisitPose::STARTLED:
-        case VisitPose::HANDS_UP:    mood = Mood::SHOCKED; s_hostReact = (int8_t)ReactPose::HANDS_UP;    break;
-        case VisitPose::COVER:       mood = Mood::SHOCKED; s_hostReact = (int8_t)ReactPose::COVER_FACE;  break;
-        case VisitPose::LOOK_AROUND: mood = Mood::SHOCKED; s_hostReact = (int8_t)ReactPose::LOOK_AROUND; break;
-        default:                     mood = Mood::ACT; s_hostAct = (uint8_t)p; break;
-    }
-    moodUntil      = now + ms;
-    s_hostActUntil = moodUntil;
-}
-
-void visitStretchClock(uint32_t now) { s_stretchStart = now; }
-
-DetectionType lastCaught() {
-    return s_haveLastDetection ? s_recentTypes[0] : DetectionType::UNKNOWN;
-}
-
-uint32_t lastShockAt() { return s_dtStart; }
-
-// The dance-off's call and answer, and what the guest says when a scare
-// catches up with them. Four apiece: these come round once in a minute or
-// two, not every beat, so four does not wear thin the way a banter pool would.
-static const char* const DANCE_CALLS[] = {
-    "Dance-off. Now.", "Beat this.", "Watch the feet.", "Try and keep up.",
-};
-static const char* const DANCE_REPLIES[] = {
-    "Hold my pelt.", "Oh, it's ON.", "Amateur hour.", "My turn.",
-};
-static const char* const SCARE_LINES[] = {
-    "Was that for us?", "Did you see that?", "I felt that one.", "Not again.",
-};
-
-uint32_t    visitDanceCall(uint32_t seed)  { return visitSay(DANCE_CALLS[seed % 4]); }
-const char* visitDanceReply(uint32_t seed) { return DANCE_REPLIES[seed % 4]; }
-const char* visitScareLine(uint32_t seed)  { return SCARE_LINES[seed % 4]; }
-
-// A returning visitor, rock-paper-scissors, snowballs, and waking up. Small
-// pools for the same reason as the dance-off's: these come round rarely.
-static const char* const FRIEND_HELLOS[] = {
-    "Back again!", "My favourite visitor.", "You again? Good.", "The usual spot?",
-};
-static const char* const RPS_CALLS[] = {
-    "Rock, paper, scissors!", "Best of one. Go!", "Rock, paper, SHOOT!", "Settle it.",
-};
-static const char* const RPS_WIN[]  = { "Undefeated.", "Too easy.", "Read you like a book." };
-static const char* const RPS_LOSE[] = { "Best of three?", "Rigged.", "I let you win." };
-static const char* const RPS_TIE[]  = { "Great minds.", "Again. Again.", "Jinx." };
-static const char* const SNOW_CALLS[] = { "Think fast!", "Heads up!", "Incoming!", "Catch!" };
-static const char* const SNOW_REPLIES[] = {
-    "Oh, it's ON.", "You'll pay for that.", "Cold! COLD!", "My turn.",
-};
-
-uint32_t visitFriendHello(uint32_t seed) { return visitSay(FRIEND_HELLOS[seed % 4]); }
-uint32_t visitRpsCall(uint32_t seed)     { return visitSay(RPS_CALLS[seed % 4]); }
-uint32_t visitRpsResult(uint8_t outcome, uint32_t seed) {
-    const char* const* pool = outcome == 1 ? RPS_WIN : outcome == 2 ? RPS_LOSE : RPS_TIE;
-    return visitSay(pool[seed % 3]);
-}
-uint32_t    visitSnowCall(uint32_t seed)  { return visitSay(SNOW_CALLS[seed % 4]); }
-const char* visitSnowReply(uint32_t seed) { return SNOW_REPLIES[seed % 4]; }
-
-uint32_t visitHangHost(uint32_t seed) {
-    if (ctxPick(seed)) return visitSay(s_ctxHost);
-    return visitSay(HANG_EXCHANGES[seed % HANG_EXCHANGES_N].host);
-}
-const char* visitHangGuest(uint32_t seed) {
-    if (s_ctxOn && seed == s_ctxSeed) return s_ctxGuest;
-    return HANG_EXCHANGES[seed % HANG_EXCHANGES_N].guest;
-}
-const char* visitHangTopper(uint32_t seed) {
-    if (s_ctxOn && seed == s_ctxSeed) return s_ctxTop[0] ? s_ctxTop : nullptr;
-    return HANG_EXCHANGES[seed % HANG_EXCHANGES_N].topper;
-}
-
-uint32_t visitReaction(VisitMoment m) {
-    switch (m) {
-        case VisitMoment::MEET:
-            return visitSay(pick(MEET_HOST_LINES, POOL_N(MEET_HOST_LINES)));
-        case VisitMoment::HANGOUT:
-            // Not reachable -- the hangout goes through the paired table
-            // above. Kept total rather than falling off the end.
-            return visitHangHost((uint32_t)random(0, HANG_EXCHANGES_N));
-        default:
-            return visitSay(pick(PART_HOST_LINES, POOL_N(PART_HOST_LINES)));
-    }
-}
-
-uint8_t nicknameIndex() { ensurePrefsLoaded(); return s_nickIdx; }
-uint8_t outfitIndex()   { ensurePrefsLoaded(); return s_outfitIdx; }
-uint8_t shadesIndex()   { ensurePrefsLoaded(); return s_shadeIdx; }
-
-const char* customName() {
-    ensurePrefsLoaded();
-    return s_customName[0] ? s_customName : nullptr;
-}
-
-void setCustomName(const char* n) {
-    ensurePrefsLoaded();
-    uint8_t len = 0;
-    if (n) while (len < CUSTOM_NAME_MAX && n[len]) { s_customName[len] = n[len]; len++; }
-    s_customName[len] = '\0';
-    if (len == 0) {
-        // Preferences::putString on an empty value is the same trap
-        // putBytes had: it does not write, so the OLD name survives the
-        // reboot and a cleared name comes back. Remove the key instead --
-        // exactly the ignore-list fix from v1.5.20.
-        s_petPrefs.remove("cname");
-    } else {
-        s_petPrefs.putString("cname", s_customName);
-    }
-}
-
-const char* nicknameAt(uint8_t idx) {
-    return NICKNAMES[idx % NICKNAMES_N];
-}
-
-const char* visitGuestLine(VisitMoment m, uint32_t seed) {
-    // Indexed rather than random: the guest's bubble is redrawn every frame
-    // it is up, and a fresh roll per frame would flicker through the whole
-    // pool instead of saying one thing. The caller supplies a value that
-    // changes once per line.
-    switch (m) {
-        case VisitMoment::MEET:
-            return MEET_GUEST_LINES[seed % POOL_N(MEET_GUEST_LINES)];
-        case VisitMoment::HANGOUT:
-            return visitHangGuest(seed);
-        default:
-            return PART_GUEST_LINES[seed % POOL_N(PART_GUEST_LINES)];
-    }
-}
-#endif // MULESKIN_MESH
 
 // Flavor pool for watchAlertReaction() -- fires once when a watched
 // target reappears. No teaching line here (see muleskin.h) since
@@ -7218,9 +6597,6 @@ void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
     // already talking) rather than interrupting: a scripted line landing on
     // top of a nap reads as a bug, and the next beat is only 30s away.
     if (!s_onboardActive && !s_showOff && mood == Mood::IDLE &&
-#if MULESKIN_MESH
-        !s_visiting &&                      // he is in the middle of a chat
-#endif
         now >= s_nextWatchAt && now >= bubbleUntil) {
         say(pick(WATCHING_LINES, WATCHING_N), 4000);
         s_nextWatchAt = now + WATCH_EVERY_MS;
@@ -7236,9 +6612,6 @@ void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
     const uint32_t  idleGap  = nextIdleAt > s_idleRolledAt ? nextIdleAt - s_idleRolledAt : 0;
     const uint32_t  idleDue  = s_idleRolledAt + (uint32_t)(idleGap * Settings::banterScale());
     if (!s_onboardActive && !s_showOff && mood == Mood::IDLE &&
-#if MULESKIN_MESH
-        !s_visiting &&
-#endif
         now >= idleDue) {
         s_idleRolledAt = now;
         s_idleRoll = true;
@@ -7486,8 +6859,7 @@ void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
     // It only ever raises headroom, never lowers it, so the per-outfit drops
     // above still win where they are larger, and every screen whose band is
     // too small for this to bite is left exactly as it was.
-    // Neither guard runs with company on screen -- see setCompany().
-    if (!s_company) {
+    {
         const int A    = availHeight - bubbleRowH;
         const int Cy   = topY + bubbleRowH;
         // (A Legend's top hat used to raise this, so the whole hat stayed on
@@ -7519,7 +6891,7 @@ void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
     // bottom. A costume too tall for the screen therefore shrinks from the
     // top and stays anchored on the detection bar, which is the only way
     // this could be done without him bouncing up and down as outfits change.
-    if (!s_company) {
+    {
         const int R    = outfitReach(currentOutfit());
         const int A    = availHeight - bubbleRowH;
         const int Cy   = topY + bubbleRowH;
@@ -7554,7 +6926,7 @@ void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
     const bool bigPanel = (t.width() >= 400 || t.height() >= 400);
     float scaleMax = 3.0f;
     if (bigPanel) {
-        const float span = (float)t.width() / (s_company ? 2.0f : 1.0f) - 8.0f;
+        const float span = (float)t.width() - 8.0f;
         scaleMax = span / 56.0f;
         if (scaleMax > 3.0f) scaleMax = 3.0f;
         if (scaleMax < minScale) scaleMax = minScale;

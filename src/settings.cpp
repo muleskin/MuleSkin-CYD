@@ -16,16 +16,6 @@ static uint8_t     s_mascotTempo  = 70;    // TEMPO: percent on his durations
 static bool        s_inverted   = false;
 static bool        s_rgbSwapped = false;
 static bool        s_colorChecked = false;
-#if MULESKIN_MESH
-// Declared with the other flags: load() reads them long before the accessors
-// below are defined.
-static bool        s_meshDetect   = false;
-static bool        s_meshTransmit = false;
-static bool        s_meshConsent  = false;
-static bool        s_phoneQwerty  = false;
-static bool        s_messagesOn   = false;
-static bool        s_msgTutor     = false;
-#endif
 static bool        s_infoPrimerShown = false;
 // Locked on the watch: a square screen with a crown has one way up, and a
 // corner button that spins it is a thing to hit by accident on a wrist.
@@ -39,12 +29,6 @@ static const bool DEFAULT_ROTATION_LOCK = false;
 #endif
 static bool        s_rotationLocked = DEFAULT_ROTATION_LOCK;
 static bool        s_aura = true;
-// Eight is the ceiling because the radio's own squad ring holds eight (see
-// SQUAD_N in mesh.cpp). A menu that offered thirty would be offering something
-// the hardware cannot hear: the ninth board in the room evicts the first, and
-// the screen would still show eight.
-static const uint8_t CROWD_MAX = 8;
-static uint8_t     s_meshCrowd = 1;   // how many on screen at once, 1..CROWD_MAX
 // The screen's starting rotation: landscape on every CYD; the watch reads
 // one step round from that with its crown on the right (LilyGo's default).
 #if defined(TWATCH_S3)
@@ -171,19 +155,15 @@ static bool     s_loraLkFeed   = false;
 // ---- status light --------------------------------------------------------
 static bool    s_lightOn     = true;
 static bool    s_lightAlerts = true;
-static bool    s_lightMsgs   = true;
 static uint8_t s_lightIdle   = 1;    // BREATHE
 static uint8_t s_lightColor  = 0;    // THEME
 static uint8_t s_lightBright = 4;    // of 7
-static bool    s_remoteUpdate = false;
-static bool    s_phraseShown  = true;
 static bool    s_updateCheck  = true;
 static bool    s_autoTime     = true;
 static uint8_t s_nightMode    = 0;
 static bool    s_labChannel   = false;
 static bool    s_autoUpdate   = false;
 static bool    s_phoneAlerts  = false;
-static bool    s_squadFollow  = false;
 static uint8_t s_timeZone     = 10;   // UTC in Clock's table
 static bool    s_tzChosen     = false;
 static const char* const LIGHT_IDLE_NAMES[]  = { "OFF", "BREATHE", "SOLID" };
@@ -433,21 +413,6 @@ void load() {
     s_mascotTempo  = s_prefs.getUChar("tempo", 70);
     if (s_mascotPace < 10 || s_mascotPace > 500) s_mascotPace = 120;
     if (s_mascotTempo < 50 || s_mascotTempo > 200) s_mascotTempo = 70;
-#if MULESKIN_MESH
-    // Both off unless asked for. See the note in settings.h.
-    s_meshDetect   = s_prefs.getBool("meshrx", false);
-    s_meshCrowd    = s_prefs.getUChar("crowd", 1);
-    if (s_meshCrowd < 1 || s_meshCrowd > CROWD_MAX) s_meshCrowd = 1;
-    // Two draws exactly what one does -- see cycleMeshCrowd(). An older build
-    // could not have stored it, but a hand-edited NVS can, and a setting that
-    // does nothing is worse than one that moved.
-    if (s_meshCrowd == 2) s_meshCrowd = 3;
-    s_meshTransmit = s_prefs.getBool("meshtx", false);
-    s_meshConsent  = s_prefs.getBool("meshok", false);
-    s_phoneQwerty  = s_prefs.getBool("qwerty", false);
-    s_messagesOn   = s_prefs.getBool("msgon", false);
-    s_msgTutor     = s_prefs.getBool("msgtut", false);
-#endif
     s_infoPrimerShown = s_prefs.getBool("infoprimer", false);
     s_rotationLocked = s_prefs.getBool("rotlock", DEFAULT_ROTATION_LOCK);
     // A new key, not the top hat's: somebody who took the hat off never said
@@ -520,7 +485,6 @@ void load() {
     s_loraLkFeed   = s_prefs.getBool("loraLkMcF", false);
     s_lightOn      = s_prefs.getBool("ltOn", true);
     s_lightAlerts  = s_prefs.getBool("ltAlert", true);
-    s_lightMsgs    = s_prefs.getBool("ltMsg", true);
     s_lightIdle    = s_prefs.getUChar("ltIdle", 1);
     s_banter       = s_prefs.getUChar("banter", 2);
     if (s_banter > 3) s_banter = 2;
@@ -530,19 +494,12 @@ void load() {
     // (old 1..5 is new 3..7) instead of dropping two rungs.
     if (s_prefs.isKey("ltBri7")) s_lightBright = s_prefs.getUChar("ltBri7", 4);
     else                         s_lightBright = (uint8_t)(s_prefs.getUChar("ltBright", 2) + 2);
-    // On by default since v1.7.7: a squad member can only ever make this board
-    // install a signed release newer than the one it runs, with a countdown
-    // and SKIP, and the trust is the phrase they already hold. Off is for
-    // anyone who wants it.
-    s_remoteUpdate = s_prefs.getBool("rmtUpd", true);
-    s_phraseShown  = s_prefs.getBool("phrShow", true);
     s_updateCheck  = s_prefs.getBool("updChk", true);
     s_autoTime     = s_prefs.getBool("autoTime", true);
     s_nightMode    = s_prefs.getUChar("night", 0);
     s_labChannel   = s_prefs.getBool("lab", false);
     s_autoUpdate   = s_prefs.getBool("autoUpd", false);
     s_phoneAlerts  = s_prefs.getBool("phoneAl", false);
-    s_squadFollow  = s_prefs.getBool("sqFollow", false);
     if (s_nightMode >= NightMode::PRESET_N) s_nightMode = 0;
     s_timeZone     = s_prefs.getUChar("tz", 10);
     s_tzChosen     = s_prefs.getBool("tzSet", false);
@@ -691,7 +648,6 @@ void toggleBackgroundLocked() {
 
 bool        lightOn()         { return s_lightOn; }
 bool        lightAlerts()     { return s_lightAlerts; }
-bool        lightMessages()   { return s_lightMsgs; }
 uint8_t     lightIdle()       { return s_lightIdle; }
 uint8_t     lightColor()      { return s_lightColor; }
 uint8_t     lightBrightness() { return s_lightBright; }
@@ -699,7 +655,6 @@ const char* lightIdleName()   { return LIGHT_IDLE_NAMES[s_lightIdle > 2 ? 1 : s_
 const char* lightColorName()  { return LIGHT_COLOR_NAMES[s_lightColor < LIGHT_COLOR_N ? s_lightColor : 0]; }
 void toggleLight()         { s_lightOn = !s_lightOn;         s_prefs.putBool("ltOn", s_lightOn); }
 void toggleLightAlerts()   { s_lightAlerts = !s_lightAlerts; s_prefs.putBool("ltAlert", s_lightAlerts); }
-void toggleLightMessages() { s_lightMsgs = !s_lightMsgs;     s_prefs.putBool("ltMsg", s_lightMsgs); }
 void cycleLightIdle()      { s_lightIdle = (uint8_t)((s_lightIdle + 1) % 3);            s_prefs.putUChar("ltIdle", s_lightIdle); }
 uint8_t     banter()       { return s_banter; }
 const char* banterName()   { return BANTER_NAMES[s_banter > 3 ? 2 : s_banter]; }
@@ -715,10 +670,6 @@ void cycleLightColor() {
     s_prefs.putUChar("ltColor", s_lightColor);
 }
 void cycleLightBrightness() { s_lightBright = (uint8_t)(s_lightBright % 7 + 1);          s_prefs.putUChar("ltBri7", s_lightBright); }
-bool remoteUpdate()         { return s_remoteUpdate; }
-void toggleRemoteUpdate()   { s_remoteUpdate = !s_remoteUpdate; s_prefs.putBool("rmtUpd", s_remoteUpdate); }
-bool phraseShown()          { return s_phraseShown; }
-void togglePhraseShown()    { s_phraseShown = !s_phraseShown; s_prefs.putBool("phrShow", s_phraseShown); }
 bool updateCheck()          { return s_updateCheck; }
 void toggleUpdateCheck()    { s_updateCheck = !s_updateCheck; s_prefs.putBool("updChk", s_updateCheck); }
 bool autoTime()             { return s_autoTime; }
@@ -729,8 +680,6 @@ bool autoUpdate()           { return s_autoUpdate; }
 void toggleAutoUpdate()     { s_autoUpdate = !s_autoUpdate; s_prefs.putBool("autoUpd", s_autoUpdate); }
 bool phoneAlerts()          { return s_phoneAlerts; }
 void togglePhoneAlerts()    { s_phoneAlerts = !s_phoneAlerts; s_prefs.putBool("phoneAl", s_phoneAlerts); }
-bool squadFollow()          { return s_squadFollow; }
-void toggleSquadFollow()    { s_squadFollow = !s_squadFollow; s_prefs.putBool("sqFollow", s_squadFollow); }
 void toggleLabChannel()     { s_labChannel = !s_labChannel; s_prefs.putBool("lab", s_labChannel); }
 void cycleNightMode()       { s_nightMode = (uint8_t)((s_nightMode + 1) % NightMode::PRESET_N); s_prefs.putUChar("night", s_nightMode); }
 uint8_t     timeZone()      { return s_timeZone; }
@@ -829,86 +778,6 @@ static const uint8_t     SQ_SIZE_PCT[3]   = { 70, 85, 100 };
 static const char* const SQ_SIZE_LABEL[3] = { "SMALL", "MEDIUM", "LARGE" };
 static const uint8_t     SQ_SIZE_N        = 3;
 
-#if MULESKIN_MESH
-bool meshDetect()   { return s_meshDetect; }
-bool meshTransmit() { return s_meshTransmit && s_meshConsent; }
-bool meshConsent()  { return s_meshConsent; }
-void setMeshConsent(bool v) {
-    s_meshConsent = v;
-    s_prefs.putBool("meshok", v);
-}
-const char* meshDetectLabel()   { return s_meshDetect   ? "ON" : "OFF"; }
-// Reports what the RADIO is doing, not what the flag holds -- meshTransmit()
-// is the same answer the advertiser gets, so the row cannot say ON while
-// nothing is going out.
-const char* meshTransmitLabel() { return meshTransmit() ? "ON" : "OFF"; }
-uint8_t meshCrowd() { return s_meshCrowd; }
-
-static const char* crowdLabel(uint8_t n) {
-    // ONE is a different thing, not a count of one: it is the ordinary visit,
-    // with the set pieces and the emotes that a crowd stands down.
-    if (n <= 1) return "ONE";
-    static char b[10];
-    snprintf(b, sizeof b, "UP TO %u", (unsigned)n);
-    return b;
-}
-const char* meshCrowdLabel() { return crowdLabel(s_meshCrowd); }
-
-// Every number from one to eight, one per tap, wrapping -- except two. It used
-// to offer only 1, 4 and 8 on the grounds that eight values would be eight
-// taps, which is true, but how many to put on screen is a matter of taste and
-// of screen size, and that is the owner's call rather than ours.
-//
-// TWO IS SKIPPED because it is the one number that would change nothing. The
-// crowd needs two PEERS before it draws anything, so "up to 2" is one visitor
-// -- which is the ordinary visit ONE already gives, and gives better: the
-// arrivals, the high fives, the rock-paper-scissors and every other set piece
-// written for exactly two MuleSkins, all of which a crowd stands down. A menu
-// value that silently does nothing reads as a bug.
-static uint8_t nextCrowd(uint8_t c) {
-    uint8_t n = (uint8_t)(c >= CROWD_MAX ? 1 : c + 1);
-    if (n == 2) n = 3;
-    return n;
-}
-void cycleMeshCrowd() {
-    s_meshCrowd = nextCrowd(s_meshCrowd);
-    s_prefs.putUChar("crowd", s_meshCrowd);
-}
-
-void cycleMeshDetect()   { s_meshDetect   = !s_meshDetect;   s_prefs.putBool("meshrx", s_meshDetect); }
-void cycleMeshTransmit() { s_meshTransmit = !s_meshTransmit; s_prefs.putBool("meshtx", s_meshTransmit); }
-
-const char* meshSummary() {
-    // Never bare "ON"/"OFF", and always with the arrow.
-    //
-    // The row opens a screen, but it looked like a switch: every toggle on
-    // that list says ON or OFF, so a row saying ON reads as one you tap to
-    // flip. The rows that DO open screens show data instead -- "14/14",
-    // "3" -- because a number cannot be mistaken for a toggle state.
-    //
-    // RX/TX rather than DETECT/SEND for width: "MULESKINMESH" plus
-    // "DETECT+SEND" collides with itself on the 240px portrait rotation at
-    // this row's size-2 text, which is the same trap already documented on
-    // TYPE FILTER and IGNORED.
-    if (s_meshDetect && meshTransmit()) return "RX+TX >";
-    if (s_meshDetect)                   return "RX >";
-    if (meshTransmit())                 return "TX >";
-    return "OFF >";
-}
-
-bool phoneQwerty() { return s_phoneQwerty; }
-void togglePhoneQwerty() {
-    s_phoneQwerty = !s_phoneQwerty;
-    s_prefs.putBool("qwerty", s_phoneQwerty);
-}
-bool messagesOn() { return s_messagesOn; }
-void toggleMessages() {
-    s_messagesOn = !s_messagesOn;
-    s_prefs.putBool("msgon", s_messagesOn);
-}
-bool meshTutorSeen()    { return s_msgTutor; }
-void setMeshTutorSeen() { s_msgTutor = true; s_prefs.putBool("msgtut", true); }
-#endif
 
 uint16_t mascotPaceMs() { return s_mascotPace; }
 void setMascotPaceMs(uint16_t ms) {

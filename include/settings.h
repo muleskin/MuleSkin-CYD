@@ -320,8 +320,6 @@ namespace Settings {
     void        toggleLight();
     bool        lightAlerts();           // detection flashes
     void        toggleLightAlerts();
-    bool        lightMessages();         // the unread blink, and squad visits
-    void        toggleLightMessages();
     uint8_t     lightIdle();             // 0 OFF, 1 BREATHE, 2 SOLID
     void        cycleLightIdle();
 
@@ -340,12 +338,6 @@ namespace Settings {
     uint8_t     lightBrightness();       // 1..7, caps everything
     void        cycleLightBrightness();
 
-    // REMOTE UPDATE: whether a squad update nudge over MuleSkinMesh may start
-    // an update on this board. OFF by default -- a board in a pocket that
-    // reboots on its own is a surprise nobody signed up for -- and on the
-    // SECURITY screen, because it is about who can do things to this board.
-    bool        remoteUpdate();
-    void        toggleRemoteUpdate();
 
     // UPDATE CHECK: whether the board joins its saved WiFi for a few seconds
     // at boot to ask the site for a newer release. Tells, never installs.
@@ -378,11 +370,6 @@ namespace Settings {
     bool        phoneAlerts();
     void        togglePhoneAlerts();
 
-    // TELL SQUAD: a WITH YOU goes to the squad as a message too (main.cpp
-    // queueSquadFollow()). Off by default; listed on mesh builds only.
-    bool        squadFollow();
-    void        toggleSquadFollow();
-
     // TIME ZONE: an index into Clock's zone table, applied at load and on
     // every change. UTC until somebody picks one; timeZoneChosen() says
     // whether anybody has, so MuleSkin can ask once.
@@ -394,12 +381,6 @@ namespace Settings {
     void        markTimeZoneChosen();       // THIS IS RIGHT on the card
     bool        timeZoneChosen();
 
-    // SHOW PHRASE: whether this board ever prints its five words. OFF makes
-    // the squad invite-only from this board's side: nobody can read the
-    // phrase off it, so the only way in is ADD TO SQUAD, in person. ON by
-    // default, which is what every board did before the switch existed.
-    bool        phraseShown();
-    void        togglePhraseShown();
 
     // What is CONFIGURED, ignoring the master switch. Only the power menu
     // wants these: it has to show you what you have chosen while the feature
@@ -445,66 +426,6 @@ namespace Settings {
     // full-size case, and every value below it is strictly more
     // conservative than what they solved for. Above 100 would invalidate
     // both, which is a different and much larger job.
-#if MULESKIN_MESH
-    // The two halves of MuleSkinMesh, separately switchable, because they are
-    // genuinely different things to consent to.
-    //
-    // TRANSMIT is the privacy-relevant one and defaults OFF. This device
-    // otherwise never transmits, which is written up as a feature; turning
-    // it on makes it visible to anybody else's scanner and gives it an
-    // identity that follows it around. That should be chosen, not inherited.
-    //
-    // DETECT also defaults off, so the feature as a whole does nothing until
-    // it is asked to. One earlier attempt gated only transmit and left
-    // detect always on, which was defensible and still wrong: a setting
-    // whose label says off while MuleSkins keep arriving is a setting that
-    // lies. Splitting them is the honest version of that argument -- somebody
-    // who wants to watch without being seen can now say so.
-    bool        meshDetect();
-    // FALSE until the warning screen has been accepted, whatever the stored
-    // TRANSMIT flag says. The masking lives in the getter rather than at the
-    // call sites so there is exactly one place that can be wrong, and so a
-    // preference left behind by an older build cannot start a radio the
-    // owner of this one never agreed to.
-    bool        meshTransmit();
-    bool        meshConsent();
-    void        setMeshConsent(bool v);
-    const char* meshDetectLabel();
-    const char* meshTransmitLabel();
-    // CROWD: how many MuleSkines may be on screen at once, roaming rather
-    // than standing. 1 is the old behaviour -- one visitor, both of them on
-    // the ground. Measured on hardware: eight at the size they shrink to cost
-    // LESS to draw than the two at today's size do (17.6 ms against 29).
-    //
-    // Any number from one to eight, and EIGHT IS NOT ARBITRARY: the radio's
-    // squad ring holds eight (SQUAD_N in mesh.cpp), so a ninth board in the
-    // room evicts the first. Raising this without raising that would offer a
-    // number the hardware cannot hear.
-    //
-    // Up to four share one row; past four they take two or three, because
-    // five across reads as a queue and four across still reads as a group.
-    uint8_t     meshCrowd();
-    const char* meshCrowdLabel();
-    void        cycleMeshCrowd();
-    void        cycleMeshDetect();
-    void        cycleMeshTransmit();
-    // For the one-line summary on the Settings row that opens the menu.
-    const char* meshSummary();
-    // Which board the payphone screen shows. The keypad is the default and
-    // the point; QWERTY is the bailout for people who hate multi-tap, and it
-    // is remembered because somebody who hates it hates it every time.
-    bool        phoneQwerty();
-    void        togglePhoneQwerty();
-    // Encrypted messages between MuleSkines that share a phrase. Off until
-    // asked for. Reading one needs DETECT; sending one needs TRANSMIT, and so
-    // sits behind the same consent gate.
-    bool        messagesOn();
-    void        toggleMessages();
-    // Whether the messages tutorial has run. Set when it STARTS, so a
-    // skipped tutorial counts as seen; "?" on the message screen replays it.
-    bool        meshTutorSeen();
-    void        setMeshTutorSeen();
-#endif
 
     // The mascot's pace, chosen by eye on a real board (PACE N / TEMPO P on
     // the console) and kept. Pace: milliseconds between his steps. Tempo: a

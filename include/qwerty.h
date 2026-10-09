@@ -8,7 +8,6 @@
 // the name being typed lives there: switching layouts mid-word keeps what you
 // have typed, which is the entire point of a bailout.
 #pragma once
-#if MULESKIN_MESH
 #include <stdint.h>
 
 namespace Qwerty {
@@ -44,9 +43,9 @@ constexpr int BAND_BOTTOM_INSET = 26 + 6 + 6;
 // Rows are un-staggered -- rows two and three share a left edge -- because
 // QWERTY's offset is a typewriter linkage artefact, and squaring it up is
 // where the middle row gets its extra width.
-// `message`: the board for a MuleSkinMesh message -- a digit row on top, an
-// apostrophe after M, and , . ? ! - around the space bar. A name gets the
-// four-row letters-only board.
+// `message`: the board with a digit row on top, an apostrophe after M, and
+// , . ? ! - around the space bar (it was the squad messages' board). Without
+// it, the four-row letters-only board.
 uint8_t layout(int w, int bandTop, int bandBottom, Key out[KEY_N], bool message = false);
 
 // The key nearest (x, y), measured to its RECTANGLE rather than its centre.
@@ -80,4 +79,3 @@ struct TouchFilter {
 };
 
 } // namespace Qwerty
-#endif

@@ -23,7 +23,7 @@ const int ROW_GAP = 3;
 // the two cannot drift apart.
 struct Geom {
     int x, w;                          // the wide buttons
-    int wifiY, btY, squadY, switchY;
+    int wifiY, btY, stackY, switchY;
     int backX, backY, backW;
 };
 
@@ -37,14 +37,12 @@ Geom geom(TFT_eSPI& t) {
     g.backX = (w - g.backW) / 2;
     g.backY = h - BTN_H - 6;
     g.switchY = g.backY - BTN_H - 8;
-    g.squadY  = OtaCore::otherVersion() ? g.switchY - BTN_H - 8 : g.switchY;
-    // Stacked upward from SQUAD: Bluetooth only where the board has it (the
+    // The bottom of the update buttons: above SWITCH when there is another
+    // version to switch to.
+    g.stackY  = OtaCore::otherVersion() ? g.switchY - BTN_H - 8 : g.switchY;
+    // Stacked upward from there: Bluetooth only where the board has it (the
     // CYDs dropped it; see nimble_flags_cyd), and WiFi takes its place.
-#if MULESKIN_MESH
-    int above = g.squadY - BTN_H - 8;
-#else
-    int above = g.squadY;
-#endif
+    int above = g.stackY;
     g.btY     = above;
     if (OtaBle::available()) above -= BTN_H + 8;
     g.wifiY   = above;
@@ -155,9 +153,6 @@ void drawMenu(TFT_eSPI& t) {
     Theme::drawWin95Button(t, g.x, g.wifiY, g.w, BTN_H, "UPDATE OVER WIFI", false);
     if (OtaBle::available())
         Theme::drawWin95Button(t, g.x, g.btY,   g.w, BTN_H, "UPDATE OVER BLUETOOTH (BETA)", false);
-#if MULESKIN_MESH
-    Theme::drawWin95Button(t, g.x, g.squadY, g.w, BTN_H, "UPDATE SQUAD", false);
-#endif
     if (other) {
         char b[40];
         snprintf(b, sizeof b, "SWITCH TO %.20s", other);
@@ -497,9 +492,6 @@ UpdateHit uiUpdateHitTest(TFT_eSPI& t, int x, int y, int* netIndex) {
             }
             if (in(x, y, g.x, g.wifiY, g.w, BTN_H)) return UpdateHit::WIFI_START;
             if (OtaBle::available() && in(x, y, g.x, g.btY, g.w, BTN_H)) return UpdateHit::BT_START;
-#if MULESKIN_MESH
-            if (in(x, y, g.x, g.squadY, g.w, BTN_H)) return UpdateHit::SQUAD_START;
-#endif
             if (OtaCore::otherVersion() && in(x, y, g.x, g.switchY, g.w, BTN_H)) return UpdateHit::SWITCH;
             return onBack ? UpdateHit::BACK : UpdateHit::NONE;
         case OtaBle::State::WAITING:

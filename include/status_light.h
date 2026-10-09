@@ -10,10 +10,7 @@
 //   3. A detection alert: three fast flashes in the detection's own colour,
 //      then steady for as long as the alert card is up, then a one-second
 //      fade down. Same colour the card uses, from the theme.
-//   4. An unread message: a soft double-blink in the mesh pink every three
-//      seconds until the inbox is opened.
-//   5. A squad visit: one short blip, then back to idle. Never repeats.
-//   6. Idle: off, a slow breathe, or solid, in the idle colour.
+//   4. Idle: off, a slow breathe, or solid, in the idle colour.
 //
 // The LED sits on GPIO 4 / 16 / 17 on the 2.8" CYD, both the ST7789 and the
 // ILI9341 kinds, and on the RL Phantom, where it is on the front. Common
@@ -33,8 +30,6 @@ namespace StatusLight {
 struct Context {
     bool     alert;         // the ALERT card is on screen
     uint16_t alertColor;    // Theme::colorFor(type), RGB565
-    bool     unread;        // MeshTalk::inbox().unread
-    bool     visiting;      // somebody's MuleSkin is on our screen
     uint8_t  update;        // 0 none, 1 receiving, 2 done, 3 failed
     bool     quiet;         // the lock screen, PIN entry: show nothing at all
     bool     screenDimmed;  // the power saver has dimmed the backlight
@@ -52,8 +47,8 @@ void begin();
 // The red, green, blue sweep during the splash. Half a second.
 void boot(uint32_t now);
 
-// The settings TEST row: alert, message, visit and idle back to back, about
-// six seconds, so the settings can be seen without waiting for a camera.
+// The settings TEST row: an alert, then idle, about four seconds, so the
+// settings can be seen without waiting for a camera.
 void test(uint32_t now);
 
 // Dark, now, and stays dark until the next tick() decides otherwise. For the

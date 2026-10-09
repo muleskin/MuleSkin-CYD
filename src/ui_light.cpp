@@ -49,9 +49,6 @@ static void rowContent(LightRow r, char* valBuf, size_t valBufN,
         case LightRow::ALERTS:
             label = "ALERTS"; value = Settings::lightAlerts() ? "ON" : "OFF";
             break;
-        case LightRow::MESSAGES:
-            label = "MESSAGES"; value = Settings::lightMessages() ? "ON" : "OFF";
-            break;
         case LightRow::IDLE:
             label = "IDLE"; value = Settings::lightIdleName();
             break;

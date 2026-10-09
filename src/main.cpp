@@ -284,7 +284,6 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "flood_bench.h"
 #include "ui_boot.h"
 #include "ui_clear.h"
-#include "crowd_bench.h"
 #include "ui_alert.h"
 #include "ui_log.h"
 #include "ui_watchalert.h"
@@ -301,20 +300,8 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "draw_band.h"
 #include "frame_prof.h"
 #include "fast_sprite.h"
-#if MULESKIN_MESH
 #include "ui_phone.h"
-#include "ui_meshmenu.h"
-#include "ui_meshwarn.h"
-#include "meshtalk.h"
-#include "ui_meshphrase.h"
-#include "ui_meshcompose.h"
-#include "meshtutor.h"
-#include "ui_squad.h"
 #include "ui_nudge.h"
-#include "ui_squadupdate.h"
-#include "ui_invite.h"
-#include "meshmsg.h"
-#endif
 #include "ignore_list.h"
 #include "ignore_list.h"
 #include "ui_detfilter.h"
@@ -338,8 +325,6 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "ui_update.h"
 #include "ui_wifipass.h"
 #include "ui_sysprops.h"
-#if MULESKIN_MESH
-#endif
 #include "status_light.h"
 #include "ui_light.h"
 #if MULESKIN_LORA
@@ -1341,9 +1326,6 @@ static void restoreFrameBuffer();
 // gear, an auto-lock -- has to stop it, or detection stays off until a restart.
 static bool onRawScanScreen() {
     return state == AppState::WIFI_ADD
-#if MULESKIN_MESH
-        || state == AppState::SQUAD_UPDATE
-#endif
         ;
 }
 static void enterClear() {
@@ -1560,25 +1542,16 @@ static void enterUpdate() {
     uiUpdateInit(*canvas);
 }
 
-#if MULESKIN_MESH
-// ---- the squad update -----------------------------------------------------
-// A nudge heard on the mesh waits here until the main screen is showing,
-// then becomes the countdown. Three minutes and it is forgotten: a nudge
-// from a while ago is not something to act on when a menu finally closes.
-static MeshTalk::NudgeIn s_nudge = {};
-static bool              s_nudgePending = false;
-static bool              s_nudgeIsAuto  = false;   // the countdown is AUTO UPDATE's, not a squad member's
-static const uint32_t    NUDGE_HOLD_MS  = 180000;
-static const uint16_t    NUDGE_COUNT_S  = 30;
+// ---- AUTO UPDATE -----------------------------------------------------------
+// serviceAutoUpdate() puts the countdown up (ui_nudge.h); when it runs out,
+// or somebody taps NOW, the update is driven from the UPDATE state's tick in
+// place of the taps the manual flow takes, on the saved WiFi.
+static uint8_t           s_autoVer[3]  = { 0, 0, 0 };
+static const uint16_t    AUTO_COUNT_S  = 30;
 
-// The update a nudge started, driven from the UPDATE state's tick in place
-// of the taps the manual flow takes. The shared network is used once and
-// wiped the moment it has been handed to the radio.
 static struct {
-    bool     active = false, connected = false, installed = false, haveCreds = false;
+    bool     active = false, connected = false, installed = false;
     uint32_t failAt = 0;
-    char     ssid[MeshMsg::WIFI_SSID_MAX + 1] = "";
-    char     pass[MeshMsg::WIFI_PASS_MAX + 1] = "";
 } s_auto;
 
 static void enterNudge() {
@@ -1586,7 +1559,7 @@ static void enterNudge() {
     transitionStart = millis();
     lastTouch = transitionStart;     // undims a sleeping screen, like an alert
     if (s_screenDimmed) { s_screenDimmed = false; applyBrightness(); }
-    uiNudgeInit(*canvas, s_nudgeIsAuto ? nullptr : s_nudge.from, s_nudge.ver, NUDGE_COUNT_S, transitionStart);
+    uiNudgeInit(*canvas, s_autoVer, AUTO_COUNT_S, transitionStart);
 }
 
 static void enterBingo() {
@@ -1599,24 +1572,6 @@ static void enterDex() {
     state = AppState::DEX;
     transitionStart = millis();
     uiDexInit(*canvas);
-}
-
-static void enterSquadUpdate() {
-    state = AppState::SQUAD_UPDATE;
-    transitionStart = millis();
-    // The scan behind SHARE WIFI: which saved network is in this room. Mesh
-    // keeps its radio through a WiFi scan (only an update takes that), so
-    // the nudge can still go out while this is running.
-    engine.startRawWifiScan();
-    uiSquadUpdateInit(*canvas);
-}
-
-static void enterInvite() {
-    state = AppState::INVITE;
-    transitionStart = millis();
-    lastTouch = transitionStart;
-    if (s_screenDimmed) { s_screenDimmed = false; applyBrightness(); }
-    uiInviteInit(*canvas);
 }
 
 // INVERT and ROT on the console -- see clock.cpp. Consumed in loop().
@@ -1647,7 +1602,7 @@ volatile int32_t g_consoleFakeLat7 = 0, g_consoleFakeLon7 = 0;   // GPS FAKE lat
 
 #ifdef BENCH_TOOLS
 // UPDATE NOW and UPDATE STOP on the console, for the bench: the unattended
-// version of the update the squad nudge does, and of the CANCEL button.
+// update AUTO UPDATE does, without waiting for night, and the CANCEL button.
 // Bench builds only.
 volatile bool g_benchUpdateNow  = false;
 volatile bool g_benchUpdateStop = false;
@@ -1660,12 +1615,10 @@ static const char* updateRefusedWhy() {
     return Security::locked() ? "Unlock the board first" : "Try again in a moment";
 }
 
-static void startNudgedUpdate() {
+static void startAutoUpdate() {
     s_auto = {};
-    if (!OtaWifi::hasSaved())
-        s_auto.haveCreds = MeshTalk::takeNudgeWifi(s_nudge, s_auto.ssid, s_auto.pass);
-    if (!OtaWifi::hasSaved() && !s_auto.haveCreds) {
-        Theme::showToast("NO WIFI TO USE", "Do one WiFi update by hand first", Theme::AMBER);
+    if (!OtaWifi::hasSaved()) {
+        Theme::showToast("NO WIFI TO USE", "Save a network in WIFI NETWORKS", Theme::AMBER);
         enterClear();
         return;
     }
@@ -1673,14 +1626,13 @@ static void startNudgedUpdate() {
     engine.startUpdateRadio();
     if (!OtaWifi::begin()) {
         engine.stopUpdateRadio();
-        memset(s_auto.pass, 0, sizeof s_auto.pass);
-        Theme::showToast("CAN'T START UPDATE", nullptr, Theme::AMBER);
+        Theme::showToast("CAN'T START UPDATE", updateRefusedWhy(), Theme::AMBER);
         enterClear();
         return;
     }
     s_auto.active = true;
-    Serial.printf("[nudge] updating on %s's word, network %s\n", s_nudge.from,
-                  OtaWifi::hasSaved() ? "saved" : "shared");
+    Serial.printf("[auto] updating to v%u.%u.%u on the saved WiFi\n",
+                  (unsigned)s_autoVer[0], (unsigned)s_autoVer[1], (unsigned)s_autoVer[2]);
 }
 
 // The taps the manual flow would make, made by the tick instead.
@@ -1689,18 +1641,15 @@ static void autoUpdateTick(uint32_t now) {
     const OtaWifi::State ws = OtaWifi::state();
     if (ws == OtaWifi::State::PICK && !s_auto.connected) {
         s_auto.connected = true;
-        if (OtaWifi::hasSaved()) OtaWifi::connectSaved();
-        else                     OtaWifi::connect(s_auto.ssid, s_auto.pass, false);
-        memset(s_auto.pass, 0, sizeof s_auto.pass);
+        OtaWifi::connectSaved();
     } else if (ws == OtaWifi::State::READY && !s_auto.installed) {
         s_auto.installed = true;
         if (OtaWifi::upToDate()) {
-            // The nudge said newer; the site disagrees. Nothing to do, and
-            // Bluetooth is already gone, so this restarts the board.
+            // The boot check said newer; the site disagrees. Nothing to do,
+            // and Bluetooth is already gone, so this restarts the board.
             s_auto.active = false;
             if (!OtaWifi::end()) { engine.stopUpdateRadio(); enterClear(); }
         } else {
-            if (!s_nudgeIsAuto) MeshTalk::markNudged();   // AUTO UPDATE reports to no one
             lendFrameToDownload();
             OtaWifi::install();
         }
@@ -1716,7 +1665,6 @@ static void autoUpdateTick(uint32_t now) {
         s_auto.active = false;      // somebody tapped CANCEL
     }
 }
-#endif
 
 // The frame buffer, handed back: 77 KB at 320x240, the biggest single
 // allocation on the heap. The duress wipe does it because the board is
@@ -1886,48 +1834,6 @@ static void serviceNightDim(uint32_t now) {
     }
 }
 
-#if MULESKIN_MESH
-// TELL SQUAD (SETTINGS, off by default): a WITH YOU goes to the squad too, as
-// an ordinary message -- "AIRTAG WITH ME 23 MIN" -- so every board in the
-// squad shows it, firmware old or new, and nobody needs a new frame type to
-// read it. Queued rather than sent on the spot: a message replaces whatever
-// is on the air, and a WITH YOU must never cut off what the owner just typed.
-// It waits up to two minutes for the air to clear, then gives up. On the heap,
-// and only while one is waiting.
-static char*    s_squadText = nullptr;
-static uint32_t s_squadAt   = 0;
-
-static void queueSquadFollow(const Detection& d, uint16_t mins) {
-    if (!Settings::squadFollow() || !MeshTalk::ready()) return;
-    if (!s_squadText) s_squadText = (char*)malloc(MeshMsg::TEXT_MAX + 1);
-    if (!s_squadText) return;
-    // The message alphabet is capitals, digits and a little punctuation:
-    // "SAMSUNG_TAG" goes as "SAMSUNG TAG", and anything else outside it is
-    // dropped rather than refused.
-    char t[24];
-    size_t n = 0;
-    for (const char* p = detectionTypeName(d.type); *p && n < sizeof t - 1; p++) {
-        char c = (*p == '_') ? ' ' : (char)toupper((unsigned char)*p);
-        if (MeshMsg::textChar(c)) t[n++] = c;
-    }
-    t[n] = 0;
-    snprintf(s_squadText, MeshMsg::TEXT_MAX + 1, "%s WITH ME %u MIN", t, (unsigned)mins);
-    s_squadAt = millis();
-}
-
-static void serviceSquadFollow(uint32_t now) {
-    if (!s_squadText) return;
-    const bool stale = now - s_squadAt > 120000u;
-    if (!stale && MeshTalk::sending(now)) return;
-    if (!stale) {
-        const MeshTalk::Send r = MeshTalk::sendText(s_squadText, now);
-        Serial.printf("[follow] told the squad: %s (%s)\n", s_squadText,
-                      r == MeshTalk::Send::OK ? "sent" : "not sent");
-    }
-    free(s_squadText);
-    s_squadText = nullptr;
-}
-#endif
 
 // A tracker travelling with you (include/tracker_follow.h): every 30 s, feed
 // the tags in the LOG to the follow table and raise the first one that has
@@ -1973,9 +1879,6 @@ static void serviceFollowing(uint32_t now) {
         enterAlert(*d);
         uiAlertSetFollow(mins);
         PhoneAlerts::alert(*d, mins ? mins : 1);
-#if MULESKIN_MESH
-        queueSquadFollow(*d, mins ? mins : 1);
-#endif
 #if SQW_HAS_BUZZER
         // The one alert that is about YOU: it chirps whatever else is true,
         // with BUZZER on -- new device or not, night or not.
@@ -2036,9 +1939,6 @@ static void runSelfTest() {
     // Updates and their keys.
     line(OtaCore::available() ? 0 : 1, "updates", OtaCore::available() ? "second app slot ready, %u trusted key(s)" : "no second app slot", OtaCore::trustedKeyCount());
     line(0, "rules", "%u extra detection rules", (unsigned)extraRuleCount());
-#if MULESKIN_MESH
-    line(MeshTalk::selfTestOk() ? 0 : 2, "mesh crypto", MeshTalk::selfTestOk() ? "self-test passed" : "self-test FAILED: messages are off");
-#endif
     Serial.printf("[selftest] done: %u pass, %u warn, %u fail\n", pass, warn, fail);
 }
 
@@ -2054,15 +1954,13 @@ static void serviceLive(uint32_t now) {
     }
 }
 
-#if MULESKIN_MESH
 // AUTO UPDATE (SYSTEM page, off by default): when a newer release is known
-// -- from the boot check, or the daily AUTO TIME join that now asks too --
-// install it at night, on its own. The squad nudge's machinery does the work:
-// the same 30 s countdown with SKIP (titled AUTO UPDATE), then the same
-// unattended join-check-install-restart that falls back to the old version if
-// anything fails. Night is NIGHT DIM's hours, or 1-5 AM without them; only
-// from the main screen, after ten minutes untouched, unlocked, and one try a
-// night.
+// -- from the boot check, or the daily AUTO TIME join that asks too --
+// install it at night, on its own: a 30 s countdown with SKIP, then the
+// unattended join-check-install-restart above, which falls back to the old
+// version if anything fails. Night is NIGHT DIM's hours, or 1-5 AM without
+// them; only from the main screen, after ten minutes untouched, unlocked, and
+// one try a night.
 static void serviceAutoUpdate(uint32_t now) {
     static uint32_t lastTry = 0;
     if (!Settings::autoUpdate() || state != AppState::CLEAR) return;
@@ -2076,13 +1974,10 @@ static void serviceAutoUpdate(uint32_t now) {
     lastTry = now;
     unsigned a, b, c;
     if (sscanf(OtaCore::availableVersion(), "%u.%u.%u", &a, &b, &c) != 3) return;
-    memset(&s_nudge, 0, sizeof s_nudge);
-    s_nudge.ver[0] = (uint8_t)a; s_nudge.ver[1] = (uint8_t)b; s_nudge.ver[2] = (uint8_t)c;
-    s_nudgeIsAuto = true;
+    s_autoVer[0] = (uint8_t)a; s_autoVer[1] = (uint8_t)b; s_autoVer[2] = (uint8_t)c;
     Serial.printf("[auto] night update to v%u.%u.%u: counting down\n", a, b, c);
     enterNudge();
 }
-#endif
 
 // PHONE ALERTS' service, registered once: at boot with the setting on, or the
 // first time it is switched on. NimBLE will not register a GATT server while a
@@ -2136,50 +2031,6 @@ static void enterIgnoreList() {
     uiIgnoreListInit(*canvas);
 }
 
-#if MULESKIN_MESH
-static void enterMeshPhrase() {
-    state = AppState::MESH_PHRASE;
-    transitionStart = millis();
-    uiMeshPhraseInit(*canvas);
-}
-
-static void enterMeshCompose() {
-    state = AppState::MESH_COMPOSE;
-    transitionStart = millis();
-    uiMeshComposeInit(*canvas);
-}
-
-static void enterSquad(bool roster = false) {
-    state = AppState::SQUAD;
-    transitionStart = millis();
-    uiSquadInit(*canvas, roster);
-}
-
-static void enterMeshWarn() {
-    state = AppState::MESH_WARN;
-    transitionStart = millis();
-    uiMeshWarnInit(*canvas);
-}
-
-static void enterMeshMenu() {
-    state = AppState::MESH_MENU;
-    transitionStart = millis();
-    uiMeshMenuInit(*canvas);
-}
-
-static void enterPhone() {
-    state = AppState::PHONE;
-    transitionStart = millis();
-    uiPhoneInit(*canvas);
-}
-
-// The same payphone, typing a MuleSkinMesh message instead of a name.
-static void enterPhoneMessage(const char* text) {
-    state = AppState::PHONE;
-    transitionStart = millis();
-    uiPhoneInitMessage(*canvas, text);
-}
-#endif
 
 static void enterDetFilter(bool keepScroll = false) {
     state = AppState::DETECTION_FILTER;
@@ -2289,7 +2140,8 @@ static nvs_iterator_t sqwNvsEntryNext(nvs_iterator_t it) {
 #endif
 
 static bool secretNamespace(const char* ns) {
-    // "otawifi" is the saved WiFi password for firmware updates.
+    // "otawifi" is the saved WiFi password for firmware updates; "meshtalk"
+    // held the retired squad's phrase and key, erased at boot since.
     return !strcmp(ns, "meshtalk") || !strcmp(ns, "ignore") || !strcmp(ns, "otawifi");
 }
 
@@ -2399,9 +2251,6 @@ static void performWipe(WipeBoot after) {
     delay(20);
     esp_restart();
 #else
-#if MULESKIN_MESH
-    MeshTalk::forget();
-#endif
     engine.clearLog();
     engine.clearWatch();
     engine.clearHunt();
@@ -3324,6 +3173,20 @@ void setup() {
     twatchApplyCharge();
 #endif
     Security::begin();
+    // MuleSkinMesh is gone, but a board upgraded from a build that had it
+    // still holds that squad's phrase and key in NVS. Erased here, once: the
+    // check is a read, so a board with nothing left to erase writes nothing.
+#if HAVE_NVS_ERASE
+    {
+        nvs_iterator_t it = sqwNvsEntryFind(NVS_DEFAULT_PART_NAME, "meshtalk", NVS_TYPE_ANY);
+        if (it) {
+            nvs_release_iterator(it);
+            Preferences old;
+            if (old.begin("meshtalk", false)) { old.clear(); old.end(); }
+            Serial.println("[boot] erased the retired squad phrase and key");
+        }
+    }
+#endif
     // Which version lives in this slot, and whether this boot is a fresh
     // update on probation or the aftermath of one that was rolled back.
     OtaCore::boot();
@@ -3803,12 +3666,6 @@ void setup() {
     Dex::begin();
     Regulars::begin();
     MuleSkin::setIdleProvider([]() { return Notices::idleLine(engine); });
-#if MULESKIN_MESH
-    // After the radio is up and before anything can ask whether messages are
-    // ready: this is where the crypto self-test runs, on the real cipher,
-    // against a frame built by an independent implementation.
-    MeshTalk::begin();
-#endif
     if (Settings::phoneAlerts()) phoneAlertsStart();
     applyBrightness();
     // After a wipe the board comes back the way the wipe asked: straight to the
@@ -4529,14 +4386,12 @@ void loop() {
     }
 #endif
     Clock::tick(now);   // the note to self, when it is due
-#if MULESKIN_MESH && defined(BENCH_TOOLS)
+#ifdef BENCH_TOOLS
     if (g_benchUpdateNow && state == AppState::CLEAR) {
         // Waits for the main screen rather than barging in from wherever the
         // board happens to be -- the same place a person would start from.
         g_benchUpdateNow = false;
-        memset(&s_nudge, 0, sizeof s_nudge);
-        strncpy(s_nudge.from, "the bench", sizeof s_nudge.from - 1);
-        startNudgedUpdate();
+        startAutoUpdate();
     }
     if (g_benchUpdateStop) {
         g_benchUpdateStop = false;
@@ -4631,10 +4486,8 @@ void loop() {
     serviceNightDim(now);
     serviceFollowing(now);
     serviceLive(now);
-#if MULESKIN_MESH
     serviceAutoUpdate(now);
-    serviceSquadFollow(now);
-#endif
+    PhoneAlerts::tick(now);
     if (state == AppState::CLEAR) {
         const char* sub = nullptr;
         bool good = false;
@@ -4653,50 +4506,6 @@ void loop() {
             s_brownouts = 0;
         }
     }
-#if MULESKIN_MESH
-    MeshProbe::tick(now);
-    Mesh::tick(now);
-    MeshTalk::tick(now);
-    {
-        char who[13];
-        if (MeshTalk::takeRead(who, sizeof who)) {
-            static char sub[40];
-            snprintf(sub, sizeof sub, "%s opened your message", who);
-            Theme::showToast("READ", sub, Theme::GREEN, 3000);   // a solid three seconds: it is the whole reply
-            // And from the messenger himself, when he is on screen to say it.
-            static char line[32];
-            snprintf(line, sizeof line, "%s read it.", who);
-            if (state == AppState::CLEAR) MuleSkin::announce(line);
-        }
-    }
-    {
-        MeshTalk::NudgeIn n;
-        if (MeshTalk::takeNudge(n)) {
-            uint8_t mine[3] = { 0, 0, 0 };
-            MeshMsg::parseVersion(OtaCore::runningVersion(), mine);
-            if (!Settings::remoteUpdate())            Serial.println("[nudge] ignored: REMOTE UPDATE is off");
-            else if (Security::locked())              Serial.println("[nudge] ignored: locked");
-            else if (!MeshMsg::versionNewer(n.ver, mine)) Serial.println("[nudge] ignored: not newer than this build");
-            else { s_nudge = n; s_nudgePending = true; }
-        }
-        if (s_nudgePending && (int32_t)(now - s_nudge.at) > (int32_t)NUDGE_HOLD_MS) s_nudgePending = false;
-        if (s_nudgePending && state == AppState::CLEAR && !Security::locked()) {
-            s_nudgePending = false;
-            s_nudgeIsAuto  = false;
-            enterNudge();
-        }
-        MeshTalk::UpdatedIn u;
-        if (MeshTalk::takeUpdated(u) && state == AppState::SQUAD_UPDATE) uiSquadUpdateReported(u.from);
-        // Somebody offered us their squad. Asked from the main screen only,
-        // and never while locked; the offer stays on the air a minute.
-        if (MeshTalk::inviteState() == MeshTalk::InviteState::ASKED && state == AppState::CLEAR &&
-            !Security::locked()) enterInvite();
-    }
-    // Beside the radio, not inside the draw: an emote arriving while any other
-    // screen is up -- or while boring mode has turned MuleSkin off -- still has
-    // to be taken off the queue and acted on when CLEAR comes back.
-    uiClearEmoteTick(now);
-#endif
 
     // The padlock, left of the rotate icon while a PIN is set, on the screens
     // that draw the corner icons. Ahead of the rotate handler, whose oversized
@@ -5150,7 +4959,7 @@ void loop() {
         }
         case AppState::SYS_PROPS: {
             // A detection still takes the screen. The window can open on a
-            // board nobody is watching -- a squad member's hello brings the
+            // board nobody is watching -- AUTO TIME's daily join brings the
             // news -- and it has no timeout, so without this it held every
             // alert back until somebody happened to tap it.
             {
@@ -5189,9 +4998,9 @@ void loop() {
             // A newer release heard of AFTER the intro: the window, now. The
             // intro only opens it for news that is already known when the
             // intro ends, and on a board whose boot check could not reach the
-            // site the news comes later, in a squad member's hello -- which on
-            // the bench landed a few seconds either side of that moment, so
-            // the window came up on one boot and not the next. Once per
+            // site the news comes later, with AUTO TIME's daily join -- which
+            // can land a few seconds either side of that moment, so the
+            // window would come up on one boot and not the next. Once per
             // version: takeAvailableNotice() answers once, and a newer version
             // arms it again. Not over a visit's banter any more either: being
             // painted over by it is why this is a window at all.
@@ -5199,7 +5008,7 @@ void loop() {
                 enterSysProps();
                 break;
             }
-            if (now - transitionStart > 7000 && !MuleSkin::visiting()) {
+            if (now - transitionStart > 7000) {
                 // Once a day, a hello with the date in it; on the days that
                 // count, how long it has been.
                 const char* dl = MuleSkin::takeDayLine();
@@ -5269,19 +5078,6 @@ void loop() {
                     }
                 }
             }
-#if CROWD_BENCH
-            // The crowd benchmark (a test build): its numbers or its table go
-            // over everything, a tap moves it on, and nothing else on this
-            // screen -- alerts included -- interrupts it while it runs.
-            if (CrowdBench::active()) {
-                CrowdBench::drawOver(*canvas, now);
-                if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
-                    lastTouch = now;
-                    CrowdBench::tap();
-                }
-                break;
-            }
-#endif
             // Check for new detection — gated by the settings-menu
             // confidence filter (LOW_CONF/default = no filtering, every
             // match still interrupts with the ALERT screen).
@@ -5302,9 +5098,6 @@ void loop() {
             // consumed on read; leaving it untouched means it stays
             // pending and still fires for real once onboarding ends.
             if (MuleSkin::onboardingActive()
-#if MULESKIN_MESH
-                || MeshTutor::active()     // same courtesy for the messages tutorial
-#endif
                ) {
                 // deliberately no-op
             } else if (engine.watchHitPending()) {
@@ -5426,38 +5219,9 @@ void loop() {
                 MuleSkin::stopShowOff();
                 lastTouch = now;
                 sqActive  = false;
-#if MULESKIN_MESH
-            } else if (MeshTutor::active() && tp.valid) {
-                // The messages tutorial owns the screen while it runs: every
-                // touch goes to it, so nobody pets MuleSkin, cycles the scene
-                // or clears the log halfway through a sentence. The whole
-                // gesture is claimed.
-                sqActive      = false;
-                if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
-                    lastTouch = now;
-                    if (MeshTutor::cardTap(tp.x, tp.y) == MeshTutor::Tap::SKIP) {
-                        MeshTutor::stop();
-                    } else if (MeshTutor::step() == MeshTutor::Step::TAP_ICON) {
-                        // Only the bubble moves this step on: it is the one
-                        // thing the step is teaching.
-                        if (uiClearBubbleHit(tp.x, tp.y)) { MeshTutor::next(); enterMeshCompose(); }
-                    } else if (MeshTutor::waitsForTap()) {
-                        MeshTutor::next();
-                    }
-                }
-#endif
             } else if (!boring && MuleSkin::onboardingActive() && tp.valid && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
                 MuleSkin::onboardingTapAdvance(tp.x, tp.y)) {
                 lastTouch = now;
-#if MULESKIN_MESH
-            } else if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
-                       uiClearBubbleHit(tp.x, tp.y)) {
-                // The message bubble. Ahead of the background and the edge
-                // zones: it can sit over the right-hand one, and a tap on it
-                // must never cycle the scene on the way to the message.
-                lastTouch = now;
-                sqActive  = false;
-                enterMeshCompose();
 #if MULESKIN_LORA && defined(TWATCH_S3)
             } else if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
                        twatchLoraBadgeHit(tp.x, tp.y)) {
@@ -5480,22 +5244,6 @@ void loop() {
                 lastTouch = now;
                 sqActive  = false;
                 enterWatchAlert();
-            } else if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
-                       uiClearSquadHit(tp.x, tp.y)) {
-                // The squad badge, ahead of the scene gestures for the same
-                // reason as the bubble above.
-                lastTouch = now;
-                sqActive  = false;
-                enterSquad();
-            } else if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
-                       uiClearCrowdTap(tp.x, tp.y, now)) {
-                // Asking one of the crowd who he is. Below the bubble and the
-                // badge, which sit over the crowd and mean something more
-                // specific; above the edge zones, so asking a stranger his
-                // name cannot also change the background out from under him.
-                lastTouch = now;
-                sqActive  = false;
-#endif
             } else if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
                        Theme::radarBlipAt(tp.x, tp.y, now, s_tappedBlip)) {
                 // A blip on the radar: that device's panel on the LOG --
@@ -6145,7 +5893,6 @@ void loop() {
                             PhoneAlerts::setEnabled(Settings::phoneAlerts());
                             if (Settings::phoneAlerts()) phoneAlertsStart();
                             break;
-                        case SettingsRow::SQUAD_FOLLOW: Settings::toggleSquadFollow(); break;
                         case SettingsRow::UPDATE_CHANNEL:
                             Settings::toggleLabChannel();
                             Theme::showToast(Settings::labChannel() ? "UPDATES: LAB" : "UPDATES: STABLE",
@@ -6239,16 +5986,6 @@ void loop() {
                         case SettingsRow::STATUS_LIGHT: enterLight(); break;
                         case SettingsRow::SECURITY:    enterSecurity(); break;
                         case SettingsRow::IGNORED_DEVICES:  enterIgnoreList(); break;
-#if MULESKIN_MESH
-                        case SettingsRow::MULESKINMESH:
-                            // Asked once. After that the row opens the menu
-                            // directly -- re-consenting on every visit trains
-                            // people to dismiss the thing without reading it,
-                            // which is worse than not asking.
-                            if (Settings::meshConsent()) enterMeshMenu();
-                            else                        enterMeshWarn();
-                            break;
-#endif
                         // These ask first -- see the confirm panel over in
                         // ui_settings. A row earns one when tapping it a
                         // second time does not put things back: calibration
@@ -6301,79 +6038,6 @@ void loop() {
             }
             break;
         }
-#if MULESKIN_MESH
-        case AppState::MESH_PHRASE: {
-            drawTwoBand([&](TFT_eSPI& t, bool advance) { uiMeshPhraseTick(t, now, engine, advance); });
-            if (touchJustDown) uiMeshPhraseTouch(tp.x, tp.y);
-            if (uiMeshPhraseDone()) enterMeshMenu();
-            break;
-        }
-        case AppState::MESH_COMPOSE: {
-            drawTwoBand([&](TFT_eSPI& t, bool advance) { uiMeshComposeTick(t, now, engine, advance); });
-            // Sent or not, back to the main screen -- that is where the
-            // bubble's dots show it going out.
-            if (touchJustDown) {
-                const ComposeHit hit = uiMeshComposeTouch(tp.x, tp.y, now);
-                // TYPE -- or EDIT on a typed message -- opens the keyboard,
-                // carrying whatever is typed so far.
-                if (hit == ComposeHit::TYPE) { enterPhoneMessage(uiMeshComposeTyped()); break; }
-                // "?" replays the tutorial, which runs on the main screen.
-                if (hit == ComposeHit::HELP) MeshTutor::start();
-                if (hit != ComposeHit::NONE) enterClear();
-            }
-            break;
-        }
-        case AppState::MESH_WARN: {
-            drawTwoBand([&](TFT_eSPI& t, bool advance) { uiMeshWarnTick(t, now, engine, advance); });
-            if (touchJustDown) {
-                switch (uiMeshWarnHitTest(*canvas, tp.x, tp.y)) {
-                    case MeshWarnHit::YES:
-                        Settings::setMeshConsent(true);
-                        enterMeshMenu();
-                        break;
-                    // Nothing is stored on NO. Declining is not a decision
-                    // worth remembering -- it just means not now.
-                    case MeshWarnHit::NO: enterSettings(); break;
-                    default: break;
-                }
-            }
-            break;
-        }
-        case AppState::MESH_MENU: {
-            drawTwoBand([&](TFT_eSPI& t, bool advance) { uiMeshMenuTick(t, now, engine, advance); });
-            if (touchJustDown && Theme::pinnedBackHit(tp.x, tp.y, canvas->width(), canvas->height())) {
-                lastTouch = now;
-                enterSettings();
-                break;
-            }
-            if (touchJustDown) {
-                switch (uiMeshMenuHitTest(*canvas, tp.x, tp.y,
-                                          canvas->width(), canvas->height())) {
-                    case MeshMenuRow::DETECT:   Settings::cycleMeshDetect();   break;
-                    case MeshMenuRow::TRANSMIT: Settings::cycleMeshTransmit(); break;
-                    case MeshMenuRow::MESSAGES:
-                        Settings::toggleMessages();
-                        // The first time they go on, the tutorial runs. It is
-                        // marked seen as it STARTS, so skipping it counts; the
-                        // "?" on the message screen replays it. Not in boring
-                        // mode, which has no MuleSkin to visit.
-                        if (Settings::messagesOn() && !Settings::meshTutorSeen() &&
-                            !Settings::boringMode()) {
-                            Settings::setMeshTutorSeen();
-                            MeshTutor::start();
-                            enterClear();
-                        }
-                        break;
-                    case MeshMenuRow::CROWD:    Settings::cycleMeshCrowd();    break;
-                    case MeshMenuRow::SQUAD:    enterSquad(true);              break;
-                    case MeshMenuRow::PHRASE:   enterMeshPhrase();             break;
-                    case MeshMenuRow::NAME:     enterPhone();                  break;
-                    case MeshMenuRow::BACK:     enterSettings();               break;
-                    default: break;
-                }
-            }
-            break;
-        }
         case AppState::UPDATE: {
             // An update in progress owns the screen. Dimming, auto-lock and
             // the idle frame cap all run off lastTouch, so holding it at now
@@ -6414,9 +6078,7 @@ void loop() {
                     }
                 }
             }
-#if MULESKIN_MESH
             autoUpdateTick(now);
-#endif
             // touchJustDown, not the debounce timer: lastTouch is pinned above.
             if (touchJustDown) {
                 int netIndex = -1;
@@ -6478,9 +6140,6 @@ void loop() {
                         enterSettings();
                         uiSettingsOpenPage(SettingsPage::SYSTEM);
                         break;
-#if MULESKIN_MESH
-                    case UpdateHit::SQUAD_START: enterSquadUpdate(); break;
-#endif
                     default: break;
                 }
             }
@@ -6600,144 +6259,9 @@ void loop() {
             NudgeHit hit = NudgeHit::NONE;
             if (touchJustDown) hit = uiNudgeHit(*canvas, tp.x, tp.y);
             if (hit == NudgeHit::SKIP) { Serial.println("[nudge] skipped"); enterClear(); break; }
-            if (hit == NudgeHit::NOW || uiNudgeSecondsLeft(now) <= 0) startNudgedUpdate();
+            if (hit == NudgeHit::NOW || uiNudgeSecondsLeft(now) <= 0) startAutoUpdate();
             break;
         }
-        case AppState::SQUAD_UPDATE: {
-            drawTwoBand([&](TFT_eSPI& t, bool) { uiSquadUpdateTick(t, now, engine); });
-            if (touchJustDown) {
-                switch (uiSquadUpdateHit(*canvas, tp.x, tp.y)) {
-                    case SquadUpdateHit::SHARE: uiSquadUpdateToggleShare(); break;
-                    case SquadUpdateHit::SEND: {
-                        uint8_t ver[3] = { 0, 0, 0 };
-                        MeshMsg::parseVersion(OtaCore::runningVersion(), ver);
-                        char ssid[33] = "", pass[65] = "";
-                        const int8_t share = uiSquadUpdateShareIndex();
-                        if (uiSquadUpdateShareWifi() && share >= 0) {
-                            snprintf(ssid, sizeof ssid, "%s", OtaWifi::savedSsidAt((uint8_t)share));
-                            OtaWifi::savedPassAt((uint8_t)share, pass, sizeof pass);
-                        }
-                        const MeshTalk::Send r = MeshTalk::sendNudge(ver, ssid[0] ? ssid : nullptr, pass, now);
-                        memset(pass, 0, sizeof pass);
-                        uiSquadUpdateSent(r == MeshTalk::Send::OK, now);
-                        if (r == MeshTalk::Send::NOT_READY)    Theme::showToast("CAN'T SEND", "Messages need a phrase first", Theme::AMBER);
-                        else if (r == MeshTalk::Send::TRANSMIT_OFF) Theme::showToast("CAN'T SEND", "Turn TRANSMIT on in MuleSkinMesh", Theme::AMBER);
-                        else if (r != MeshTalk::Send::OK)      Theme::showToast("CAN'T SEND", "WiFi password too long to share", Theme::AMBER);
-                        break;
-                    }
-                    case SquadUpdateHit::BACK: engine.stopRawScan(); enterUpdate(); break;
-                    default: break;
-                }
-            }
-            break;
-        }
-        case AppState::INVITE: {
-            drawTwoBand([&](TFT_eSPI& t, bool) { uiInviteTick(t, now, engine); });
-            lastTouch = now;
-            // A confirmed finish -- YOU'RE IN on one board, ADDED on the
-            // other -- shows for a few seconds and then gets out of the
-            // way, the same on both sides. Anything unconfirmed or failed
-            // waits to be read.
-            {
-                const MeshTalk::InviteState st = MeshTalk::inviteState();
-                const bool happy = st == MeshTalk::InviteState::JOINED ||
-                                   (st == MeshTalk::InviteState::DONE && MeshTalk::inviteConfirmed());
-                if (happy && now - MeshTalk::inviteSince() > 4000) {
-                    MeshTalk::inviteCancel();
-                    enterClear();
-                    break;
-                }
-            }
-            if (touchJustDown) {
-                switch (uiInviteHit(*canvas, tp.x, tp.y)) {
-                    case InviteHit::ACCEPT: {
-                        const MeshTalk::Send r = MeshTalk::inviteAccept(now);
-                        if (r == MeshTalk::Send::TRANSMIT_OFF) {
-                            Theme::showToast("CAN'T ANSWER", "Turn TRANSMIT on in MuleSkinMesh", Theme::AMBER);
-                            MeshTalk::inviteCancel();
-                            enterClear();
-                        }
-                        break;
-                    }
-                    case InviteHit::DECLINE: MeshTalk::inviteDecline(); enterClear(); break;
-                    case InviteHit::MATCH:   MeshTalk::inviteConfirm(now); break;
-                    case InviteHit::NOMATCH: MeshTalk::inviteCancel(); Theme::showToast("INVITE STOPPED", "The digits did not match", Theme::AMBER); enterClear(); break;
-                    case InviteHit::CANCEL:  MeshTalk::inviteCancel(); enterClear(); break;
-                    case InviteHit::SHOW:    break;     // the screen shows the phrase itself
-                    case InviteHit::BACK:
-                        // Leaving a finished or failed invite clears it; leaving
-                        // SENDING lets the phrase finish its time on the air.
-                        if (MeshTalk::inviteState() != MeshTalk::InviteState::SENDING) MeshTalk::inviteCancel();
-                        enterClear();
-                        break;
-                    default: break;
-                }
-            }
-            break;
-        }
-        case AppState::SQUAD: {
-            drawTwoBand([&](TFT_eSPI& t, bool advance) { uiSquadTick(t, now, engine, advance); });
-            if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
-                lastTouch = now;
-                switch (uiSquadTouch(tp.x, tp.y, now)) {
-                    case SquadHit::BACK:    if (uiSquadRosterMode()) enterMeshMenu(); else enterClear(); break;
-                    // Back to the main screen to watch the swap happen.
-                    case SquadHit::INVITED: enterClear(); break;
-                    case SquadHit::REPLY:   enterMeshCompose(); break;
-                    // A fox hunt: their board is the target, the HUNT gauge the
-                    // receiver. Already hunting them: just go to the gauge.
-                    case SquadHit::HUNT: {
-                        const uint8_t* mac = uiSquadSelectedMac();
-                        if (!mac) break;
-                        if (!engine.isHunted(mac, true)) engine.huntBle(mac, uiSquadSelectedName());
-                        enterHunt();
-                        break;
-                    }
-                    case SquadHit::ADD: {
-                        const uint8_t* mac = uiSquadSelectedMac();
-                        if (!mac) break;
-                        const MeshTalk::Send r = MeshTalk::inviteStart(mac, uiSquadSelectedName(), now);
-                        if (r == MeshTalk::Send::OK)            enterInvite();
-                        else if (r == MeshTalk::Send::NOT_READY) Theme::showToast("NO PHRASE TO SHARE", "Set one under MULESKINMESH first", Theme::AMBER);
-                        else if (r == MeshTalk::Send::TRANSMIT_OFF) Theme::showToast("CAN'T SEND", "Turn TRANSMIT on in MuleSkinMesh", Theme::AMBER);
-                        else                                     Theme::showToast("CAN'T START", "Try again in a moment", Theme::AMBER);
-                        break;
-                    }
-                    default: break;
-                }
-            }
-            break;
-        }
-        case AppState::PHONE: {
-            drawTwoBand([&](TFT_eSPI& t, bool advance) { uiPhoneTick(t, now, engine, advance); });
-            // All three edges of a touch, not just the press. The payphone
-            // keypad still acts on the press and ignores the rest; the
-            // QWERTY board previews on the press, follows the finger, and
-            // types on the release -- see ui_phone.h. Both come through here
-            // because the choice between them is a setting the screen reads,
-            // not a different screen.
-            //
-            // The wake-tap swallow near the top of loop() clears tp.valid and
-            // both edges for the whole gesture, so a touch that only woke the
-            // display reaches none of these.
-            if (touchJustDown)    uiPhoneTouch(tp.x, tp.y, now, PhoneTouch::DOWN);
-            else if (tp.valid)    uiPhoneTouch(tp.x, tp.y, now, PhoneTouch::MOVE);
-            else if (touchJustUp) uiPhoneTouch(tp.x, tp.y, now, PhoneTouch::UP);
-            // Back to where it was opened from, not to Settings.
-            if (uiPhoneDone()) {
-                // A message goes back to the message screen to be read over
-                // before it is sent; a name goes back to the menu it came from.
-                if (uiPhoneMessageMode()) {
-                    const char* m = uiPhoneMessage();
-                    enterMeshCompose();
-                    if (m && m[0]) uiMeshComposeSetTyped(m);
-                } else {
-                    enterMeshMenu();
-                }
-            }
-            break;
-        }
-#endif
         case AppState::IGNORE_LIST: {
             drawTwoBand([&](TFT_eSPI& t, bool) { uiIgnoreListTick(t, now); });
             // Same drag-to-scroll / act-on-release gesture the detection
@@ -6897,7 +6421,6 @@ void loop() {
                         case SecurityRow::LOCK_AT_BOOT: if (on) Security::setLockAtBoot(!Security::lockAtBoot()); break;
                         case SecurityRow::WIPE_ON_FAIL: if (on) Security::setWipeOnFail(!Security::wipeOnFail()); break;
                         case SecurityRow::LOCK_ALERTS:  if (on) Security::cycleLockAlerts(); break;
-                        case SecurityRow::REMOTE_UPDATE: Settings::toggleRemoteUpdate(); break;
                         default: break;
                     }
                 }
@@ -6989,9 +6512,6 @@ void loop() {
             } else {
                 uiPhonePinWait(nullptr);
             }
-#if MULESKIN_MESH
-            uiPhonePinPrompt(MeshTalk::inbox().unread ? "LOCKED - NEW MESSAGE" : "LOCKED");
-#endif
             drawTwoBand([&](TFT_eSPI& t, bool advance) { uiPhoneTick(t, now, engine, advance); });
             if (touchJustDown) uiPhoneTouch(tp.x, tp.y, now, PhoneTouch::DOWN);
             if (uiPhonePinForgot()) {
@@ -7155,7 +6675,6 @@ void loop() {
                     switch (hit) {
                         case LightRow::ENABLED:    Settings::toggleLight(); break;
                         case LightRow::ALERTS:     Settings::toggleLightAlerts(); break;
-                        case LightRow::MESSAGES:   Settings::toggleLightMessages(); break;
                         case LightRow::IDLE:       Settings::cycleLightIdle(); break;
                         case LightRow::IDLE_COLOR: Settings::cycleLightColor(); break;
                         case LightRow::BRIGHTNESS: Settings::cycleLightBrightness(); break;
@@ -7361,9 +6880,6 @@ void loop() {
                           (unsigned long)engine.lifetimeTotal());
         }
     }
-#if CROWD_BENCH
-    CrowdBench::noteFrame(micros() - frameStartUs, s_pushAccumUs);
-#endif
 
     // ---- power saver ------------------------------------------------------
     // Both timers hang off lastTouch, which every screen already maintains.
@@ -7467,13 +6983,6 @@ void loop() {
         // A fox caught on the HUNT gauge flashes the light green, the same
         // three flashes a detection gets in its own colour.
         if (state == AppState::HUNT && uiHuntCaught()) { lc.alert = true; lc.alertColor = Theme::GREEN; }
-#if MULESKIN_MESH
-        lc.unread     = MeshTalk::inbox().unread;
-        lc.visiting   = MuleSkin::visiting();
-#else
-        lc.unread     = false;
-        lc.visiting   = false;
-#endif
         lc.update = 0;
         {
             const OtaBle::State  b = OtaBle::state();

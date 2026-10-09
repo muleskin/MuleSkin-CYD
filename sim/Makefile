@@ -57,7 +57,7 @@ EXTRA_CXXFLAGS ?=
 # the same for a real build), so the splash and banners in renders say it.
 FW_VERSION := $(shell git describe --tags --always 2>/dev/null || echo sim)
 CXXFLAGS := -std=c++17 -O1 -g -Wall -Wno-unused-parameter $(EXTRA_CXXFLAGS) \
-            -I$(SIM_DIR) -I$(INC) -DMULESKIN_MESH=1 -DFIRMWARE_VERSION=\"$(FW_VERSION)\"
+            -I$(SIM_DIR) -I$(INC) -DFIRMWARE_VERSION=\"$(FW_VERSION)\"
 # MinGW (Windows) compilers: the POSIX bits its runtime lacks (see win_compat.h).
 ifneq ($(findstring mingw,$(shell $(CXX) -dumpmachine)),)
 CXXFLAGS += -include $(SIM_DIR)/win_compat.h
@@ -65,27 +65,12 @@ endif
 
 UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/muleskin.cpp \
-            $(SRC)/muleskinmesh.cpp \
-            $(SRC)/mesh.cpp \
-            $(SRC)/meshmsg.cpp \
-            $(SRC)/emote_script.cpp \
-            $(SRC)/crowd_bench.cpp \
-            $(SRC)/meshwords.cpp \
-            $(SRC)/meshtalk.cpp \
-            $(SRC)/meshtutor.cpp \
-            $(SIM_DIR)/meshcrypto_sim.cpp \
-            $(SIM_DIR)/meshsim.cpp \
             $(SRC)/ui_phone.cpp \
             $(SRC)/phone_alerts.cpp \
             $(SRC)/qwerty.cpp \
-            $(SRC)/ui_meshmenu.cpp \
-            $(SRC)/ui_meshwarn.cpp \
             $(SRC)/ui_beaconwarn.cpp \
             $(SRC)/security.cpp \
             $(SRC)/ui_security.cpp \
-            $(SRC)/ui_squad.cpp \
-            $(SRC)/ui_meshphrase.cpp \
-            $(SRC)/ui_meshcompose.cpp \
             $(SRC)/settings.cpp \
             $(SRC)/signatures.cpp \
             $(SRC)/remote_id.cpp \
@@ -129,8 +114,6 @@ UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/ui_watchalert.cpp \
             $(SRC)/ui_update.cpp \
             $(SRC)/ui_nudge.cpp \
-            $(SRC)/ui_squadupdate.cpp \
-            $(SRC)/ui_invite.cpp \
             $(SRC)/ui_wifipass.cpp \
             $(SRC)/ui_sysprops.cpp \
             $(SRC)/ui_wifinets.cpp \

@@ -60,8 +60,6 @@ static const uint32_t BOOT_SWEEP_MS  = 600;
 static const uint32_t ALERT_FLASH_MS = 600;    // three 100 ms flashes
 static const uint32_t FADE_MS        = 1000;
 static const uint32_t BREATHE_MS     = 6000;
-static const uint32_t MSG_PERIOD_MS  = 3000;
-static const uint32_t VISIT_MS       = 300;
 
 // The seven BRIGHTNESS steps, as a duty cap out of 4095. Perceptual, not
 // linear: the LED is far brighter than a status light needs to be, and 4 of
@@ -111,8 +109,6 @@ static const uint8_t FIXED[10][3] = {
 static uint32_t s_lastTick  = 0;
 static uint32_t s_bootAt    = 0;   static bool s_booting = false;
 static uint32_t s_testAt    = 0;   static bool s_testing = false;
-static uint32_t s_visitAt   = 0;   static bool s_visitOn = false;
-static bool     s_prevVisiting = false;
 static bool     s_prevAlert    = false;
 static uint16_t s_prevAlertCol = 0;
 static uint32_t s_alertSince   = 0;
@@ -217,17 +213,8 @@ static Want idleColour(uint16_t level) {
     return w;
 }
 
-// Rungs 4 to 6 of the ladder: what shows once nothing louder is happening.
+// The bottom rung of the ladder: what shows once nothing louder is happening.
 static Want lower(uint32_t now, const Context& c) {
-    if (c.unread && Settings::lightMessages()) {
-        const uint32_t ph = now % MSG_PERIOD_MS;
-        if (ph < 120 || (ph >= 240 && ph < 360)) return tinted(Theme::VAPOR_PINK, 204);
-        if (ph < 400) return tinted(Theme::VAPOR_PINK, 0);
-    }
-    if (s_visitOn) {
-        if (now - s_visitAt < VISIT_MS) return tinted(Theme::GREEN, 255);
-        s_visitOn = false;
-    }
     if (Settings::boringMode() || c.screenDark) return idleColour(0);
     uint16_t level = 0;
     switch (Settings::lightIdle()) {
@@ -298,19 +285,18 @@ void tick(uint32_t now, const Context& cIn) {
 
     Context c = cIn;
 
-    // The TEST row plays a script over the real context: an alert, then a
-    // message, then a visit, then whatever idle is set to.
+    // The TEST row plays a script over the real context: an alert, then
+    // whatever idle is set to.
     if (s_testing) {
         const uint32_t dt = now - s_testAt;
         if (dt < 2000)      { c.alert = true; c.alertColor = Theme::PINK; c.update = 0; }
-        else if (dt < 4500) { c.alert = false; c.unread = true; }
-        else if (dt < 5000) { c.alert = false; c.unread = false; c.visiting = true; }   // rising edge below blips once
+        else if (dt < 4000) { c.alert = false; }
         else                { s_testing = false; }
         c.quiet = false;
     }
 
-    // Edges the rules need: when an alert went up (for the flashes), when it
-    // came down (for the fade), when a visitor arrived (for the blip).
+    // Edges the rules need: when an alert went up (for the flashes), and when
+    // it came down (for the fade).
     if (c.alert && !s_prevAlert) s_alertSince = now;
     if (!c.alert && s_prevAlert && Settings::lightAlerts() && !c.quiet) {
         Want last = tinted(s_prevAlertCol, 255);
@@ -319,8 +305,6 @@ void tick(uint32_t now, const Context& cIn) {
     }
     if (c.alert) s_prevAlertCol = c.alertColor;
     s_prevAlert = c.alert;
-    if (c.visiting && !s_prevVisiting) { s_visitOn = true; s_visitAt = now; }
-    s_prevVisiting = c.visiting;
 
     Want w = evaluate(now, c);
 

@@ -80,20 +80,13 @@ static const SettingsRow ALL_ROWS[] = {
 #endif
     // Hidden where the board cannot (PhoneAlerts::available()).
     SettingsRow::PHONE_ALERTS,
-    SettingsRow::SQUAD_FOLLOW,
     SettingsRow::DETECTION_FILTER,
     SettingsRow::IGNORED_DEVICES,
     // APPEARANCE opens the display page -- see APPEARANCE_ROWS. It sat at the
     // very top of this list, which put it under the first thumb that opened
-    // the screen and got pressed by accident. Down here with MULESKINMESH it is
-    // beside the other row that opens a page rather than changing a value.
+    // the screen and got pressed by accident. Down here it sits with the other
+    // rows that open a page rather than change a value.
     SettingsRow::APPEARANCE,
-#if MULESKIN_MESH
-    // One row, not two: NAME moved inside the MuleSkinMesh menu, which is a
-    // row back on a list carrying twenty-five with three colliding in
-    // portrait.
-    SettingsRow::MULESKINMESH,
-#endif
     // SIZE, OUTFIT, PET and SHADES COLOR all live on the APPEARANCE page now
     // -- see APPEARANCE_ROWS. Everything about how he LOOKS is on one page;
     // what stays here is what he DOES.
@@ -184,19 +177,17 @@ static_assert(WATCH_ROWS_N <= LIST_MAX_N, "the display list is sized off LIST_MA
 // "not found yet" hands over the existence of a secret.
 static bool isMuleSkinOnlyRow(SettingsRow r) {
     return r == SettingsRow::REPLAY_INTRO || r == SettingsRow::SHOW_OFF ||
-           r == SettingsRow::MULESKIN_NAME ||
            // NOT Appearance: it is the only way to theme, background,
            // brightness, invert, colour order and rotation lock, none of which
            // are about MuleSkin. Listed here for one hour and boring mode lost
            // its brightness control -- see groupFor(), which moves the row to
            // SYSTEM in that mode instead of hiding it.
-           r == SettingsRow::MULESKINMESH ||
            r == SettingsRow::SHADES_COLOR || r == SettingsRow::MULESKIN_SIZE ||
            r == SettingsRow::OUTFIT ||
            r == SettingsRow::PET || r == SettingsRow::AURA;
 }
 
-enum class RowGroupId : uint8_t { APPEARANCE, BEHAVIOR, MULESKIN, SYSTEM, SQUAD, WATCH };
+enum class RowGroupId : uint8_t { APPEARANCE, BEHAVIOR, MULESKIN, SYSTEM, WATCH };
 
 static RowGroupId groupFor(SettingsRow r) {
     // Appearance sits with the MuleSkin rows because that is where it was asked
@@ -245,13 +236,10 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::BUZZER:
 #endif
         case SettingsRow::PHONE_ALERTS:
-        case SettingsRow::SQUAD_FOLLOW:
         case SettingsRow::DETECTION_FILTER:
         case SettingsRow::IGNORED_DEVICES:
             return RowGroupId::BEHAVIOR;
-        case SettingsRow::MULESKIN_NAME:
         case SettingsRow::APPEARANCE:
-        case SettingsRow::MULESKINMESH:
         case SettingsRow::REPLAY_INTRO:
         case SettingsRow::VIEW_DIARY:
         case SettingsRow::BINGO:
@@ -268,7 +256,6 @@ static const char* groupName(RowGroupId g) {
         case RowGroupId::APPEARANCE: return "APPEARANCE";
         case RowGroupId::BEHAVIOR:   return "BEHAVIOR";
         case RowGroupId::MULESKIN:    return "MULESKIN";
-        case RowGroupId::SQUAD:      return "SQUAD";
         case RowGroupId::WATCH:      return "WATCH";
         default:                     return "SYSTEM";
     }
@@ -282,7 +269,6 @@ static uint16_t groupColor(RowGroupId g) {
         case RowGroupId::APPEARANCE: return Theme::CYAN;
         case RowGroupId::BEHAVIOR:   return Theme::AMBER;
         case RowGroupId::MULESKIN:    return Theme::VAPOR_PINK;
-        case RowGroupId::SQUAD:      return Theme::GREEN;
         case RowGroupId::WATCH:      return Theme::AMBER;
         default:                     return Theme::VAPOR_PURPLE;
     }
@@ -324,8 +310,7 @@ static uint8_t buildDisplayList(DisplayItem* out) {
         // seen would give the secret away -- and a switch for an aura he
         // does not have yet would be a switch that does nothing.
         // How he looks and what he does on screen: nothing to set while he is
-        // never drawn (MuleSkin::MASCOT_SHOWN). His NAME stays -- it is what
-        // the squad and messages call this board.
+        // never drawn (MuleSkin::MASCOT_SHOWN).
         if (!MuleSkin::MASCOT_SHOWN &&
             (r == SettingsRow::MULESKIN_SIZE || r == SettingsRow::OUTFIT || r == SettingsRow::PET ||
              r == SettingsRow::SHADES_COLOR || r == SettingsRow::AURA || r == SettingsRow::BANTER ||
@@ -336,9 +321,6 @@ static uint8_t buildDisplayList(DisplayItem* out) {
         // a Bluetooth server has nothing to update into.
         if ((r == SettingsRow::UPDATE_FIRMWARE || r == SettingsRow::UPDATE_CHECK || r == SettingsRow::UPDATE_CHANNEL || r == SettingsRow::AUTO_UPDATE) && !OtaCore::available()) continue;
         if (r == SettingsRow::PHONE_ALERTS && !PhoneAlerts::available()) continue;
-#if !MULESKIN_MESH
-        if (r == SettingsRow::SQUAD_FOLLOW) continue;
-#endif
         rows[n++] = r;
     }
 
@@ -936,10 +918,6 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             label = "PHONE ALERTS";
             value = !Settings::phoneAlerts() ? "OFF" : PhoneAlerts::connected() ? "CONNECTED" : "WAITING";
             break;
-        case SettingsRow::SQUAD_FOLLOW:
-            // What gets told, not ON: only a WITH YOU, never every alert.
-            label = "TELL SQUAD"; value = Settings::squadFollow() ? "WITH YOU" : "OFF";
-            break;
         case SettingsRow::UPDATE_CHANNEL:
             label = "UPDATES"; value = Settings::labChannel() ? "LAB" : "STABLE";
             break;
@@ -967,22 +945,6 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
         case SettingsRow::MULESKIN_SIZE:
             label = "SIZE"; value = Settings::muleskinSizeLabel();
             break;
-#if MULESKIN_MESH
-        case SettingsRow::MULESKIN_NAME: {
-            // What he is actually called: the typed name if there is one,
-            // else the curated one. MuleSkin::nickname() resolves that, so
-            // this row cannot disagree with the nameplate. There used to be
-            // a second row, NICKNAME, cycling the curated list on its own;
-            // once a name was typed it changed something nothing showed.
-            label = "NAME";
-            value = MuleSkin::nickname();
-            break;
-        }
-        case SettingsRow::MULESKINMESH:
-            label = "MULESKINMESH";
-            value = Settings::meshSummary();
-            break;
-#endif
         case SettingsRow::OUTFIT:
             label = "OUTFIT";
             snprintf(valBuf, valBufN, "%s (%u/%u)", MuleSkin::outfitName(),

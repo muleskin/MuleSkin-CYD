@@ -157,39 +157,26 @@ enum class AppState : uint8_t {
                             // "IGNORED DEVICES" row
     POWER_SAVER      = 15, // battery settings, reached via Settings'
                             // "POWER SAVER" row
-    PHONE            = 16, // the payphone: type a name for MuleSkin. Reached
-                            // from the MuleSkinMesh menu. Only ever entered on
-                            // a MuleSkinMesh build -- the row is not offered
-                            // otherwise -- but the state costs nothing.
-    MESH_MENU        = 17, // MuleSkinMesh's own screen: detect, transmit, name
-    MESH_WARN        = 18, // the consent gate in front of it. Stands before
-                            // the MENU rather than before the TRANSMIT row:
-                            // a warning read next to a switch reads as an
-                            // obstacle, one read before there is anything to
-                            // click reads as information.
-    MESH_PHRASE      = 19, // roll, show or enter the five-word phrase
-    MESH_COMPOSE     = 20, // send a message; opened from CLEAR's little bubble
+    // 16 to 20 were the payphone name screen and MuleSkinMesh's menu, consent
+    // gate, phrase and compose screens; removed with the mesh, numbers kept free.
     BEACON_WARN      = 21, // what switching iBeacons on means, asked from
                             // DETECTION FILTER before it happens
     SECURITY         = 22, // the SECURITY submenu (PIN lock + the rest)
     LOCKED           = 23, // the lock screen: the payphone, digits only
     PIN_ENTRY        = 24, // setting, changing or checking a PIN, from SECURITY
-    SQUAD            = 25, // every MuleSkin in range, and the inbox
+    // 25 was SQUAD, removed with the mesh.
     UPDATE           = 26, // UPDATE FIRMWARE, from Settings' SYSTEM page:
                             // WiFi or Bluetooth update, or switch slots
     WIFI_PASS        = 27, // typing a WiFi password, from UPDATE's network list
     STATUS_LIGHT     = 28, // the RGB LED's settings, from the APPEARANCE page
-    NUDGE            = 29, // another board asked the squad to update: the countdown
-    SQUAD_UPDATE     = 30, // UPDATE SQUAD, from the UPDATE FIRMWARE screen
-    INVITE           = 31, // ADD TO SQUAD, either side of it
+    NUDGE            = 29, // AUTO UPDATE's countdown, before it installs at night
+    // 30 and 31 were SQUAD UPDATE and ADD TO SQUAD, removed with the mesh.
     // 32 was DESK, desk mode; removed, number kept free.
     WIFI_NETS        = 33, // WIFI NETWORKS, from the SYSTEM page: the saved list
     WIFI_ADD         = 34, // ...and the scan to add one from
     SYS_PROPS        = 35, // SYSTEM PROPERTIES: the window that says an update
                             // is out, in front of the main screen on the first
                             // frame after the intro. See ui_sysprops.h.
-    // 36 was CROWD, a page holding one setting; the MuleSkinMesh menu's CROWD
-    // row steps it in place now.
     BINGO            = 36, // the detection bingo card, from Settings' BINGO
                             // row. See ui_bingo.h.
     DEX              = 37, // the MULESKIN-DEX, from Settings' row. See ui_dex.h.
