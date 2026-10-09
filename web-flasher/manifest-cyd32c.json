@@ -1,6 +1,6 @@
 {
   "name": "MuleSkin-CYD (3.2\" capacitive, ESP32-2432S032C)",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "new_install_prompt_erase": true,
   "builds": [
     {
