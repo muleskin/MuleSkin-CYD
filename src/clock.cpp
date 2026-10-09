@@ -3,6 +3,7 @@
 #include "serial_flush.h"
 #include "security.h"   // a locked device takes no console commands
 #include "ota_wifi.h"    // the WIFI command lists the saved networks
+#include "nvs_backup.h"  // NVS EXPORT / SET / RESTART: the web flasher's settings backup
 #include "detection.h"   // WINDOW N, for the bench; RADIO
 #if defined(ARDUINO_ARCH_ESP32)
 #include <esp_phy_init.h> // RADIO FULLCAL
@@ -478,8 +479,9 @@ void pollSerial() {
     // A line buffer rather than a parser. Anything that is not the one
     // command is answered and dropped -- this is a debug port, and silence
     // in response to a typo is worse than a line of help.
-    static char line[48];
-    static uint8_t len = 0;
+    // Long enough for an NVS SET line (a 256-byte value is 512 hex digits).
+    static char line[600];
+    static uint16_t len = 0;
 
     while (Serial.available() > 0) {
         const int c = Serial.read();
@@ -498,6 +500,7 @@ void pollSerial() {
             Serial.println("[security] locked -- unlock it on the screen first.");
             continue;
         }
+        if (NvsBackup::handle(line)) continue;
 
         if (strncasecmp(line, "FLOOD ", 6) == 0) {
             // A thousand a second is five times the loudest room measured;

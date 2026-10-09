@@ -2922,6 +2922,11 @@ void setup() {
     // Before anything else can allocate: the breadcrumb has to be read out
     // while it is still the previous life's, not this one's.
     crashReportInit();
+    // Room for a whole console line: the web flasher's settings restore sends
+    // NVS SET lines of up to ~540 characters (see nvs_backup.h). The sender
+    // also has to pace them -- the UART's own 128-byte FIFO overflows at
+    // 2 Mbaud while the board is busy -- which the flasher does.
+    Serial.setRxBufferSize(1024);
     Serial.begin(SERIAL_BAUD);
 #if SQW_BOOT_BTN
     pinMode(0, INPUT_PULLUP);   // BOOT: see bootButtonTick()
@@ -3127,7 +3132,13 @@ void setup() {
     bool bootCheckRan = false;
     if (takeBootCheckSkip()) {
         Serial.println("[ota] boot check skipped: the frame buffer failed after the last one");
-    } else if (Settings::updateCheck() && !Security::locked() && OtaCore::available() && OtaWifi::hasSaved()) {
+    } else if (!(Settings::updateCheck() && !Security::locked() && OtaCore::available() && OtaWifi::hasSaved())) {
+        // Say why, so a quiet boot log is not a mystery.
+        Serial.printf("[ota] boot check off: %s\n",
+                      !Settings::updateCheck() ? "UPDATE CHECK is off" :
+                      Security::locked()       ? "the board is locked" :
+                      !OtaCore::available()    ? "no second app slot" : "no saved WiFi network");
+    } else {
         bootCheckRan = true;
         // The backlight down first, for the same reason it goes down at the
         // radio start below: WiFi's RF calibration plus a full backlight is

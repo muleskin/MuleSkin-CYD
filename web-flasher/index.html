@@ -520,6 +520,12 @@
       <button id="clockBtn" class="identify-btn">[ SET TIME &amp; ZONE ]</button>
       <div class="identify-result" id="clockResult"></div>
     </div>
+    <div class="identify-row">
+      <button id="backupBtn" class="identify-btn">[ BACK UP SETTINGS ]</button>
+      <button id="restoreBtn" class="identify-btn">[ RESTORE SETTINGS ]</button>
+      <div class="identify-result" id="backupResult"></div>
+    </div>
+    <p class="browser-note"><strong>Back up settings</strong> before a reinstall that erases the board, and <strong>Restore settings</strong> after it: saved WiFi networks, colour order, time zone, the mesh and the rest come back. The backup stays in this browser (and can be saved as a file); it includes WiFi passwords, so keep the file to yourself. A locked board has to be unlocked on its screen first. Needs firmware v3.1.3 or later.</p>
     <p class="browser-note">After flashing, <strong>Set Time &amp; Zone</strong> tells the board this computer's clock and time zone over the same cable. The zone is kept for good; the clock lasts until the board is unplugged, and a saved WiFi network puts it back at every boot. A T-Watch has its clock set for it after installing, and keeps the time from then on, even through a flat battery.</p>
   </div>
 
@@ -964,6 +970,152 @@
       try { if (port) await port.close(); } catch (e4) {}
     } finally {
       clockBtn.disabled = false;
+    }
+  }
+
+  // ---- Settings backup and restore -----------------------------------------
+  // The firmware's console speaks NVS EXPORT / NVS SET / NVS RESTART (see
+  // include/nvs_backup.h). A backup is the export's lines, kept in this
+  // browser's storage and offered as a file; a restore sends them back one at
+  // a time, waiting for each "[nvs] ok", then restarts the board.
+  var backupBtn = document.getElementById('backupBtn');
+  var restoreBtn = document.getElementById('restoreBtn');
+  var backupResult = document.getElementById('backupResult');
+  var BACKUP_KEY = 'muleskin-settings-backup';
+  function loadBackup() { try { return JSON.parse(localStorage.getItem(BACKUP_KEY) || 'null'); } catch (e) { return null; } }
+  function saveBackup(b) { try { localStorage.setItem(BACKUP_KEY, JSON.stringify(b)); return true; } catch (e) { return false; } }
+  function showBackupState() {
+    var b = loadBackup();
+    if (restoreBtn) restoreBtn.textContent = b ? '[ RESTORE SETTINGS ] (' + b.lines.length + ' from ' + b.when.slice(0, 10) + ')' : '[ RESTORE SETTINGS ]';
+  }
+  if (backupBtn && restoreBtn) {
+    if (!('serial' in navigator)) {
+      backupBtn.disabled = restoreBtn.disabled = true;
+      backupBtn.textContent = '[ BACK UP SETTINGS ] (needs a desktop browser)';
+    } else {
+      backupBtn.addEventListener('click', backupSettings);
+      restoreBtn.addEventListener('click', restoreSettings);
+      showBackupState();
+    }
+  }
+
+  // Open the board's console and let it boot (opening the port resets it).
+  async function openConsole(msg) {
+    var port = await navigator.serial.requestPort();
+    var native = isNativeUsb(port);
+    await port.open({ baudRate: native ? 115200 : 2000000, bufferSize: 65536 });
+    try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (e) {}
+    for (var sec = 10; sec > 0; sec--) {
+      backupResult.textContent = msg + ' Letting the board boot... ' + sec;
+      await new Promise(function (r) { setTimeout(r, 1000); });
+    }
+    return port;
+  }
+
+  // Send one line, then read until `until` matches the text or `ms` passes.
+  // In 64-byte pieces a few milliseconds apart: the ESP32's UART holds 128
+  // bytes in hardware, and at 2 Mbaud a longer line overflowed it whenever
+  // the board was busy drawing -- the start of the line was simply lost.
+  async function talk(port, line, until, ms) {
+    var w = port.writable.getWriter();
+    var bytes = new TextEncoder().encode(line);
+    for (var i = 0; i < bytes.length; i += 64) {
+      await w.write(bytes.slice(i, i + 64));
+      await new Promise(function (r) { setTimeout(r, 4); });
+    }
+    w.releaseLock();
+    var r = port.readable.getReader(), dec = new TextDecoder(), text = '', t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      var c = await Promise.race([r.read(), new Promise(function (res) { setTimeout(function () { res({ done: false, value: null }); }, 200); })]);
+      if (c.done) break;
+      if (c.value) text += dec.decode(c.value, { stream: true });
+      if (until.test(text)) break;
+    }
+    await r.cancel(); r.releaseLock();
+    return text;
+  }
+
+  async function backupSettings() {
+    backupBtn.disabled = restoreBtn.disabled = true;
+    backupResult.className = 'identify-result';
+    var port;
+    try {
+      backupResult.textContent = 'Pick the board’s port...';
+      port = await openConsole('Backing up.');
+      backupResult.textContent = 'Reading the settings...';
+      var text = await talk(port, '\nNVS EXPORT\n', /NVS END \d+|\[security\] locked/, 10000);
+      await port.close(); port = null;
+      if (text.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
+      if (!/NVS END \d+/.test(text)) throw new Error('no answer. This needs firmware v3.1.3 or later');
+      var lines = text.split(/\r?\n/).filter(function (l) {
+        return /^NVS \S+ \S+ [0-9a-f]{2} [0-9a-f]*$/.test(l) && !/^NVS (END|SKIP) /.test(l);
+      });
+      var b = { when: new Date().toISOString(), lines: lines };
+      saveBackup(b);
+      showBackupState();
+      // And as a file, for a different computer or a cleared browser.
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(b, null, 1)], { type: 'application/json' }));
+      a.download = 'muleskin-settings-' + b.when.slice(0, 10) + '.json';
+      a.textContent = 'save it as a file';
+      backupResult.textContent = 'BACKED UP: ' + lines.length + ' settings, kept in this browser. Also ';
+      backupResult.appendChild(a);
+      backupResult.appendChild(document.createTextNode('.'));
+    } catch (err) {
+      backupResult.className = 'identify-result err';
+      backupResult.textContent = 'Couldn’t back up: ' + (err && err.message ? err.message : 'unknown error');
+      try { if (port) await port.close(); } catch (e) {}
+    } finally {
+      backupBtn.disabled = restoreBtn.disabled = false;
+    }
+  }
+
+  // The backup in this browser, or a file the person picks when there is none.
+  function pickBackup() {
+    var b = loadBackup();
+    if (b) return Promise.resolve(b);
+    return new Promise(function (resolve, reject) {
+      var inp = document.createElement('input');
+      inp.type = 'file';
+      inp.accept = '.json,application/json';
+      inp.onchange = function () {
+        var f = inp.files && inp.files[0];
+        if (!f) return reject(new Error('no backup picked'));
+        f.text().then(function (t) { resolve(JSON.parse(t)); }, reject);
+      };
+      inp.click();
+    });
+  }
+
+  async function restoreSettings() {
+    backupBtn.disabled = restoreBtn.disabled = true;
+    backupResult.className = 'identify-result';
+    var port;
+    try {
+      var b = await pickBackup();
+      if (!b || !b.lines || !b.lines.length) throw new Error('that backup is empty');
+      backupResult.textContent = 'Pick the board’s port...';
+      port = await openConsole('Restoring ' + b.lines.length + ' settings.');
+      var ok = 0, bad = [];
+      for (var i = 0; i < b.lines.length; i++) {
+        backupResult.textContent = 'Restoring ' + (i + 1) + ' of ' + b.lines.length + '...';
+        var reply = await talk(port, '\n' + b.lines[i].replace(/^NVS /, 'NVS SET ') + '\n',
+                               /\[nvs\] (ok|bad)|\[security\] locked/, 3000);
+        if (reply.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
+        if (/\[nvs\] ok/.test(reply)) ok++;
+        else bad.push(b.lines[i].split(' ').slice(1, 3).join('/'));
+      }
+      await talk(port, '\nNVS RESTART\n', /restarting/, 2000);
+      await port.close(); port = null;
+      backupResult.textContent = 'RESTORED: ' + ok + ' of ' + b.lines.length + ' settings; the board is restarting with them.' +
+        (bad.length ? '  Not taken: ' + bad.join(', ') : '');
+      if (!ok) backupResult.className = 'identify-result err';
+    } catch (err) {
+      backupResult.className = 'identify-result err';
+      backupResult.textContent = 'Couldn’t restore: ' + (err && err.message ? err.message : 'unknown error');
+      try { if (port) await port.close(); } catch (e) {}
+    } finally {
+      backupBtn.disabled = restoreBtn.disabled = false;
     }
   }
 
