@@ -4636,6 +4636,70 @@ void drawRadarBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd) {
     }
 }
 
+// What the radar is actually seeing: every device heard in the last minute as
+// a blip on the main screen's scope, in its type's colour. The bearing is a
+// hash of the address -- the board has no direction finding, so it only has
+// to stay put -- and the distance from the centre is the signal: strong near
+// the middle, faint at the rim. Each blip lights up as the arm passes over it
+// and dims behind it, like a real radar's paint, and fades out over the minute
+// after the device was last heard.
+static uint16_t scale565(uint16_t c, uint8_t k) {   // k/255 of c
+    const uint16_t r = ((c >> 11) & 0x1F) * k / 255;
+    const uint16_t g = ((c >> 5) & 0x3F) * k / 255;
+    const uint16_t b = (c & 0x1F) * k / 255;
+    return (uint16_t)((r << 11) | (g << 5) | b);
+}
+
+static void drawRadarBlips(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
+                           const DetectionEngine& eng) {
+    using namespace RadarArt;
+    static const uint32_t SHOW_MS = 60000;
+    static const int MAX_BLIPS = 24;
+    const int W = t.width(), H = t.height();
+    // The same cover transform drawRadarBackground() uses.
+    const int coverW = (W * REF_H >= H * REF_W) ? W : H * REF_W / REF_H;
+    const int coverH = (W * REF_H >= H * REF_W) ? W * REF_H / REF_W : H;
+    const int ox = (W - coverW) / 2, oy = (H - coverH) / 2;
+    const uint8_t sweep = (uint8_t)(PHASE + (uint32_t)((uint64_t)(now % PERIOD_MS) * 256u / PERIOD_MS));
+    const float rim = (BOX_W < BOX_H ? BOX_W : BOX_H) * 0.5f - 6.0f;
+    int rad = 4 * coverW / REF_W;
+    if (rad < 3) rad = 3;
+
+    int drawn = 0;
+    const uint8_t n = eng.logCount();
+    for (uint8_t i = 0; i < n && drawn < MAX_BLIPS; i++) {
+        const Detection* d = eng.logAt(i);
+        if (!d || d->restored || !d->lastSeen) continue;
+        const uint32_t age = now - d->lastSeen;
+        if (age >= SHOW_MS) continue;
+        // FNV-1a over the address: one bearing per device, the same every frame.
+        uint32_t hsh = 2166136261u;
+        for (int k = 0; k < 6; k++) { hsh ^= d->mac[k]; hsh *= 16777619u; }
+        const uint8_t a = (uint8_t)(hsh >> 24);
+        // -35 dBm and stronger at the centre, -100 at the rim.
+        float f = (float)(-35 - d->rssi) / 65.0f;
+        if (f < 0) f = 0;
+        if (f > 1) f = 1;
+        const float r = rim * (0.12f + 0.88f * f);
+        const float th = (float)a * (6.2831853f / 256.0f);   // 0 = north, clockwise
+        const float rx = CX + r * sinf(th), ry = CY - r * cosf(th);
+        const int x = ox + (int)(rx * coverW / REF_W);
+        const int y = oy + (int)(ry * coverH / REF_H);
+        if (y - rad - 2 < yStart || y + rad + 2 >= yEnd) continue;
+        // Paint: full as the arm crosses, down to a third a turn later; then
+        // the minute's fade on top.
+        const uint8_t behind = (uint8_t)(sweep - a);
+        int k = 255 - behind * 170 / 255;
+        k = k * (int)(SHOW_MS - age) / (int)SHOW_MS;
+        if (k < 90) k = 90;
+        const uint16_t col = scale565(colorFor(d->type), (uint8_t)k);
+        t.fillCircle(x, y, rad + 1, BLACK);   // lifts it off the weather behind
+        t.fillCircle(x, y, rad, col);
+        if (behind < 16) t.drawCircle(x, y, rad + 2, scale565(colorFor(d->type), 200));
+        drawn++;
+    }
+}
+
 void drawActiveBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
                           const DetectionEngine& eng, bool advance) {
     const uint32_t bgT0 = micros();
@@ -4680,6 +4744,7 @@ void drawActiveBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
         case Settings::Background::BLACK:      t.fillRect(0, yStart, t.width(), yEnd - yStart, BG); break;
         default:                               drawDigitalRain(t, now, yStart, yEnd, advance); break;
     }
+    if (Settings::background() == Settings::Background::RADAR) drawRadarBlips(t, now, yStart, yEnd, eng);
     const uint32_t bgDt = micros() - bgT0;
     s_bgUsAvg = s_bgUsAvg ? s_bgUsAvg + ((int32_t)bgDt - (int32_t)s_bgUsAvg) / 8 : bgDt;
 }
