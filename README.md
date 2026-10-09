@@ -463,9 +463,10 @@ MuleSkin-CYD/
 push or a tag. `tools/build_flasher_bins.sh` builds every board the web
 flasher lists (in Docker, so nothing needs installing) into
 `.pio/flasher-bins`, and `web-flasher/Dockerfile` serves the flasher on port
-8000 with those bins mounted at `/firmware`. Getting a release onto
-flasher.oillie.cloud is a manual step; the boards check that same site
-for updates.
+8000 with those bins mounted at `/firmware`. `tools/release.sh 3.1.2 --push`
+stamps the manifests, tags and pushes a release; getting it onto
+flasher.oillie.cloud, which the boards also check for updates, is a manual
+step on the server -- see [deploy/README.md](deploy/README.md).
 
 Detection is reliable for the high-priority targets (Flock, Axon, skimmer,
 camera glasses). Remote ID and iBeacon are exact-format matches. Raven,

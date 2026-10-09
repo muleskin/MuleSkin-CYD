@@ -1,0 +1,19 @@
+services:
+  muleskin-flasher:
+    build: /root/MuleSkin-CYD/web-flasher
+    image: muleskin-flasher
+    container_name: muleskin-flasher
+    restart: unless-stopped
+    volumes:
+      - /root/MuleSkin-CYD/.pio/flasher-bins:/firmware:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.flasher-oillie.entrypoints=websecure
+      - traefik.http.routers.flasher-oillie.rule=Host(`flasher.oillie.cloud`)
+      - traefik.http.routers.flasher-oillie.tls.certresolver=letsencrypt
+      - traefik.http.routers.flasher-oillie.service=muleskin-flasher
+      - traefik.http.services.muleskin-flasher.loadbalancer.server.port=8000
+      - traefik.http.routers.flasher-ota.entrypoints=web
+      - traefik.http.routers.flasher-ota.rule=Host(`flasher.oillie.cloud`) && (PathRegexp(`^/manifest-[^/]*\.json$`) || PathRegexp(`^/[^/]*-firmware\.(bin|sig)$`))
+      - traefik.http.routers.flasher-ota.priority=100
+      - traefik.http.routers.flasher-ota.service=muleskin-flasher
