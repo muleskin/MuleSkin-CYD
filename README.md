@@ -64,6 +64,18 @@ was being logged as a plate reader.
 volume. One shop can put more beacons in range than this device would
 otherwise see all week. It is one tap away in `DETECTION FILTER`.
 
+### New rules without a new release
+
+The table above is what is built in. On top of it, a board with a saved WiFi
+network fetches a **signed rule set** from flasher.oillie.cloud at every boot
+check (`web-flasher/signatures.txt`): extra address prefixes and WiFi
+network names, used only when the signature checks out. Rules only ever add:
+a prefix the firmware already knows keeps its built-in meaning. Rule set 2
+adds 44 prefixes read out of the IEEE registry -- WatchGuard, Digital Ally
+and BodyWorn body cams, ShotSpotter, Neology and Kapsch plate readers, and
+Axis, Hanwha, Hikvision, Dahua, Uniview, Reolink, Amcrest and other camera
+makers -- and three camera setup hotspots (`davinci`, `HAP_`, `DAP-`).
+
 ## Hardware
 
 - **ESP32-2432S028R** ("Cheap Yellow Display" / CYD) — about $15.
@@ -101,6 +113,22 @@ T-Watch S3, the Freenove ESP32-S3 2.8", the Elecrow CrowPanel 7" and the
 RockBase NM-CYD-C5), plug in,
 click Connect & Install, done. A T-Watch has its clock set for it once the install
 finishes.
+
+The same page talks to a plugged-in board over the cable:
+
+- **Set Time & Zone** sends this computer's clock and time zone.
+- **Back up / Restore settings** keeps your settings across an install that
+  erases the board.
+- **Download log** saves every detection the board has kept as a
+  spreadsheet; **Crash report** reads what it kept about its last crash.
+- **Self-test** checks the board's parts -- memory, touch, both radios, the
+  black box, SD card, settings, clock, WiFi, update keys, rules -- and lists
+  anything that needs a look.
+- **Live view** shows what the board is detecting right now, live.
+
+Every release is also on [GitHub Releases](https://github.com/muleskin/MuleSkin-CYD/releases)
+with the bins for every board attached, and the page keeps the previous
+releases in a version picker.
 
 ## Build
 
@@ -386,14 +414,13 @@ MuleSkin-CYD/
 ## Status
 
 **Shipping.** CI (`.github/workflows/ci.yml`) builds every flasher board and
-runs the host tests on each push, but nothing is published or deployed from
-it. `tools/build_flasher_bins.sh` builds every board the web
-flasher lists (in Docker, so nothing needs installing) into
-`.pio/flasher-bins`, and `web-flasher/Dockerfile` serves the flasher on port
-8000 with those bins mounted at `/firmware`. `tools/release.sh 3.1.2 --push`
-stamps the manifests, tags and pushes a release; getting it onto
-flasher.oillie.cloud, which the boards also check for updates, is a manual
-step on the server -- see [deploy/README.md](deploy/README.md).
+runs the host tests on each push. `tools/release.sh 3.1.5 --name ... --note
+... --push` stamps the manifests with the version and the release notes the
+boards show, tags and pushes it; the tag builds a GitHub Release with every
+board's bins (`.github/workflows/release.yml`). Getting it onto
+flasher.oillie.cloud, which the boards check for updates, is one command on
+the server -- see [deploy/README.md](deploy/README.md) -- which builds the
+bins, signs them and the rule set with the release key, and deploys.
 
 Detection is reliable for the high-priority targets (Flock, Axon, skimmer,
 camera glasses). Remote ID and iBeacon are exact-format matches. Raven,
