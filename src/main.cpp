@@ -301,7 +301,7 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "frame_prof.h"
 #include "fast_sprite.h"
 #include "ui_phone.h"
-#include "ui_nudge.h"
+#include "ui_autoupdate.h"
 #include "ignore_list.h"
 #include "ignore_list.h"
 #include "ui_detfilter.h"
@@ -1543,7 +1543,7 @@ static void enterUpdate() {
 }
 
 // ---- AUTO UPDATE -----------------------------------------------------------
-// serviceAutoUpdate() puts the countdown up (ui_nudge.h); when it runs out,
+// serviceAutoUpdate() puts the countdown up (ui_autoupdate.h); when it runs out,
 // or somebody taps NOW, the update is driven from the UPDATE state's tick in
 // place of the taps the manual flow takes, on the saved WiFi.
 static uint8_t           s_autoVer[3]  = { 0, 0, 0 };
@@ -1554,12 +1554,12 @@ static struct {
     uint32_t failAt = 0;
 } s_auto;
 
-static void enterNudge() {
-    state = AppState::NUDGE;
+static void enterAutoUpdate() {
+    state = AppState::AUTO_UPDATE;
     transitionStart = millis();
     lastTouch = transitionStart;     // undims a sleeping screen, like an alert
     if (s_screenDimmed) { s_screenDimmed = false; applyBrightness(); }
-    uiNudgeInit(*canvas, s_autoVer, AUTO_COUNT_S, transitionStart);
+    uiAutoUpdateInit(*canvas, s_autoVer, AUTO_COUNT_S, transitionStart);
 }
 
 static void enterBingo() {
@@ -1976,7 +1976,7 @@ static void serviceAutoUpdate(uint32_t now) {
     if (sscanf(OtaCore::availableVersion(), "%u.%u.%u", &a, &b, &c) != 3) return;
     s_autoVer[0] = (uint8_t)a; s_autoVer[1] = (uint8_t)b; s_autoVer[2] = (uint8_t)c;
     Serial.printf("[auto] night update to v%u.%u.%u: counting down\n", a, b, c);
-    enterNudge();
+    enterAutoUpdate();
 }
 
 // PHONE ALERTS' service, registered once: at boot with the setting on, or the
@@ -6253,13 +6253,13 @@ void loop() {
             }
             break;
         }
-        case AppState::NUDGE: {
-            drawTwoBand([&](TFT_eSPI& t, bool) { uiNudgeTick(t, now, engine); });
+        case AppState::AUTO_UPDATE: {
+            drawTwoBand([&](TFT_eSPI& t, bool) { uiAutoUpdateTick(t, now, engine); });
             lastTouch = now;     // no dimming, no auto-lock, mid-count
-            NudgeHit hit = NudgeHit::NONE;
-            if (touchJustDown) hit = uiNudgeHit(*canvas, tp.x, tp.y);
-            if (hit == NudgeHit::SKIP) { Serial.println("[nudge] skipped"); enterClear(); break; }
-            if (hit == NudgeHit::NOW || uiNudgeSecondsLeft(now) <= 0) startAutoUpdate();
+            AutoUpdateHit hit = AutoUpdateHit::NONE;
+            if (touchJustDown) hit = uiAutoUpdateHit(*canvas, tp.x, tp.y);
+            if (hit == AutoUpdateHit::SKIP) { Serial.println("[auto] skipped"); enterClear(); break; }
+            if (hit == AutoUpdateHit::NOW || uiAutoUpdateSecondsLeft(now) <= 0) startAutoUpdate();
             break;
         }
         case AppState::IGNORE_LIST: {

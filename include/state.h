@@ -169,7 +169,7 @@ enum class AppState : uint8_t {
                             // WiFi or Bluetooth update, or switch slots
     WIFI_PASS        = 27, // typing a WiFi password, from UPDATE's network list
     STATUS_LIGHT     = 28, // the RGB LED's settings, from the APPEARANCE page
-    NUDGE            = 29, // AUTO UPDATE's countdown, before it installs at night
+    AUTO_UPDATE      = 29, // AUTO UPDATE's countdown, before it installs at night
     // 30 and 31 were SQUAD UPDATE and ADD TO SQUAD, removed with the mesh.
     // 32 was DESK, desk mode; removed, number kept free.
     WIFI_NETS        = 33, // WIFI NETWORKS, from the SYSTEM page: the saved list

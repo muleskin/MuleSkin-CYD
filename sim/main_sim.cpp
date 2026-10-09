@@ -50,7 +50,7 @@
 #include "ui_security.h"
 #include "ui_ignorelist.h"
 #include "ui_light.h"
-#include "ui_nudge.h"
+#include "ui_autoupdate.h"
 #include "ui_meeting.h"
 #include "ui_timesync.h"
 #include "ui_today.h"
@@ -565,7 +565,7 @@ int main(int argc, char** argv) {
         }
         else if (screen == "boot")     uiBootTick(frame, t);
         else if (screen == "update")   uiUpdateTick(frame, t);
-        else if (screen == "nudge")    uiNudgeTick(frame, t, engine);
+        else if (screen == "autoupdate")    uiAutoUpdateTick(frame, t, engine);
         else if (screen == "meeting")  uiMeetingTick(frame, t);
         else if (screen == "timesync") uiTimeSyncTick(frame, t);
         else if (screen == "today")    uiTodayTick(frame, t);
@@ -576,11 +576,11 @@ int main(int argc, char** argv) {
         else if (screen == "wifiadd")  uiWifiAddTick(frame, t, engine);
         else if (screen == "poses") {
             // Every arm movement he has, for the costume test in
-            // sim/test_outfit_poses.py: IDLE, WAVE, then each VisitPose, each at
+            // sim/test_outfit_poses.py: IDLE, WAVE, then each ActPose, each at
             // POSE_PHASES moments 125 ms apart, one per captured frame, on a flat
             // key colour so the script can separate him from the backdrop. Run
             // with --frames 0 and --sequence POSE_N * POSE_PHASES.
-            using VP = MuleSkin::VisitPose;
+            using VP = MuleSkin::ActPose;
             static const VP kPoses[] = {
                 VP::NONE, VP::NONE, VP::HIGH_FIVE, VP::LOW_FIVE, VP::FIST, VP::STARTLED,
                 VP::DANCE, VP::PUMP, VP::SLEEPY, VP::STRETCH, VP::LAUGH, VP::SALUTE,
@@ -605,7 +605,7 @@ int main(int argc, char** argv) {
             // drawn 4000 times on a moving clock and the pixels written per
             // frame are printed. That count is what a costume costs a board;
             // host time is not (see the costume notes in muleskin.cpp).
-            using VP = MuleSkin::VisitPose;
+            using VP = MuleSkin::ActPose;
             static const VP kP[] = { VP::NONE, VP::NONE, VP::HANDS_UP, VP::CHEER, VP::DANCE,
                                      VP::BOW, VP::STARTLED, VP::CROUCH, VP::COVER, VP::HIGH_FIVE };
             const int pi = poseIdx < 0 ? 0 : poseIdx % 10;
@@ -678,7 +678,7 @@ int main(int argc, char** argv) {
     else if (screen == "icons")      {}
     else if (screen == "boot")       uiBootInit(frame);
     else if (screen == "update")     uiUpdateInit(frame);
-    else if (screen == "nudge")      { const uint8_t v[3] = { 1, 7, 6 }; uiNudgeInit(frame, v, 30, 0); }
+    else if (screen == "autoupdate")      { const uint8_t v[3] = { 1, 7, 6 }; uiAutoUpdateInit(frame, v, 30, 0); }
     else if (screen == "meeting")    {
         uiMeetingInit(frame);
         // MULESKINSIM_MEETING_TAPS=N: N taps on the sign (1 = 15 min, 2 = 30, 3 = 60).

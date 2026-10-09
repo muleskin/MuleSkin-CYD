@@ -1,5 +1,5 @@
-// MuleSkin-CYD — the AUTO UPDATE countdown. See ui_nudge.h.
-#include "ui_nudge.h"
+// MuleSkin-CYD — the AUTO UPDATE countdown. See ui_autoupdate.h.
+#include "ui_autoupdate.h"
 #include "theme.h"
 #include "settings.h"
 #include "ota_core.h"
@@ -37,18 +37,18 @@ void centred(TFT_eSPI& t, int y, uint16_t c, const char* s) {
 }
 } // namespace
 
-void uiNudgeInit(TFT_eSPI& t, const uint8_t ver[3], uint16_t seconds, uint32_t now) {
+void uiAutoUpdateInit(TFT_eSPI& t, const uint8_t ver[3], uint16_t seconds, uint32_t now) {
     snprintf(s_ver, sizeof s_ver, "v%u.%u.%u", ver[0], ver[1], ver[2]);
     s_until = now + (uint32_t)seconds * 1000u;
     t.fillRect(0, 0, t.width(), t.height(), Theme::BG);
 }
 
-int uiNudgeSecondsLeft(uint32_t now) {
+int uiAutoUpdateSecondsLeft(uint32_t now) {
     const int32_t ms = (int32_t)(s_until - now);
     return ms <= 0 ? 0 : (int)((ms + 999) / 1000);
 }
 
-void uiNudgeTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
+void uiAutoUpdateTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
     (void)eng;
     const int w = t.width(), h = t.height();
     t.fillRect(0, 0, w, h, Theme::BG);
@@ -69,7 +69,7 @@ void uiNudgeTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
 
     // The count, big, in the middle of what is left.
     const Btns b = btns(t);
-    const int left = uiNudgeSecondsLeft(now);
+    const int left = uiAutoUpdateSecondsLeft(now);
     t.setTextSize(2);
     snprintf(line, sizeof line, left > 0 ? "UPDATING IN %d" : "UPDATING...", left);
     const int cy = y + 12 + (b.y - (y + 12) - t.fontHeight()) / 2;
@@ -80,9 +80,9 @@ void uiNudgeTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
     Theme::drawWin95Button(t, b.skipX, b.y, b.w, BTN_H, "SKIP", false);
 }
 
-NudgeHit uiNudgeHit(TFT_eSPI& t, int x, int y) {
+AutoUpdateHit uiAutoUpdateHit(TFT_eSPI& t, int x, int y) {
     const Btns b = btns(t);
-    if (in(x, y, b.nowX,  b.y, b.w, BTN_H)) return NudgeHit::NOW;
-    if (in(x, y, b.skipX, b.y, b.w, BTN_H)) return NudgeHit::SKIP;
-    return NudgeHit::NONE;
+    if (in(x, y, b.nowX,  b.y, b.w, BTN_H)) return AutoUpdateHit::NOW;
+    if (in(x, y, b.skipX, b.y, b.w, BTN_H)) return AutoUpdateHit::SKIP;
+    return AutoUpdateHit::NONE;
 }

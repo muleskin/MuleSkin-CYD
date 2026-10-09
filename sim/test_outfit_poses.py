@@ -5,7 +5,7 @@
     python  test_outfit_poses.py --check-only    # wherever numpy + Pillow are
 
 Renders every outfit through every arm movement he has -- IDLE, WAVE and each
-VisitPose, at eight moments 125 ms apart -- on a flat key colour, using the
+ActPose, at eight moments 125 ms apart -- on a flat key colour, using the
 firmware's own drawWaving() (the `poses` screen in main_sim.cpp).
 
 Then, for each frame, it compares the costume against the same frame with no

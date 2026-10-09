@@ -113,7 +113,7 @@ UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/ui_detfilter.cpp \
             $(SRC)/ui_watchalert.cpp \
             $(SRC)/ui_update.cpp \
-            $(SRC)/ui_nudge.cpp \
+            $(SRC)/ui_autoupdate.cpp \
             $(SRC)/ui_wifipass.cpp \
             $(SRC)/ui_sysprops.cpp \
             $(SRC)/ui_wifinets.cpp \

@@ -129,13 +129,13 @@ enum class Mood : uint8_t { IDLE, WAVE, SHOCKED, BOUNCE, SLEEPY, WALK, DANCE, WI
 static int8_t s_reachDir = 1;
 // ...and at what height: 0 up (a high five), 1 down (a low five), 2 level (a
 // fist bump, or a hand held out with a rock, paper or scissors over it). The
-// host's comes from visitReach(), the guest's from his VisitPose.
+// host's comes from visitReach(), the guest's from his ActPose.
 static uint8_t s_reachLevel = 0;
 static uint8_t s_hostReachLevel = 0;
 
-// Which emote pose Mood::ACT strikes, as a VisitPose, set by whoever draws the
+// Which emote pose Mood::ACT strikes, as a ActPose, set by whoever draws the
 // body just before it does -- the host's from visitPose(), the guest's from
-// his own VisitPose -- exactly as s_reachDir is. And the detection reaction an
+// his own ActPose -- exactly as s_reachDir is. And the detection reaction an
 // emote borrows: COVER, LOOK_AROUND and HANDS_UP are SHOCKED with a pose of
 // the emote's choosing rather than the one his last detection picks. -1 is
 // "his own", which is every SHOCKED that is not an emote's.
@@ -519,14 +519,6 @@ static const uint8_t  PET_MILESTONES_N = sizeof(PET_MILESTONES) / sizeof(PET_MIL
 
 // ---- Runtime state ----
 static Mood          mood            = Mood::IDLE;
-// True while somebody is visiting, and true while somebody else is the one
-// talking -- see setVisiting()/setListening(). Both live out here rather than
-// with the visit code because tick() reads them and tick() is in every build,
-// mesh or not: s_visiting decides whether his speech bubble grows a tail, and
-// a static declared inside #if MULESKIN_MESH does not exist to answer that in
-// the four shipping builds.
-static bool          s_visiting      = false;
-static bool          s_listening     = false;
 static uint32_t      moodUntil       = 0;
 
 // A little wander away from center and back — see tick()'s idle-quip
@@ -4845,14 +4837,14 @@ static void drawBody(TFT_eSPI& t, int cx, int hy, int headTopY, uint32_t now, Mo
     // sinking into a crouch or a bow, hanging his head, throwing it back to
     // howl, leaning back on a rope. His feet stay planted -- the legs below
     // shorten by exactly what the body sank.
-    const VisitPose act = (m == Mood::ACT) ? (VisitPose)s_actPose : VisitPose::NONE;
+    const ActPose act = (m == Mood::ACT) ? (ActPose)s_actPose : ActPose::NONE;
     int crouch = 0, actHead = 0;
     switch (act) {
-        case VisitPose::CROUCH: crouch = S(9); actHead = S(2); break;
-        case VisitPose::BOW:    crouch = S(3); actHead = S(7); break;
-        case VisitPose::SAD:    actHead = S(3); break;
-        case VisitPose::HOWL:   actHead = -S(3); break;
-        case VisitPose::PULL:   cx2 -= s_reachDir * S(4); break;
+        case ActPose::CROUCH: crouch = S(9); actHead = S(2); break;
+        case ActPose::BOW:    crouch = S(3); actHead = S(7); break;
+        case ActPose::SAD:    actHead = S(3); break;
+        case ActPose::HOWL:   actHead = -S(3); break;
+        case ActPose::PULL:   cx2 -= s_reachDir * S(4); break;
         default: break;
     }
     hy += crouch;
@@ -5575,23 +5567,23 @@ static void drawBody(TFT_eSPI& t, int cx, int hy, int headTopY, uint32_t now, Mo
         };
         const float beat = sinf((float)(now % 500) / 500.0f * 6.2831853f);
         switch (act) {
-        case VisitPose::SALUTE:                 // hand to the brow
+        case ActPose::SALUTE:                 // hand to the brow
             hang(-sd);
             limbTo(cx2 + sd * S(11), hy + S(26), cx2 + sd * S(9), hy + S(3));
             break;
-        case VisitPose::BOW:                    // hands folded at the belly
+        case ActPose::BOW:                    // hands folded at the belly
             limbTo(cx2 - S(11), hy + S(26), cx2 + S(2), hy + S(36));
             limbTo(cx2 + S(11), hy + S(26), cx2 - S(2), hy + S(34));
             break;
-        case VisitPose::HUG:                    // both arms round the other one
+        case ActPose::HUG:                    // both arms round the other one
             limbTo(cx2 + sd * S(11), hy + S(26), cx2 + sd * S(27), hy + S(24));
             limbTo(cx2 - sd * S(11), hy + S(26), cx2 + sd * S(21), hy + S(31));
             break;
-        case VisitPose::SAD:                    // arms hanging limp and in
+        case ActPose::SAD:                    // arms hanging limp and in
             limbTo(cx2 - S(11), hy + S(26), cx2 - S(9), hy + S(44));
             limbTo(cx2 + S(11), hy + S(26), cx2 + S(9), hy + S(44));
             break;
-        case VisitPose::GRR: {                  // fists clenched at his sides, shaking
+        case ActPose::GRR: {                  // fists clenched at his sides, shaking
             const int sh = (int)(sinf((float)(now % 120) / 120.0f * 6.2831853f) * S(1));
             limbTo(cx2 - S(11), hy + S(26), cx2 - S(21) + sh, hy + S(41));
             limbTo(cx2 + S(11), hy + S(26), cx2 + S(21) + sh, hy + S(41));
@@ -5599,29 +5591,29 @@ static void drawBody(TFT_eSPI& t, int cx, int hy, int headTopY, uint32_t now, Mo
             t.fillCircle(cx2 + S(21) + sh, hy + S(41), S(4), furLight);
             break;
         }
-        case VisitPose::CROUCH:                 // hands on his knees
+        case ActPose::CROUCH:                 // hands on his knees
             limbTo(cx2 - S(11), hy + S(26), cx2 - S(13), hy + S(38));
             limbTo(cx2 + S(11), hy + S(26), cx2 + S(13), hy + S(38));
             break;
-        case VisitPose::PULL: {                 // both hands on the rope, heaving
+        case ActPose::PULL: {                 // both hands on the rope, heaving
             const int tug = (int)(beat * S(2));
             limbTo(cx2 + sd * S(11), hy + S(26), cx2 + sd * S(30) + tug, hy + S(28));
             limbTo(cx2 - sd * S(11), hy + S(26), cx2 + sd * S(24) + tug, hy + S(31));
             break;
         }
-        case VisitPose::WIGGLE: {               // tickling fingers, reaching over
+        case ActPose::WIGGLE: {               // tickling fingers, reaching over
             const int wg = (int)(sinf((float)(now % 180) / 180.0f * 6.2831853f) * S(3));
             limbTo(cx2 + sd * S(11), hy + S(26), cx2 + sd * S(28), hy + S(24) + wg);
             limbTo(cx2 - sd * S(11), hy + S(26), cx2 + sd * S(20), hy + S(32) - wg);
             break;
         }
-        case VisitPose::CHEER: {                // both arms up, pumping
+        case ActPose::CHEER: {                // both arms up, pumping
             const int pk = (int)(fabsf(beat) * S(5));
             limbTo(cx2 - S(11), hy + S(26), cx2 - S(19), hy - S(6) + pk);
             limbTo(cx2 + S(11), hy + S(26), cx2 + S(19), hy - S(6) + pk);
             break;
         }
-        case VisitPose::SELFIE: {               // a phone held up and out
+        case ActPose::SELFIE: {               // a phone held up and out
             hang(-sd);
             const int px = cx2 + sd * S(22), py = hy - S(4);
             limbTo(cx2 + sd * S(11), hy + S(26), px, py);
@@ -5629,15 +5621,15 @@ static void drawBody(TFT_eSPI& t, int cx, int hy, int headTopY, uint32_t now, Mo
             t.fillRect(px - S(2), py - S(5), S(4), S(6), blend(CYAN, BLACK, 90));
             break;
         }
-        case VisitPose::HOWL:                   // hands cupped either side of his mouth
+        case ActPose::HOWL:                   // hands cupped either side of his mouth
             limbTo(cx2 - S(11), hy + S(26), cx2 - S(15), hy + S(12));
             limbTo(cx2 + S(11), hy + S(26), cx2 + S(15), hy + S(12));
             break;
-        case VisitPose::POINT:                  // up and away: "look!"
+        case ActPose::POINT:                  // up and away: "look!"
             hang(-sd);
             limbTo(cx2 + sd * S(11), hy + S(26), cx2 + sd * S(27), hy - S(4));
             break;
-        case VisitPose::STRAIN: {               // an arm locked out, trembling
+        case ActPose::STRAIN: {               // an arm locked out, trembling
             hang(-sd);
             const int sh = (int)(sinf((float)(now % 120) / 120.0f * 6.2831853f) * S(1));
             limbTo(cx2 + sd * S(11), hy + S(26), cx2 + sd * S(30), hy + S(22) + sh);
@@ -5976,7 +5968,7 @@ static void drawBody(TFT_eSPI& t, int cx, int hy, int headTopY, uint32_t now, Mo
         } else if (pose == ReactPose::DISGUST) {
             limbTo(cx2 + S(11), hh + S(26), cx2, hh + S(17));
         }
-    } else if (act == VisitPose::SAD) {
+    } else if (act == ActPose::SAD) {
         // No shades for this one: eyes you can see, brows up in the middle, a
         // frown, and a tear on its way down.
         wideLine(t, cx2 - S(10), hh + S(6), cx2 - S(3), hh + S(4), S(1) + 1, furLight);
@@ -6096,7 +6088,7 @@ static void drawBody(TFT_eSPI& t, int cx, int hy, int headTopY, uint32_t now, Mo
         if (lensR != BLACK) t.drawFastVLine(cx2 + S(3)  + S(1 + gx), hh + S(7) + sd, S(4), WHITE);
 
         // Angry brows, down in the middle, over the top of the frames.
-        if (act == VisitPose::GRR || act == VisitPose::STRAIN) {
+        if (act == ActPose::GRR || act == ActPose::STRAIN) {
             wideLine(t, cx2 - S(12), hh + S(3), cx2 - S(3), hh + S(6), S(2), BLACK);
             wideLine(t, cx2 + S(12), hh + S(3), cx2 + S(3), hh + S(6), S(2), BLACK);
         }
@@ -6125,11 +6117,11 @@ static void drawBody(TFT_eSPI& t, int cx, int hy, int headTopY, uint32_t now, Mo
         bool talking = forceTalking || (ownsBubble && bubbleText && now < bubbleUntil);
         if (noMouth) {
             // nothing: this costume has no mouth in any mood
-        } else if (act == VisitPose::HOWL) {
+        } else if (act == ActPose::HOWL) {
             // Wide open and round -- the howl itself.
             t.fillEllipse(cx2, hh + S(19), S(4), S(6), BLACK);
             t.fillEllipse(cx2, hh + S(21), S(2), S(2), PINK);
-        } else if (act == VisitPose::GRR || act == VisitPose::STRAIN) {
+        } else if (act == ActPose::GRR || act == ActPose::STRAIN) {
             // Gritted teeth.
             t.fillRoundRect(cx2 - S(7), hh + S(16), S(14), S(6), S(2), BLACK);
             t.fillRect(cx2 - S(6), hh + S(17), S(12), S(4), WHITE);
@@ -6276,7 +6268,7 @@ static void drawBody(TFT_eSPI& t, int cx, int hy, int headTopY, uint32_t now, Mo
 
 void drawWaving(TFT_eSPI& t, int cx, int baseY, uint32_t now, float scale, const char* line,
                 bool talking, int wanderRangePx, bool waving, int bubbleGap, bool laughing,
-                bool listening, bool bubbleTail, VisitPose pose) {
+                bool listening, bool bubbleTail, ActPose pose) {
     if (!MASCOT_SHOWN) return;
     // This cameo is placed by callers that have already reserved room, so
     // there is no region to clamp against.
@@ -6298,13 +6290,13 @@ void drawWaving(TFT_eSPI& t, int cx, int baseY, uint32_t now, float scale, const
     uint32_t bobPeriod = laughing ? 240u : 900u;
     // A set piece's rhythm wins over a laugh: the dance keeps tick()'s DANCE
     // bob, so the two of them move to the same beat when they dance together.
-    if (pose == VisitPose::DANCE)  { bobAmt = 6.0f * scale; bobPeriod = 300u; }
-    if (pose == VisitPose::SLEEPY) { bobAmt = 1.5f * scale; bobPeriod = 2200u; }
+    if (pose == ActPose::DANCE)  { bobAmt = 6.0f * scale; bobPeriod = 300u; }
+    if (pose == ActPose::SLEEPY) { bobAmt = 1.5f * scale; bobPeriod = 2200u; }
     float bob = sinf((float)(now % bobPeriod) / (float)bobPeriod * 6.2831853f) * bobAmt;
     // Startled: up on his toes and shaking, the jolt tick()'s double-take
     // gives the host, cut down to what a pose can do without his timing.
     int jolt = 0;
-    if (pose == VisitPose::STARTLED) {
+    if (pose == ActPose::STARTLED) {
         bob  = -4.0f * scale;
         jolt = (int)(sinf((float)(now % 140) / 140.0f * 6.2831853f) * 2.0f * scale);
     }
@@ -6350,25 +6342,25 @@ void drawWaving(TFT_eSPI& t, int cx, int baseY, uint32_t now, float scale, const
     const bool cameoTalking = talking || (line != nullptr);
     Mood cm = waving ? Mood::WAVE : Mood::IDLE;
     switch (pose) {
-        case VisitPose::HIGH_FIVE: cm = Mood::HIGHFIVE; s_reachDir = -1; s_reachLevel = 0; break;
-        case VisitPose::LOW_FIVE:  cm = Mood::HIGHFIVE; s_reachDir = -1; s_reachLevel = 1; break;
-        case VisitPose::FIST:      cm = Mood::HIGHFIVE; s_reachDir = -1; s_reachLevel = 2; break;
-        case VisitPose::PUMP:      cm = Mood::PUMP;     s_reachDir = -1; break;
-        case VisitPose::SLEEPY:    cm = Mood::SLEEPY;   break;
-        case VisitPose::STRETCH:   cm = Mood::STRETCH;  break;
-        case VisitPose::DANCE:     cm = Mood::DANCE;    break;
+        case ActPose::HIGH_FIVE: cm = Mood::HIGHFIVE; s_reachDir = -1; s_reachLevel = 0; break;
+        case ActPose::LOW_FIVE:  cm = Mood::HIGHFIVE; s_reachDir = -1; s_reachLevel = 1; break;
+        case ActPose::FIST:      cm = Mood::HIGHFIVE; s_reachDir = -1; s_reachLevel = 2; break;
+        case ActPose::PUMP:      cm = Mood::PUMP;     s_reachDir = -1; break;
+        case ActPose::SLEEPY:    cm = Mood::SLEEPY;   break;
+        case ActPose::STRETCH:   cm = Mood::STRETCH;  break;
+        case ActPose::DANCE:     cm = Mood::DANCE;    break;
         // SHOCKED picks its arms from the host's last detection, so the two
         // of them throw the same pose at the same scare -- which is the point.
-        case VisitPose::STARTLED:  cm = Mood::SHOCKED;  break;
+        case ActPose::STARTLED:  cm = Mood::SHOCKED;  break;
         // The emotes'. Three borrow a detection reaction with a pose of their
         // own; the rest are Mood::ACT, facing the host.
-        case VisitPose::HANDS_UP:    cm = Mood::SHOCKED; s_actReact = (int8_t)ReactPose::HANDS_UP;    break;
-        case VisitPose::COVER:       cm = Mood::SHOCKED; s_actReact = (int8_t)ReactPose::COVER_FACE;  break;
-        case VisitPose::LOOK_AROUND: cm = Mood::SHOCKED; s_actReact = (int8_t)ReactPose::LOOK_AROUND; break;
-        case VisitPose::NONE:
-        case VisitPose::LAUGH:     break;           // a laugh is his bob, not a pose
+        case ActPose::HANDS_UP:    cm = Mood::SHOCKED; s_actReact = (int8_t)ReactPose::HANDS_UP;    break;
+        case ActPose::COVER:       cm = Mood::SHOCKED; s_actReact = (int8_t)ReactPose::COVER_FACE;  break;
+        case ActPose::LOOK_AROUND: cm = Mood::SHOCKED; s_actReact = (int8_t)ReactPose::LOOK_AROUND; break;
+        case ActPose::NONE:
+        case ActPose::LAUGH:     break;           // a laugh is his bob, not a pose
         default:
-            if ((uint8_t)pose >= (uint8_t)VisitPose::SALUTE) {
+            if ((uint8_t)pose >= (uint8_t)ActPose::SALUTE) {
                 cm = Mood::ACT; s_actPose = (uint8_t)pose; s_reachDir = -1;
             }
             break;
@@ -6537,7 +6529,7 @@ void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
                              say("SHAKE IT OFF", SHOW_STEP_MS); break;
                     case 18: mood = Mood::IDLE; s_backSteps = 3; s_backAt = now;
                              say("BACKING AWAY", SHOW_STEP_MS); break;
-                    case 19: mood = Mood::ACT; s_hostAct = (uint8_t)VisitPose::CROUCH;
+                    case 19: mood = Mood::ACT; s_hostAct = (uint8_t)ActPose::CROUCH;
                              s_hostActUntil = now + SHOW_STEP_MS + 300u; s_backSteps = 0;
                              say("SIT DOWN", SHOW_STEP_MS); break;
                     case 20: mood = Mood::IDLE; s_flickStart = now; s_flickDir = 1;
@@ -6717,7 +6709,7 @@ void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
             // held, with his hands on his knees; a catch stands him up.
             say(pick(SIT_LINES, 4), MIN_BUBBLE_MS);
             mood = Mood::ACT;
-            s_hostAct = (uint8_t)VisitPose::CROUCH;
+            s_hostAct = (uint8_t)ActPose::CROUCH;
             moodUntil = now + tempo(9000);
             s_hostActUntil = moodUntil;
             nextIdleAt = now + tempo(9000) + 8000 + random(0, 12000);
@@ -7182,19 +7174,6 @@ void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
         s_shadowCov = (uint8_t)(16.0f - ua * 6.0f);
     }
 
-    // Listening: a slow nod on top of whatever the bob is already doing.
-    //
-    // Squared so it goes down and comes back rather than swaying both ways --
-    // a nod has a direction, and a sine through the rest line reads as
-    // swaying, which is what somebody bored does. Only while the mood is
-    // IDLE, so it never fights the laugh: a MuleSkin nodding politely and
-    // cracking up at the same time is neither.
-    if (s_listening && mood == Mood::IDLE) {
-        const float nk  = (float)(now % 1700u) / 1700.0f;
-        const float dip = sinf(nk * 3.14159265f);
-        s_headDrop += (int)(dip * dip * 3.6f * scale);
-    }
-
     // ---- carry and drop --------------------------------------------
     // A finger holding him overrides every other position: the mood
     // machine keeps running underneath (he can be shocked while being
@@ -7321,12 +7300,7 @@ void tick(TFT_eSPI& t, int cx, int topY, int availHeight, uint32_t now,
     if (showBubble) {
         lastBubbleW = 0; lastBubbleH = 0;
         if (s_onboardActive) drawOnboardBubble(t, cx, topY, bubbleText, s_onboardStep, ONBOARD_N);
-        // Pointed at the BODY, not at cx: the two differ while he wanders,
-        // and a tail that stays put while he walks out from under it is
-        // worse than no tail. Only while there is a second MuleSkin to be
-        // confused with.
-        else                 drawBubble(t, cx, topY, bubbleText, now, true,
-                                        s_visiting ? bodyCx : NO_TAIL);
+        else                 drawBubble(t, cx, topY, bubbleText, now, true, NO_TAIL);
     }
     // Only what this call itself drew. A bubble that is held, or still
     // popping in, returns before recording anything, and the rectangle

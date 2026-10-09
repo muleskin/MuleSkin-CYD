@@ -11,10 +11,10 @@
 
 class DetectionEngine;
 
-enum class NudgeHit : uint8_t { NONE, NOW, SKIP };
+enum class AutoUpdateHit : uint8_t { NONE, NOW, SKIP };
 
 // `ver` is the release to install, `seconds` the count.
-void     uiNudgeInit(TFT_eSPI& t, const uint8_t ver[3], uint16_t seconds, uint32_t now);
-void     uiNudgeTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng);
-NudgeHit uiNudgeHit(TFT_eSPI& t, int x, int y);
-int      uiNudgeSecondsLeft(uint32_t now);
+void     uiAutoUpdateInit(TFT_eSPI& t, const uint8_t ver[3], uint16_t seconds, uint32_t now);
+void     uiAutoUpdateTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng);
+AutoUpdateHit uiAutoUpdateHit(TFT_eSPI& t, int x, int y);
+int      uiAutoUpdateSecondsLeft(uint32_t now);

@@ -403,13 +403,11 @@ namespace MuleSkin {
     // bubbleTail: hang a little pointer off the bubble aimed at him. Off by
     // default because a lone MuleSkin's bubble can only be his; it earns its
     // keep when there are two of them and two bubbles taking turns.
-    // The guest's half of a two-MuleSkin set piece -- see visitHighFive() and
-    // friends. NONE is the ordinary cameo. Declared out here rather than with
-    // them because drawWaving() is also the boot splash's, in every build.
-    enum class VisitPose : uint8_t { NONE, HIGH_FIVE, LOW_FIVE, FIST, STARTLED, DANCE,
+    // A pose to strike: his own SHOW OFF moves (Mood::ACT), or a cameo's.
+    // NONE is the ordinary cameo.
+    enum class ActPose : uint8_t { NONE, HIGH_FIVE, LOW_FIVE, FIST, STARTLED, DANCE,
                                      PUMP, SLEEPY, STRETCH,
-                                     // The emotes' (see emote_script.h). The last
-                                     // three borrow his detection reactions.
+                                     // The last three borrow his detection reactions.
                                      LAUGH, SALUTE, BOW, HUG, SAD, GRR, CROUCH, PULL,
                                      WIGGLE, CHEER, SELFIE, HOWL, POINT, STRAIN,
                                      COVER, LOOK_AROUND, HANDS_UP };
@@ -418,5 +416,5 @@ namespace MuleSkin {
                     const char* line = nullptr, bool talking = false, int wanderRangePx = 0,
                     bool waving = true, int bubbleGap = 34, bool laughing = false,
                     bool listening = false, bool bubbleTail = false,
-                    VisitPose pose = VisitPose::NONE);
+                    ActPose pose = ActPose::NONE);
 }
