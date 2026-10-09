@@ -18,10 +18,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install mbedtls
-        run: sudo apt-get update -q && sudo apt-get install -y -q libmbedtls-dev
       - name: Host tests
         run: make -C test -k -j"$(nproc)"
+
+  # The emulator renders the main screens and sim/screens_check.py compares
+  # them with sim/golden/: a moved row, a clipped label or a wrong colour fails
+  # here instead of on a board. A change that meant to move pixels re-renders
+  # the references (python sim/screens_check.py --update) and commits them.
+  screens:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the emulator
+        run: make -C sim -j"$(nproc)" muleskinsim
+      - name: Compare the screens
+        run: |
+          pip install -q pillow
+          python sim/screens_check.py
+      - name: Keep the differences
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screen-diffs
+          path: sim/out/diff/
 
   firmware:
     runs-on: ubuntu-latest
