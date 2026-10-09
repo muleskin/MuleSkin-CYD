@@ -369,6 +369,10 @@ namespace Settings {
     // by default; only the boards that can (PhoneAlerts::available()) list it.
     bool        phoneAlerts();
     void        togglePhoneAlerts();
+    // PHONE CODE: 0 is off; otherwise the four digits (1000..9999) a phone
+    // must send before it gets alerts. Picked by main.cpp when switched on.
+    uint16_t    phoneCode();
+    void        setPhoneCode(uint16_t code);
 
     // TIME ZONE: an index into Clock's zone table, applied at load and on
     // every change. UTC until somebody picks one; timeZoneChosen() says

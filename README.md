@@ -287,10 +287,21 @@ board raises on its own screen, and every WITH YOU, then arrives as a
 notification for as long as that page stays open. The row reads WAITING, then
 CONNECTED.
 
-There is no pairing: the first phone to connect gets the alerts. It learns
-what the board is alerting about and nothing else, and the board takes
-nothing back from it. To make room, the CYD builds no longer offer firmware
-updates over Bluetooth; USB and WiFi updates are unchanged.
+The page keeps a **history** on the phone, newest first, with a **map**
+(OpenStreetMap) and **CSV** and **KML** exports for a spreadsheet or Google
+Earth. Tick *Record where each alert happened* and each alert is stamped with
+the phone's own location: the board has no GPS, but the phone in your pocket
+does, so this is where a camera was seen. The history and the locations stay
+on that phone until you press Clear; the board takes nothing from the phone.
+
+With **PHONE CODE** off (the default) the first phone to connect gets the
+alerts. Switch it on and the row shows four digits -- new ones every time --
+that a phone has to send before it gets anything; the page asks once and
+remembers them. A phone without the code is let go after 30 seconds, or after
+three wrong guesses, so a stranger cannot hold the one connection slot, and
+the alert itself cannot be read off the board without it. To make room, the
+CYD builds no longer offer firmware updates over Bluetooth; USB and WiFi
+updates are unchanged.
 
 ## Updates
 

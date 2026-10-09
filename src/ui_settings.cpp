@@ -80,6 +80,7 @@ static const SettingsRow ALL_ROWS[] = {
 #endif
     // Hidden where the board cannot (PhoneAlerts::available()).
     SettingsRow::PHONE_ALERTS,
+    SettingsRow::PHONE_CODE,
     SettingsRow::DETECTION_FILTER,
     SettingsRow::IGNORED_DEVICES,
     // APPEARANCE opens the display page -- see APPEARANCE_ROWS. It sat at the
@@ -236,6 +237,7 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::BUZZER:
 #endif
         case SettingsRow::PHONE_ALERTS:
+        case SettingsRow::PHONE_CODE:
         case SettingsRow::DETECTION_FILTER:
         case SettingsRow::IGNORED_DEVICES:
             return RowGroupId::BEHAVIOR;
@@ -320,7 +322,7 @@ static uint8_t buildDisplayList(DisplayItem* out) {
         // Not a secret, just impossible: a board without a second app slot or
         // a Bluetooth server has nothing to update into.
         if ((r == SettingsRow::UPDATE_FIRMWARE || r == SettingsRow::UPDATE_CHECK || r == SettingsRow::UPDATE_CHANNEL || r == SettingsRow::AUTO_UPDATE) && !OtaCore::available()) continue;
-        if (r == SettingsRow::PHONE_ALERTS && !PhoneAlerts::available()) continue;
+        if ((r == SettingsRow::PHONE_ALERTS || r == SettingsRow::PHONE_CODE) && !PhoneAlerts::available()) continue;
         rows[n++] = r;
     }
 
@@ -916,7 +918,15 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             // CONNECTED says a phone is listening -- and, the slot being one,
             // that nobody else can be.
             label = "PHONE ALERTS";
-            value = !Settings::phoneAlerts() ? "OFF" : PhoneAlerts::connected() ? "CONNECTED" : "WAITING";
+            value = !Settings::phoneAlerts() ? "OFF" : PhoneAlerts::listening() ? "CONNECTED"
+                  : PhoneAlerts::connected() ? "CODE?" : "WAITING";
+            break;
+        case SettingsRow::PHONE_CODE:
+            // The digits themselves: they are what the phone asks for, and
+            // the settings screen is behind the PIN lock when there is one.
+            label = "PHONE CODE";
+            if (Settings::phoneCode()) { snprintf(valBuf, valBufN, "%04u", (unsigned)Settings::phoneCode()); value = valBuf; }
+            else value = "OFF";
             break;
         case SettingsRow::UPDATE_CHANNEL:
             label = "UPDATES"; value = Settings::labChannel() ? "LAB" : "STABLE";

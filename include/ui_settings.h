@@ -67,6 +67,7 @@ enum class SettingsRow : uint8_t {
     UPDATE_CHANNEL,  // on the SYSTEM page: UPDATES STABLE / LAB
     AUTO_UPDATE,     // on the SYSTEM page: AUTO UPDATE OFF / AT NIGHT
     PHONE_ALERTS,    // beside BUZZER: alerts to a phone over Bluetooth (phone_alerts.h)
+    PHONE_CODE,      // ...and the four digits a phone must send first (OFF / 4821)
     BACK,
     COUNT,
     NONE = 255

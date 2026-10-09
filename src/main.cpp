@@ -4598,11 +4598,17 @@ void loop() {
         g_consoleSelfTest = false;
         runSelfTest();
     }
-    if (g_consolePhone == 2) {
+    if (g_consolePhone == 3) {
+        // PHONE CODE: the settings row's toggle, and the code it picked.
+        g_consolePhone = -1;
+        Settings::setPhoneCode(Settings::phoneCode() ? 0 : (uint16_t)(1000 + (esp_random() % 9000)));
+        PhoneAlerts::codeChanged();
+        Serial.printf("[phone] code %04u\n", (unsigned)Settings::phoneCode());
+    } else if (g_consolePhone == 2) {
         // PHONE TEST: one line to a connected phone.
         g_consolePhone = -1;
         PhoneAlerts::note("TEST from the board");
-        Serial.printf("[phone] test %s\n", PhoneAlerts::connected() ? "sent" : "not sent: no phone connected");
+        Serial.printf("[phone] test %s\n", PhoneAlerts::listening() ? "sent" : "not sent: no phone listening");
     } else if (g_consolePhone >= 0) {
         // PHONE ON / OFF: the settings row's job, for a bench with no finger
         // on the screen.
@@ -5892,6 +5898,12 @@ void loop() {
                             Settings::togglePhoneAlerts();
                             PhoneAlerts::setEnabled(Settings::phoneAlerts());
                             if (Settings::phoneAlerts()) phoneAlertsStart();
+                            break;
+                        case SettingsRow::PHONE_CODE:
+                            // A fresh code every time it is switched on: one
+                            // read over a shoulder is not good forever.
+                            Settings::setPhoneCode(Settings::phoneCode() ? 0 : (uint16_t)(1000 + (esp_random() % 9000)));
+                            PhoneAlerts::codeChanged();
                             break;
                         case SettingsRow::UPDATE_CHANNEL:
                             Settings::toggleLabChannel();

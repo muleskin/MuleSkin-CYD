@@ -545,6 +545,7 @@ void pollSerial() {
         if (strcasecmp(line, "PHONE ON") == 0)  { g_consolePhone = 1; continue; }
         if (strcasecmp(line, "PHONE OFF") == 0) { g_consolePhone = 0; continue; }
         if (strcasecmp(line, "PHONE TEST") == 0) { g_consolePhone = 2; continue; }
+        if (strcasecmp(line, "PHONE CODE") == 0) { g_consolePhone = 3; continue; }
         if (strcasecmp(line, "LIVE ON") == 0)  { g_liveOn = true;  Serial.println("[live] on: type,mac,rssi,channel,hits,again,vendor,name"); continue; }
         if (strcasecmp(line, "LIVE OFF") == 0) { g_liveOn = false; Serial.println("[live] off"); continue; }
         if (strcasecmp(line, "AURA") == 0)   { g_consoleAura = true; continue; }

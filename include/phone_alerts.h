@@ -21,11 +21,12 @@
 // no more than the role. The CYDs give up Bluetooth firmware updates for it
 // (ota_ble.cpp): one GATT server, one job.
 //
-// WHO MAY LISTEN. Anyone in range who connects first -- there is no pairing.
-// What they would learn is what the board is alerting about, which is worth
-// knowing and not worth a pairing ritual on a resistive screen. The one
-// connection slot is the real limit: a stranger connected is you not
-// connected, and the settings row says CONNECTED whenever someone is.
+// WHO MAY LISTEN. With PHONE CODE off (the default), anyone in range who
+// connects first. With it on, a phone has to write the four digits shown on
+// that settings row within 30 seconds of connecting, three tries, or the
+// board lets it go -- so a stranger cannot hold the one connection slot, and
+// gets nothing while trying: alerts go only to a phone that gave the code,
+// and the alert characteristic is notify-only, never readable.
 #pragma once
 #include <stdint.h>
 #include "state.h"
@@ -44,8 +45,14 @@ bool registered();
 // The settings row turned it on or off. Off drops a connected phone.
 void setEnabled(bool on);
 
-// A phone is connected right now.
+// A phone is connected right now -- and, for listening(), has given the code
+// (or PHONE CODE is off), so alerts reach it.
 bool connected();
+bool listening();
+
+// PHONE CODE changed: tells phones whether to ask, and lets a connected one
+// go so it comes back through the new code.
+void codeChanged();
 
 // A phone may connect now: on, registered, nobody connected.
 bool wantConnectable();
