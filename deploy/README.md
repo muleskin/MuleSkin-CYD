@@ -56,11 +56,22 @@ tools/release.sh 3.1.2 --push
 ```
 
 That stamps every `web-flasher/manifest-*.json` with the version, commits,
-tags `v3.1.2` and pushes. Then on the server:
+tags `v3.1.2` and pushes. Then on the server, one command:
 
 ```bash
-sudo git -C /root/MuleSkin-CYD pull --ff-only origin main
-sudo git -C /root/MuleSkin-CYD fetch --tags
+sudo OTA_SIGNING_KEY=/path/to/ota-key.pem /root/MuleSkin-CYD/deploy/redeploy.sh
+```
+
+`redeploy.sh` fetches, checks the clone out at the newest release tag (or the
+one you name, e.g. `redeploy.sh v3.1.2` to roll back), builds and signs all
+13 boards, rebuilds the flasher container, and then checks that the live site
+serves that version, its signatures and `versions.json` -- it fails loudly
+otherwise. The clone is left on the tag (detached HEAD); the next run just
+fetches and moves it. The same steps by hand, if you need them:
+
+```bash
+sudo git -C /root/MuleSkin-CYD fetch --tags origin
+sudo git -C /root/MuleSkin-CYD checkout v3.1.2
 cd /root/MuleSkin-CYD && sudo OTA_SIGNING_KEY=/path/to/ota-key.pem tools/build_flasher_bins.sh
 cd /docker/muleskin-flasher && sudo docker compose up -d --build
 ```

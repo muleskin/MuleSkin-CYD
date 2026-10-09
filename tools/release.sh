@@ -69,9 +69,6 @@ fi
 
 cat <<EOF
 
-Next, on the server (see deploy/README.md):
-  sudo git -C /root/MuleSkin-CYD pull --ff-only origin main && sudo git -C /root/MuleSkin-CYD fetch --tags
-  cd /root/MuleSkin-CYD && sudo OTA_SIGNING_KEY=<private key .pem> tools/build_flasher_bins.sh
-  cd /docker/muleskin-flasher && sudo docker compose up -d --build
-Then check: curl -s http://flasher.oillie.cloud/manifest-cyd-ili9341.json | grep version
+Next, on the server (see deploy/README.md) -- it builds, deploys and checks:
+  sudo OTA_SIGNING_KEY=<private key .pem> /root/MuleSkin-CYD/deploy/redeploy.sh $TAG
 EOF
