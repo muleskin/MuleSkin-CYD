@@ -24,13 +24,44 @@ import tempfile
 PREFIX = b"SQWOTA1\n"
 
 
+def verify_any(pub_path, sig_path, msg_path):
+    """openssl reads only the first key in a PEM file; try each block."""
+    with open(pub_path) as f:
+        text = f.read()
+    blocks, cur = [], []
+    for line in text.splitlines():
+        if "BEGIN PUBLIC KEY" in line:
+            cur = [line]
+        elif cur:
+            cur.append(line)
+            if "END PUBLIC KEY" in line:
+                blocks.append("\n".join(cur) + "\n")
+                cur = []
+    if not blocks:
+        sys.exit("no public key in %s" % pub_path)
+    for b in blocks:
+        fd, p = tempfile.mkstemp(suffix=".pem")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(b)
+            r = subprocess.run(["openssl", "dgst", "-sha256", "-verify", p, "-signature", sig_path, msg_path],
+                               capture_output=True)
+            if r.returncode == 0:
+                return
+        finally:
+            os.remove(p)
+    sys.exit("the signature matches none of the %d trusted key(s) in %s" % (len(blocks), pub_path))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--key", required=True, help="P-256 private key, PEM")
     ap.add_argument("--env", required=True, help="PlatformIO environment the image was built for")
     ap.add_argument("--bin", required=True, help="the app image (firmware.bin)")
     ap.add_argument("--out", required=True, help="where to write the DER signature")
-    ap.add_argument("--pub", help="optional public key to verify the result against")
+    ap.add_argument("--pub", help="optional public key(s) to verify the result against: a PEM file "
+                                  "with one or more keys (any one matching passes -- a key rotation "
+                                  "trusts two)")
     a = ap.parse_args()
 
     with open(a.bin, "rb") as f:
@@ -45,8 +76,7 @@ def main():
         subprocess.run(["openssl", "dgst", "-sha256", "-sign", a.key, "-out", a.out, msg_path],
                        check=True)
         if a.pub:
-            subprocess.run(["openssl", "dgst", "-sha256", "-verify", a.pub,
-                            "-signature", a.out, msg_path], check=True)
+            verify_any(a.pub, a.out, msg_path)
     finally:
         os.remove(msg_path)
     print("signed %s for %s (%d bytes) -> %s" % (a.bin, a.env, len(image), a.out))

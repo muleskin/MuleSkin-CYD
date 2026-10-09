@@ -102,6 +102,39 @@ The flasher page offers them at `?lab=1`. The version must be newer than the
 release the lab boards run. Then release it as usual; a lab board on
 `3.1.4-lab` sees release `3.1.4` as the same version, so it stays put.
 
+## The signing key
+
+Boards install an update over WiFi only if it is signed with a key whose
+public half is in `include/ota_pubkey.h`. Whoever holds the private key can
+make every board install anything, so:
+
+- It lives at `/root/.config/muleskin/ota-signing-key.pem` on the server
+  today. Better is a machine that does not serve the web: build and sign
+  there (`tools/build_flasher_bins.sh` with `OTA_SIGNING_KEY`), then copy
+  `.pio/flasher-bins/` to `/root/MuleSkin-CYD/.pio/flasher-bins/` on the
+  server.
+- Never paste it into a chat, a ticket or a commit, and check that no copy
+  sits in a shell history, a log or an AI assistant's session transcript
+  (`grep -rl "PRIVATE KEY" /root` finds them).
+
+### Rotating the signing key
+
+If the key may have been seen, replace it. Boards trust a list of keys, so
+nothing has to be reinstalled by cable:
+
+1. `tools/new_ota_key.sh /path/to/new-key.pem` on the signing machine. It
+   prints the new public key twice -- as PEM and as a C array.
+2. Add both to `include/ota_pubkey.h`: the PEM to the comment, the array to
+   `OTA_PUBKEYS`, **first**. Keep the old key in the list.
+3. Release that build **signed with the old key**. Boards take it over WiFi
+   and from then on trust both keys.
+4. Sign every release after it with the new key.
+5. Once boards have moved on (or a few releases later), remove the old key
+   from `OTA_PUBKEYS` and the comment, and destroy the old private key.
+
+A board that missed step 3 (left unplugged through it) still has only the
+old key: it needs one install from the web flasher.
+
 ## Checking it
 
 ```bash
