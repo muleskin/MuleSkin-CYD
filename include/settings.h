@@ -368,6 +368,11 @@ namespace Settings {
     bool        labChannel();
     void        toggleLabChannel();
 
+    // AUTO UPDATE: install a newer release on its own, at night (main.cpp
+    // serviceAutoUpdate()). Off by default.
+    bool        autoUpdate();
+    void        toggleAutoUpdate();
+
     // TIME ZONE: an index into Clock's zone table, applied at load and on
     // every change. UTC until somebody picks one; timeZoneChosen() says
     // whether anybody has, so MuleSkin can ask once.

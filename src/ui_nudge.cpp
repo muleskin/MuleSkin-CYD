@@ -39,7 +39,10 @@ void centred(TFT_eSPI& t, int y, uint16_t c, const char* s) {
 }
 } // namespace
 
+// from == nullptr: AUTO UPDATE's countdown (main.cpp), not a squad member's.
+static bool s_isAuto = false;
 void uiNudgeInit(TFT_eSPI& t, const char* from, const uint8_t ver[3], uint16_t seconds, uint32_t now) {
+    s_isAuto = (from == nullptr);
     snprintf(s_from, sizeof s_from, "%s", from && from[0] ? from : "SOMEONE");
     snprintf(s_ver, sizeof s_ver, "v%u.%u.%u", ver[0], ver[1], ver[2]);
     s_until = now + (uint32_t)seconds * 1000u;
@@ -55,12 +58,13 @@ void uiNudgeTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
     (void)eng;
     const int w = t.width(), h = t.height();
     t.fillRect(0, 0, w, h, Theme::BG);
-    Theme::drawListHeading(t, "SQUAD UPDATE", Theme::VAPOR_PINK);
+    Theme::drawListHeading(t, s_isAuto ? "AUTO UPDATE" : "SQUAD UPDATE", Theme::VAPOR_PINK);
 
     t.setTextSize(1);
     int y = Theme::LIST_TOP + Theme::LIST_HEADING_H + 10;
     char line[48];
-    snprintf(line, sizeof line, "%s asked the squad to update", s_from);
+    if (s_isAuto) snprintf(line, sizeof line, "A newer release is ready: updating");
+    else          snprintf(line, sizeof line, "%s asked the squad to update", s_from);
     centred(t, y, Theme::WHITE, line);
     y += 12;
     snprintf(line, sizeof line, "to %s. This board runs %s.", s_ver, OtaCore::runningVersion());

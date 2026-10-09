@@ -1562,6 +1562,7 @@ static void enterUpdate() {
 // from a while ago is not something to act on when a menu finally closes.
 static MeshTalk::NudgeIn s_nudge = {};
 static bool              s_nudgePending = false;
+static bool              s_nudgeIsAuto  = false;   // the countdown is AUTO UPDATE's, not a squad member's
 static const uint32_t    NUDGE_HOLD_MS  = 180000;
 static const uint16_t    NUDGE_COUNT_S  = 30;
 
@@ -1580,7 +1581,7 @@ static void enterNudge() {
     transitionStart = millis();
     lastTouch = transitionStart;     // undims a sleeping screen, like an alert
     if (s_screenDimmed) { s_screenDimmed = false; applyBrightness(); }
-    uiNudgeInit(*canvas, s_nudge.from, s_nudge.ver, NUDGE_COUNT_S, transitionStart);
+    uiNudgeInit(*canvas, s_nudgeIsAuto ? nullptr : s_nudge.from, s_nudge.ver, NUDGE_COUNT_S, transitionStart);
 }
 
 static void enterBingo() {
@@ -1693,7 +1694,7 @@ static void autoUpdateTick(uint32_t now) {
             s_auto.active = false;
             if (!OtaWifi::end()) { engine.stopUpdateRadio(); enterClear(); }
         } else {
-            MeshTalk::markNudged();
+            if (!s_nudgeIsAuto) MeshTalk::markNudged();   // AUTO UPDATE reports to no one
             lendFrameToDownload();
             OtaWifi::install();
         }
@@ -1999,6 +2000,36 @@ static void serviceLive(uint32_t now) {
         if (d && !d->restored && d->lastSeen && now - d->lastSeen <= 2000) printLive(*d, false);
     }
 }
+
+#if MULESKIN_MESH
+// AUTO UPDATE (SYSTEM page, off by default): when a newer release is known
+// -- from the boot check, or the daily AUTO TIME join that now asks too --
+// install it at night, on its own. The squad nudge's machinery does the work:
+// the same 30 s countdown with SKIP (titled AUTO UPDATE), then the same
+// unattended join-check-install-restart that falls back to the old version if
+// anything fails. Night is NIGHT DIM's hours, or 1-5 AM without them; only
+// from the main screen, after ten minutes untouched, unlocked, and one try a
+// night.
+static void serviceAutoUpdate(uint32_t now) {
+    static uint32_t lastTry = 0;
+    if (!Settings::autoUpdate() || state != AppState::CLEAR) return;
+    if (!OtaCore::available() || !OtaCore::availableVersion()[0] || !OtaWifi::hasSaved()) return;
+    if (Security::locked() || !Clock::trusted() || OtaWifi::timeSyncBusy()) return;
+    const uint8_t p = Settings::nightMode();
+    const uint8_t h = Clock::hour();
+    const bool night = p ? NightMode::active(p, h) : (h >= 1 && h < 5);
+    if (!night || now - lastTouch < 10u * 60u * 1000u) return;
+    if (lastTry && now - lastTry < 6u * 3600u * 1000u) return;
+    lastTry = now;
+    unsigned a, b, c;
+    if (sscanf(OtaCore::availableVersion(), "%u.%u.%u", &a, &b, &c) != 3) return;
+    memset(&s_nudge, 0, sizeof s_nudge);
+    s_nudge.ver[0] = (uint8_t)a; s_nudge.ver[1] = (uint8_t)b; s_nudge.ver[2] = (uint8_t)c;
+    s_nudgeIsAuto = true;
+    Serial.printf("[auto] night update to v%u.%u.%u: counting down\n", a, b, c);
+    enterNudge();
+}
+#endif
 
 static void enterHunt() {
     state = AppState::HUNT;
@@ -4532,6 +4563,9 @@ void loop() {
     serviceNightDim(now);
     serviceFollowing(now);
     serviceLive(now);
+#if MULESKIN_MESH
+    serviceAutoUpdate(now);
+#endif
     if (state == AppState::CLEAR) {
         const char* sub = nullptr;
         bool good = false;
@@ -4579,6 +4613,7 @@ void loop() {
         if (s_nudgePending && (int32_t)(now - s_nudge.at) > (int32_t)NUDGE_HOLD_MS) s_nudgePending = false;
         if (s_nudgePending && state == AppState::CLEAR && !Security::locked()) {
             s_nudgePending = false;
+            s_nudgeIsAuto  = false;
             enterNudge();
         }
         MeshTalk::UpdatedIn u;
@@ -6018,6 +6053,7 @@ void loop() {
                         case SettingsRow::UPDATE_CHECK:    Settings::toggleUpdateCheck();     break;
                         case SettingsRow::AUTO_TIME:       Settings::toggleAutoTime();        break;
                         case SettingsRow::NIGHT_MODE:      Settings::cycleNightMode();        break;
+                        case SettingsRow::AUTO_UPDATE:     Settings::toggleAutoUpdate();      break;
                         case SettingsRow::UPDATE_CHANNEL:
                             Settings::toggleLabChannel();
                             Theme::showToast(Settings::labChannel() ? "UPDATES: LAB" : "UPDATES: STABLE",

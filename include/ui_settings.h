@@ -67,6 +67,7 @@ enum class SettingsRow : uint8_t {
     AUTO_TIME,       // on the SYSTEM page: rejoin the saved WiFi daily to keep the clock right
     NIGHT_MODE,      // on the APPEARANCE page: NIGHT DIM, the hours the screen runs dim
     UPDATE_CHANNEL,  // on the SYSTEM page: UPDATES STABLE / LAB
+    AUTO_UPDATE,     // on the SYSTEM page: AUTO UPDATE OFF / AT NIGHT
     BACK,
     COUNT,
     NONE = 255

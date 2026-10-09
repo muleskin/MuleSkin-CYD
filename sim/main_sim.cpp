@@ -795,7 +795,9 @@ int main(int argc, char** argv) {
     else if (screen == "icons")      {}
     else if (screen == "boot")       uiBootInit(frame);
     else if (screen == "update")     uiUpdateInit(frame);
-    else if (screen == "nudge")      { const uint8_t v[3] = { 1, 7, 6 }; uiNudgeInit(frame, "BIGFOOT", v, 30, 0); }
+    else if (screen == "nudge")      { const uint8_t v[3] = { 1, 7, 6 };
+                                       // MULESKINSIM_AUTOUPDATE=1: the AUTO UPDATE countdown instead of a squad nudge
+                                       uiNudgeInit(frame, getenv("MULESKINSIM_AUTOUPDATE") ? nullptr : "BIGFOOT", v, 30, 0); }
     else if (screen == "squadupdate") uiSquadUpdateInit(frame);
     else if (screen == "meeting")    {
         uiMeetingInit(frame);

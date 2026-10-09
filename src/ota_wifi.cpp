@@ -1043,6 +1043,24 @@ void tsRun(void*) {
         s_ts = TimeSync::ASKING;
         Clock::syncStart();
         s_ts = Clock::syncWait(6000) ? TimeSync::DONE : TimeSync::NO_ANSWER;
+        // While joined anyway: is there a newer release? The boot check asks
+        // only at boot, so a board that runs for days would never hear --
+        // this is how the daily AUTO TIME join keeps it current (and what
+        // AUTO UPDATE acts on). One small GET; the buffer lives only here.
+        if (Settings::updateCheck()) {
+            uint8_t* body = (uint8_t*)malloc(1024);
+            size_t len = 0;
+            if (body && getSmall(manifestName(), body, 1023, len) == 200) {
+                body[len] = '\0';
+                char latest[16];
+                if (parseVersion((const char*)body, latest, sizeof latest)) {
+                    OtaCore::noteAvailable(latest, "");
+                    if (OtaCore::availableVersion()[0]) parseRelease((const char*)body);
+                    Serial.printf("[time] release check: site has v%s\n", latest);
+                }
+            }
+            free(body);
+        }
     }
     Clock::syncStop();
     // Off the network, but the station mode stays up: detection sniffs on it.
@@ -1063,7 +1081,7 @@ bool timeSyncStart() {
     if (!s_n) { s_ts = TimeSync::NO_SAVED; return false; }
     s_ts = TimeSync::JOINING;
     s_tsSsid[0] = '\0';
-    if (xTaskCreatePinnedToCore(tsRun, "wifitime", 6144, nullptr, 1, &s_tsTask, 1) != pdPASS) {
+    if (xTaskCreatePinnedToCore(tsRun, "wifitime", 8192, nullptr, 1, &s_tsTask, 1) != pdPASS) {
         s_tsTask = nullptr;
         s_ts = TimeSync::NO_MEMORY;
         return false;

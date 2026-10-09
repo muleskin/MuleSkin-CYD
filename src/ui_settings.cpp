@@ -152,7 +152,7 @@ static const SettingsRow SYSTEM_ROWS[] = {
     SettingsRow::LAST_RUN,
 #endif
     SettingsRow::CALIBRATE, SettingsRow::CHECK_COLORS,
-    SettingsRow::DIAGNOSTICS, SettingsRow::UPDATE_FIRMWARE, SettingsRow::UPDATE_CHECK, SettingsRow::UPDATE_CHANNEL, SettingsRow::WIFI_NETWORKS,
+    SettingsRow::DIAGNOSTICS, SettingsRow::UPDATE_FIRMWARE, SettingsRow::UPDATE_CHECK, SettingsRow::UPDATE_CHANNEL, SettingsRow::AUTO_UPDATE, SettingsRow::WIFI_NETWORKS,
     SettingsRow::TIME_ZONE, SettingsRow::AUTO_TIME, SettingsRow::RESET_STATS,
 };
 static const uint8_t SYSTEM_ROWS_N = sizeof(SYSTEM_ROWS) / sizeof(SYSTEM_ROWS[0]);
@@ -328,7 +328,7 @@ static uint8_t buildDisplayList(DisplayItem* out) {
         if (r == SettingsRow::AURA && !MuleSkin::hasAura()) continue;
         // Not a secret, just impossible: a board without a second app slot or
         // a Bluetooth server has nothing to update into.
-        if ((r == SettingsRow::UPDATE_FIRMWARE || r == SettingsRow::UPDATE_CHECK || r == SettingsRow::UPDATE_CHANNEL) && !OtaCore::available()) continue;
+        if ((r == SettingsRow::UPDATE_FIRMWARE || r == SettingsRow::UPDATE_CHECK || r == SettingsRow::UPDATE_CHANNEL || r == SettingsRow::AUTO_UPDATE) && !OtaCore::available()) continue;
         rows[n++] = r;
     }
 
@@ -916,6 +916,9 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             label = "WIFI NETWORKS";
             if (OtaWifi::savedCount()) { snprintf(valBuf, valBufN, "%u SAVED >", (unsigned)OtaWifi::savedCount()); value = valBuf; }
             else value = "NONE >";
+            break;
+        case SettingsRow::AUTO_UPDATE:
+            label = "AUTO UPDATE"; value = Settings::autoUpdate() ? "AT NIGHT" : "OFF";
             break;
         case SettingsRow::UPDATE_CHANNEL:
             label = "UPDATES"; value = Settings::labChannel() ? "LAB" : "STABLE";
