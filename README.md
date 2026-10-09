@@ -459,8 +459,9 @@ MuleSkin-CYD/
 
 ## Status
 
-**Shipping.** There is no CI in this repo: nothing builds or deploys on a
-push or a tag. `tools/build_flasher_bins.sh` builds every board the web
+**Shipping.** CI (`.github/workflows/ci.yml`) builds every flasher board and
+runs the host tests on each push, but nothing is published or deployed from
+it. `tools/build_flasher_bins.sh` builds every board the web
 flasher lists (in Docker, so nothing needs installing) into
 `.pio/flasher-bins`, and `web-flasher/Dockerfile` serves the flasher on port
 8000 with those bins mounted at `/firmware`. `tools/release.sh 3.1.2 --push`
