@@ -1666,7 +1666,8 @@ void DetectionEngine::wakeRadios() {
     g_restBle = false;
 }
 
-bool DetectionEngine::radiosResting() { return g_rawMode == RawScanMode::REST; }
+bool DetectionEngine::radiosResting() const { return g_rawMode == RawScanMode::REST; }
+bool DetectionEngine::updateRadioOn() const { return g_rawMode == RawScanMode::UPDATE; }
 
 void DetectionEngine::watchBle(const uint8_t* mac, const char* name) {
     _watchKind = WatchKind::BLE;

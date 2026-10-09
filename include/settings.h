@@ -352,6 +352,12 @@ namespace Settings {
     bool        updateCheck();
     void        toggleUpdateCheck();
 
+    // AUTO TIME: with a saved network, rejoin it once a day (and once soon
+    // after a boot that didn't set the clock) for the few seconds a time
+    // server takes, from the main screen. Detection pauses while it runs.
+    bool        autoTime();
+    void        toggleAutoTime();
+
     // TIME ZONE: an index into Clock's zone table, applied at load and on
     // every change. UTC until somebody picks one; timeZoneChosen() says
     // whether anybody has, so MuleSkin can ask once.

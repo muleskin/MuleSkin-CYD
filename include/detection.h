@@ -251,7 +251,10 @@ public:
     // until wakeRadios(). False when something else owns the radio.
     bool     restRadios(bool bleToo);
     void     wakeRadios();
-    bool     radiosResting();
+    bool     radiosResting() const;
+    // True while startUpdateRadio() has the radio (a WiFi join for an update
+    // or the clock): nothing is being scanned until stopUpdateRadio().
+    bool     updateRadioOn() const;
 
     // ---- Watched target ("stalker tracker") --------------------------
     // Session-only (not persisted to NVS -- resets on reboot). One

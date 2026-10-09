@@ -88,6 +88,7 @@ static const uint32_t kPlausible = 1735689600u;
 static Preferences s_prefs;
 static bool        s_begun    = false;
 static bool        s_synced   = false;
+static uint32_t    s_syncMs   = 0;       // millis() of the last network answer
 static uint32_t    s_born     = 0;
 static uint32_t    s_greeted  = 0;
 static uint32_t    s_mileSaid = 0;
@@ -417,7 +418,7 @@ bool syncWait(uint32_t ms) {
     for (const char* h : HOSTS) {
         const uint32_t used = millis() - t0;
         if (used >= ms) break;
-        if (ntpOnce(h, (ms - used) / 2 < 400 ? ms - used : (ms - used) / 2)) { s_synced = true; break; }
+        if (ntpOnce(h, (ms - used) / 2 < 400 ? ms - used : (ms - used) / 2)) { s_synced = true; s_syncMs = millis(); if (!s_syncMs) s_syncMs = 1; break; }
     }
     if (isSet()) noteKnown();
     return isSet();
@@ -428,6 +429,7 @@ bool syncWait(uint32_t ms) {
 }
 
 bool synced() { return s_synced; }
+uint32_t lastSyncMs() { return s_syncMs; }
 
 // ---- the board's own history ----------------------------------------------
 uint32_t bornEpoch() { return s_born; }

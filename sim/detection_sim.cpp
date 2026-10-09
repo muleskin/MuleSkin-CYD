@@ -126,6 +126,9 @@ const uint8_t* DetectionEngine::rawWifiBssid(uint8_t) const { return nullptr; }
 void DetectionEngine::stopRawScan() {}
 void DetectionEngine::startUpdateRadio() {}
 void DetectionEngine::stopUpdateRadio() {}
+// MULESKINSIM_PAUSED=1 renders the main screen as if the radio were on WiFi.
+bool DetectionEngine::radiosResting() const { return false; }
+bool DetectionEngine::updateRadioOn() const { return getenv("MULESKINSIM_PAUSED") != nullptr; }
 
 // ---- watch / hunt ----------------------------------------------------
 void DetectionEngine::watchBle(const uint8_t* mac, const char* name) {

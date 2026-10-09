@@ -503,6 +503,7 @@ bool begin() {
     // A cancelled attempt's task can still be unwinding an HTTP request it is
     // waiting on. One at a time: it clears s_task on its way out.
     if (s_task) return false;
+    if (timeSyncBusy()) return false;   // a WIFI TIME / AUTO TIME join holds the radio
     readSaved();
     s_fail = Fail::NONE;
     s_cancel = s_install = s_downloadStarted = false;

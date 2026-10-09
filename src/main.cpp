@@ -1761,6 +1761,13 @@ static void enterWifiAdd() {
 // With nothing saved it goes to WIFI NETWORKS to add one instead.
 static bool s_timeSyncRadio = false;
 static void enterTimeSync() {
+    // AUTO TIME already has a join going: show that one rather than refuse.
+    if (s_timeSyncRadio && OtaWifi::timeSyncBusy()) {
+        state = AppState::TIME_SYNC;
+        transitionStart = millis();
+        uiTimeSyncInit(*canvas);
+        return;
+    }
     if (!OtaWifi::savedCount()) {
         Theme::showToast("NO WIFI SAVED", "Add yours, then tap WIFI TIME again", Theme::AMBER);
         enterWifiNets();
@@ -1776,6 +1783,38 @@ static void enterTimeSync() {
     state = AppState::TIME_SYNC;
     transitionStart = millis();
     uiTimeSyncInit(*canvas);
+}
+
+// Detection back the moment a time join lets the radio go, whichever screen
+// is up: WIFI TIME's own, or the main screen behind an AUTO TIME join.
+static void serviceTimeSyncRadio() {
+    if (s_timeSyncRadio && !OtaWifi::timeSyncBusy()) {
+        engine.stopUpdateRadio();
+        s_timeSyncRadio = false;
+        Serial.printf("[time] join over: clock %s\n", Clock::trusted() ? "set" : "not set");
+    }
+}
+
+// AUTO TIME: WIFI TIME without the screen, from the main screen, once a day
+// -- or once, a couple of minutes after a boot whose own check didn't set
+// the clock -- and an hour after a try that didn't answer. The pill in the
+// title bar says SCAN PAUSED for the few seconds it holds the radio.
+static void serviceAutoTime(uint32_t now) {
+    static uint32_t lastTry = 0;
+    const uint32_t DAY  = 24u * 60u * 60u * 1000u;
+    const uint32_t HOUR = 60u * 60u * 1000u;
+    if (!Settings::autoTime() || state != AppState::CLEAR || s_timeSyncRadio) return;
+    if (!OtaWifi::savedCount() || OtaWifi::timeSyncBusy() || OtaWifi::state() != OtaWifi::State::OFF) return;
+    if (engine.radiosResting() || engine.updateRadioOn()) return;
+    if (now - lastTouch < 15000) return;   // not under somebody's finger
+    const uint32_t synced = Clock::lastSyncMs();
+    const bool due = synced ? now - synced >= DAY : now >= 2u * 60u * 1000u;
+    if (!due || (lastTry && now - lastTry < HOUR)) return;
+    lastTry = now;
+    engine.startUpdateRadio();
+    if (!OtaWifi::timeSyncStart()) { engine.stopUpdateRadio(); return; }
+    s_timeSyncRadio = true;
+    Serial.println("[time] AUTO TIME: joining for the clock");
 }
 
 static void enterHunt() {
@@ -4290,6 +4329,8 @@ void loop() {
     OtaCore::tick(now);
     OtaBle::tick(now);
     OtaWifi::tick(now);
+    serviceTimeSyncRadio();
+    serviceAutoTime(now);
     if (state == AppState::CLEAR) {
         const char* sub = nullptr;
         bool good = false;
@@ -4709,11 +4750,7 @@ void loop() {
         }
         case AppState::TIME_SYNC: {
             drawTwoBand([&](TFT_eSPI& t, bool) { uiTimeSyncTick(t, now); });
-            // Detection back the moment the radio is free.
-            if (s_timeSyncRadio && !OtaWifi::timeSyncBusy()) {
-                engine.stopUpdateRadio();
-                s_timeSyncRadio = false;
-            }
+            // Detection comes back in serviceTimeSyncRadio(), every loop.
             // BACK only once the job is over (it is not drawn before), and on
             // the finger lifting, so the touch cannot carry on into LOG.
             static bool backArmed = false;
@@ -5732,6 +5769,7 @@ void loop() {
                         case SettingsRow::BACKGROUND: Settings::cycleBackground(); break;
                         case SettingsRow::BACKGROUND_LOCK: Settings::toggleBackgroundLocked(); break;
                         case SettingsRow::UPDATE_CHECK:    Settings::toggleUpdateCheck();     break;
+                        case SettingsRow::AUTO_TIME:       Settings::toggleAutoTime();        break;
                         case SettingsRow::TIME_ZONE:
                             // Left half back, right half forward -- see the row's label.
                             Settings::stepTimeZone(gestureStartX < tft.width() / 2 ? -1 : 1);

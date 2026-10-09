@@ -103,6 +103,9 @@ void syncStop();
 // True once this boot has heard a time from the network, as opposed to
 // carrying one across a soft reset or being told over serial.
 bool synced();
+// millis() of the last time the network answered (any sync: the boot check,
+// WIFI TIME, the daily one); 0 if it has not this boot.
+uint32_t lastSyncMs();
 
 // ---- the board's own history ------------------------------------------
 // The first day this board ever knew the date, remembered in NVS the first

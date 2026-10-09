@@ -160,8 +160,11 @@ network (the one marked USE, or the strongest saved one in range), asks a time
 server, and lets go, pausing detection only while the radio is busy; with no
 network saved it opens WIFI NETWORKS to add one. The boot-time update check
 and UPDATE OVER WIFI set the clock the same way while the radio is up anyway.
-Once the time is real it shows at the top centre of the main screen, 12-hour
-with AM/PM. The zone is yours to pick, and there are three ways: the web
+**AUTO TIME** (on the SYSTEM page, on by default) keeps it right on its own:
+with a network saved, the board rejoins it once a day from the main screen --
+and once a couple of minutes after a boot that didn't set the clock -- for the
+few seconds a time server takes. Once the time is real it shows at the top
+centre of the main screen, 12-hour with AM/PM. The zone is yours to pick, and there are three ways: the web
 flasher's **Set Time & Zone** button sends this computer's clock and zone
 down the same cable right after flashing; the first time the clock is set
 with no zone chosen, a card on the main screen asks, with the live time in
@@ -187,13 +190,14 @@ caught between eleven and five.
 
 Nothing is detected while the board is joined to a network, attacks
 included. To stay associated the radio has to sit on the access point's
-channel, so WIFI TIME, the boot-time update check and UPDATE OVER WIFI turn
+channel, so WIFI TIME, AUTO TIME, the boot-time update check and UPDATE OVER WIFI turn
 the WiFi sniffer off first (no DEAUTH, EVIL TWIN, pentest-gear or other WiFi
 catches) and stop BLE scanning too (no trackers). The board never stays
 connected: WIFI TIME gives the join 20 seconds and the time server about 6,
 then lets go, and detection resumes the moment the radio is free, so the
 blind spot is a few seconds and at most about 26. An update over WiFi is
-blind for as long as the download and flash take.
+blind for as long as the download and flash take. While the main screen is
+up, an amber **PAUSED** pill in the title bar shows when scanning is off.
 
 One consequence: an evil twin or a deauth flood aimed at the board's own
 join isn't flagged while it happens. A flood still shows up as a join that

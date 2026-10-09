@@ -1790,6 +1790,30 @@ static void drawWatchPill(TFT_eSPI& t, int screenW, bool watching, bool hunting,
     s_watchPillOn = true;
 }
 
+// Detection is off for a moment -- the radio is on WiFi (AUTO TIME, an update
+// check) or resting -- so the counters below are standing still. Same slot and
+// shape as the WATCH pill, which it stands in for while it lasts: a paused
+// scan is the more important thing to know. Not a tap target.
+static void drawPausedPill(TFT_eSPI& t, int screenW, const char* txt, int spanR = -1) {
+    const uint16_t accent = Theme::AMBER;
+    t.setTextSize(1);
+    const int bh = 16;
+    const int bw = 16 + t.textWidth(txt) + 7;
+    const int spanL = 32;
+    if (spanR < 0) spanR = screenW - 54;
+    int x = spanL + ((spanR - spanL) - bw) / 2;
+    if (x < spanL) x = spanL;
+    const int y = (20 - bh) / 2;
+    t.fillRoundRect(x, y, bw, bh, 4, Theme::BG);
+    t.drawRoundRect(x, y, bw, bh, 4, accent);
+    // A pause sign: two short bars.
+    t.fillRect(x + 6,  y + 4, 2, bh - 8, accent);
+    t.fillRect(x + 10, y + 4, 2, bh - 8, accent);
+    t.setTextColor(accent, Theme::BG);
+    t.setCursor(x + 16, y + (bh - 8) / 2);
+    t.print(txt);
+}
+
 // The NEARBY headline's last drawn rectangle, grown to a finger-sized target.
 static bool    s_nearbyOn = false;
 static int16_t s_nbX = 0, s_nbY = 0, s_nbW = 0, s_nbH = 0;
@@ -3018,7 +3042,12 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
             s_watchPillOn = false;
             // Right of the pill: the watch's corner clock, drawn earlier (see
             // drawCornerClock()); -1 elsewhere, the old fixed reserve.
-            if (watching || hunting) drawWatchPill(t, w, watching, hunting, s_cornerClockPillR);
+            if (eng.updateRadioOn())
+                drawPausedPill(t, w, "PAUSED", s_cornerClockPillR);
+            else if (eng.radiosResting())
+                drawPausedPill(t, w, "RESTING", s_cornerClockPillR);
+            else if (watching || hunting)
+                drawWatchPill(t, w, watching, hunting, s_cornerClockPillR);
         }
     }
 

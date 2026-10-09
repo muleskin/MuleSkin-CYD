@@ -63,6 +63,7 @@ enum class SettingsRow : uint8_t {
     CHARGE_MODE,     // the CYD boards: radios and screen off so a battery charges faster
     LAST_RUN,        // the CYD boards: how long the previous boot ran, on the SYSTEM page
     PRIVACY,         // PRIVACY MODE: addresses and names masked on screen, on the SYSTEM page
+    AUTO_TIME,       // on the SYSTEM page: rejoin the saved WiFi daily to keep the clock right
     BACK,
     COUNT,
     NONE = 255
