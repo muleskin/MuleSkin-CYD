@@ -723,8 +723,18 @@ int hexVal(char c) {
 }
 
 void fetchExtraRules(uint32_t budgetMs) {
-    static char json[3072];
-    static char body[SIGX_BODY_MAX];
+    // 5 KB, held only for the few hundred ms this takes, at boot before the
+    // frame buffer exists: as statics they cost every board 5 KB of RAM for
+    // the whole run. Freed on every way out by the guard.
+    const size_t JSON_CAP = 3072;
+    struct Bufs {
+        char* json = (char*)malloc(3072);
+        char* body = (char*)malloc(SIGX_BODY_MAX);
+        ~Bufs() { free(json); free(body); }
+    } bufs;
+    if (!bufs.json || !bufs.body) { Serial.println("[rules] no memory to check"); return; }
+    char* const json = bufs.json;
+    char* const body = bufs.body;
     char sigHex[200];
     uint8_t sig[100];
     WiFiClient plain;
@@ -738,9 +748,9 @@ void fetchExtraRules(uint32_t budgetMs) {
         WiFiClient* s = http.getStreamPtr();
         const int total = http.getSize();
         const uint32_t t0 = millis();
-        while (len < sizeof json - 1 && (total < 0 || (int)len < total) && millis() - t0 < budgetMs) {
+        while (len < JSON_CAP - 1 && (total < 0 || (int)len < total) && millis() - t0 < budgetMs) {
             const int a = s->available();
-            if (a > 0) { const int r = s->read((uint8_t*)json + len, (size_t)a < sizeof json - 1 - len ? (size_t)a : sizeof json - 1 - len); if (r > 0) len += (size_t)r; }
+            if (a > 0) { const int r = s->read((uint8_t*)json + len, (size_t)a < JSON_CAP - 1 - len ? (size_t)a : JSON_CAP - 1 - len); if (r > 0) len += (size_t)r; }
             else if (!http.connected()) break;
             else delay(5);
         }
@@ -764,7 +774,7 @@ void fetchExtraRules(uint32_t budgetMs) {
     if (!b || !g) return;
     b = strchr(b + 6, '"');
     g = strchr(g + 5, '"');
-    if (!b || !g || !jsonString(b, body, sizeof body) || !jsonString(g, sigHex, sizeof sigHex)) return;
+    if (!b || !g || !jsonString(b, body, SIGX_BODY_MAX) || !jsonString(g, sigHex, sizeof sigHex)) return;
     size_t sigLen = 0;
     for (const char* h = sigHex; h[0] && h[1] && sigLen < sizeof sig; h += 2) {
         const int hi = hexVal(h[0]), lo = hexVal(h[1]);

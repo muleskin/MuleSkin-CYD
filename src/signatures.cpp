@@ -4,6 +4,7 @@
 #include <string.h>
 #include <strings.h>   // strncasecmp
 #include <ctype.h>     // the extra rules' parsing
+#include <stdlib.h>    // ...and their tables, sized to the set
 
 // OUI table. Order MATTERS: lookupOui walks top-to-bottom and returns
 // the first match. Per DESIGN.md §6.2: Axon > Flock > ALPR > cameras >
@@ -326,8 +327,11 @@ namespace {
 struct XOui  { uint8_t b[3]; DetectionType type; Confidence conf; char name[16]; };
 struct XSsid { char prefix[16]; DetectionType type; char name[16]; };
 const uint8_t X_OUI_MAX = 64, X_SSID_MAX = 32;
-XOui    g_xOui[X_OUI_MAX];
-XSsid   g_xSsid[X_SSID_MAX];
+// Allocated to the size of the set, not to the maximum: most boards carry no
+// extra rules at all, and fixed tables cost them 2.5 KB of RAM for nothing.
+XOui*   g_xOui  = nullptr;
+XSsid*  g_xSsid = nullptr;
+uint8_t g_xOuiCap = 0, g_xSsidCap = 0;
 uint8_t g_xOuiN = 0, g_xSsidN = 0;
 
 bool typeFromName(const char* s, DetectionType& out) {
@@ -373,7 +377,21 @@ void copyName(char* dst, const char* src) {
 
 uint16_t setExtraRules(const char* body) {
     g_xOuiN = g_xSsidN = 0;
-    if (!body) return 0;
+    free(g_xOui);  g_xOui = nullptr;  g_xOuiCap = 0;
+    free(g_xSsid); g_xSsid = nullptr; g_xSsidCap = 0;
+    if (!body || !*body) return 0;
+    // Room for every entry of each kind the set could hold, capped.
+    unsigned ouis = 0, ssids = 0;
+    for (const char* q = body; *q; ) {
+        while (*q == ' ' || *q == ';') q++;
+        if (strncasecmp(q, "OUI ", 4) == 0) ouis++;
+        else if (strncasecmp(q, "SSID ", 5) == 0) ssids++;
+        while (*q && *q != ';') q++;
+    }
+    if (ouis > X_OUI_MAX) ouis = X_OUI_MAX;
+    if (ssids > X_SSID_MAX) ssids = X_SSID_MAX;
+    if (ouis && (g_xOui = (XOui*)calloc(ouis, sizeof(XOui))) != nullptr) g_xOuiCap = (uint8_t)ouis;
+    if (ssids && (g_xSsid = (XSsid*)calloc(ssids, sizeof(XSsid))) != nullptr) g_xSsidCap = (uint8_t)ssids;
     char entry[96];
     const char* p = body;
     while (*p) {
@@ -385,7 +403,7 @@ uint16_t setExtraRules(const char* body) {
         p += n + (p[n] == ';' ? 1 : 0);
         char* w[6];
         const uint8_t k = words(entry, w, 6);
-        if (k >= 3 && strcasecmp(w[0], "OUI") == 0 && g_xOuiN < X_OUI_MAX) {
+        if (k >= 3 && strcasecmp(w[0], "OUI") == 0 && g_xOuiN < g_xOuiCap) {
             XOui& x = g_xOui[g_xOuiN];
             const char* m = w[1];
             if (strlen(m) != 8 || m[2] != ':' || m[5] != ':') continue;
@@ -405,7 +423,7 @@ uint16_t setExtraRules(const char* body) {
             }
             copyName(x.name, k > nameAt ? w[nameAt] : "");
             g_xOuiN++;
-        } else if (k >= 3 && strcasecmp(w[0], "SSID") == 0 && g_xSsidN < X_SSID_MAX) {
+        } else if (k >= 3 && strcasecmp(w[0], "SSID") == 0 && g_xSsidN < g_xSsidCap) {
             XSsid& x = g_xSsid[g_xSsidN];
             if (strlen(w[1]) > 15 || !typeFromName(w[2], x.type)) continue;
             copyName(x.prefix, w[1]);
