@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (2.8\" CYD)",
-  "version": "3.1.4",
-  "release_name": "Tracker alert",
-  "whats_new": ["WITH YOU alert for a following tracker", "TODAY: tap the clock", "Counters as colour pills", "Settings backup, log + crash report"],
+  "version": "3.1.5",
+  "release_name": "Phone alerts",
+  "whats_new": ["Phone alerts over Bluetooth", "Auto update at night", "44 new camera and ALPR prefixes", "Squad mesh removed: more free memory"],
   "new_install_prompt_erase": true,
   "builds": [
     {
