@@ -57,6 +57,12 @@ jobs:
             nm-cyd-c5) cp "$B/bootloader.bin" out/esp32c5-bootloader.bin; cp "$B/partitions.bin" out/nm-cyd-c5-partitions.bin ;;
             *)         cp "$B/bootloader.bin" out/esp32-bootloader.bin;  cp "$B/partitions.bin" out/esp32-partitions.bin ;;
           esac
+          # The otadata image the flasher writes too (boot_app0.bin), from
+          # whichever framework this board built with.
+          a=$(find ~/.platformio/packages -path '*framework-arduinoespressif32*/tools/partitions/boot_app0.bin' | head -1)
+          if [ -n "$a" ]; then
+            if [ "$e" = nm-cyd-c5 ]; then cp "$a" out/esp32c5-boot_app0.bin; else cp "$a" out/esp32-otadata.bin; fi
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: bins-${{ matrix.env }}
