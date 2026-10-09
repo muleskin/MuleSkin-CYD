@@ -2656,20 +2656,36 @@ static void drawCounterLine(TFT_eSPI& t, int w, int y, const DetectionEngine& en
     // background is doing behind them.
     const int PAD_X = 4, PAD_Y = 2;
     t.fillRect(x - PAD_X, y - PAD_Y, tw + 2 * PAD_X, t.fontHeight() + 2 * PAD_Y, Theme::BG);
-    // Entry by entry, each in its type's colour -- the colour its blips have
-    // on the radar, so a dot and its counter read as the same thing. One
-    // still at zero is a dim shade of it, so what is actually around stands
-    // out. The layout is the one measured above: same text, same gaps.
+    // Entry by entry. A type that is around (count above zero) is a pill in
+    // its type's colour -- the colour its blips have on the radar, so a dot
+    // and its counter read as the same thing -- with black or white text,
+    // whichever reads on that colour. A type at zero is plain light grey
+    // text: dim colours on black were unreadable on the panel. The pill
+    // stays inside the two-space gap either side, so the layout is the one
+    // measured above.
     int cx = x;
+    const int fh = t.fontHeight();
+    const uint16_t ZERO_GREY = 0xA514;   // light grey
     for (uint8_t i = 0; i < n; i++) {
         char entry[20];
         const unsigned c = counterCount(eng, types[i]);
         snprintf(entry, sizeof entry, "%s:%u", counterLabel(types[i]), c);
-        const uint16_t col = Theme::colorFor(types[i]);
-        t.setTextColor(c ? col : Theme::blend(Theme::BG, col, 110), Theme::BG);
+        const int ew = t.textWidth(entry);
+        if (c) {
+            const uint16_t col = Theme::colorFor(types[i]);
+            // Perceived brightness from the RGB565 channels (0..255 each).
+            const int r = ((col >> 11) & 0x1F) * 255 / 31;
+            const int g = ((col >> 5) & 0x3F) * 255 / 63;
+            const int b = (col & 0x1F) * 255 / 31;
+            const bool light = (r * 299 + g * 587 + b * 114) / 1000 > 140;
+            t.fillRoundRect(cx - 3, y - 2, ew + 5, fh + 3, 2, col);
+            t.setTextColor(light ? Theme::BLACK : Theme::WHITE, col);
+        } else {
+            t.setTextColor(ZERO_GREY, Theme::BG);
+        }
         t.setCursor(cx, y);
         t.print(entry);
-        cx += t.textWidth(entry) + (i + 1 < n ? t.textWidth("  ") : 0);
+        cx += ew + (i + 1 < n ? t.textWidth("  ") : 0);
     }
 }
 
