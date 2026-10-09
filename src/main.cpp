@@ -26,6 +26,7 @@
 #endif
 #include <XPT2046_Touchscreen.h>
 #include <Preferences.h>  // AWOK's own per-rotation touch-cal storage; see the AWOK block below pollTouch()'s globals
+#include "auto_time.h"    // AUTO TIME's schedule (tested on the desktop)
 #include <esp_heap_caps.h>   // heap_caps_get_largest_free_block() -- diagnostics screen
 #if defined(NM_CYD_C5)
 #include <esp_memory_utils.h> // esp_ptr_external_ram(): is the frame in PSRAM? (IDF 5 only)
@@ -1226,6 +1227,7 @@ static DetectionType s_confirmType = DetectionType::UNKNOWN;
 // primer first if it's never been shown (see Settings::infoPrimerShown()),
 // then s_confirmType's own explanation either way.
 static bool          s_infoPending       = false;
+static uint8_t       s_tappedBlip[6];          // radarBlipAt()'s answer
 static bool          s_infoShowingPrimer = false;
 // Same "ignore the touch that opened this" gate s_confirmArmed uses,
 // applied to the info panel's own GOT IT button.
@@ -1478,6 +1480,21 @@ static void enterMeeting() {
     state = AppState::MEETING;
     transitionStart = millis();
     uiMeetingInit(*canvas);
+}
+
+// The LOG's per-device panel (WATCH / IGNORE / HUNT / INFO), opened on `d`:
+// a long press on a LOG row, or a tap on its blip on the main screen's radar.
+static void openConfirmFor(const Detection* d) {
+    memcpy(s_confirmMac, d->mac, 6);
+    s_confirmIsBle = (d->channel == 0);
+    s_confirmType  = d->type;
+    snprintf(s_confirmVendor, sizeof s_confirmVendor, "%s", vendorText(*d));
+    memcpy(s_confirmName, d->name, sizeof s_confirmName);
+    const char* lbl = d->name[0] ? d->name : vendorText(*d);
+    strncpy(s_confirmLabel, lbl, sizeof(s_confirmLabel) - 1);
+    s_confirmLabel[sizeof(s_confirmLabel) - 1] = 0;
+    s_confirmPending = true;
+    s_confirmArmed   = false;
 }
 
 static void enterLog() {
@@ -1801,15 +1818,11 @@ static void serviceTimeSyncRadio() {
 // title bar says SCAN PAUSED for the few seconds it holds the radio.
 static void serviceAutoTime(uint32_t now) {
     static uint32_t lastTry = 0;
-    const uint32_t DAY  = 24u * 60u * 60u * 1000u;
-    const uint32_t HOUR = 60u * 60u * 1000u;
     if (!Settings::autoTime() || state != AppState::CLEAR || s_timeSyncRadio) return;
     if (!OtaWifi::savedCount() || OtaWifi::timeSyncBusy() || OtaWifi::state() != OtaWifi::State::OFF) return;
     if (engine.radiosResting() || engine.updateRadioOn()) return;
     if (now - lastTouch < 15000) return;   // not under somebody's finger
-    const uint32_t synced = Clock::lastSyncMs();
-    const bool due = synced ? now - synced >= DAY : now >= 2u * 60u * 1000u;
-    if (!due || (lastTry && now - lastTry < HOUR)) return;
+    if (!AutoTime::due(now, Clock::lastSyncMs(), lastTry)) return;   // auto_time.h, tested
     lastTry = now;
     engine.startUpdateRadio();
     if (!OtaWifi::timeSyncStart()) { engine.stopUpdateRadio(); return; }
@@ -5153,6 +5166,18 @@ void loop() {
                 sqActive  = false;
 #endif
             } else if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
+                       Theme::radarBlipAt(tp.x, tp.y, now, s_tappedBlip)) {
+                // A blip on the radar: that device's panel on the LOG --
+                // WATCH, IGNORE, HUNT or what it is -- as a long press on
+                // its LOG row would open.
+                lastTouch = now;
+                const Detection* hit = nullptr;
+                for (uint8_t i = 0; i < engine.logCount() && !hit; i++) {
+                    const Detection* d = engine.logAt(i);
+                    if (d && memcmp(d->mac, s_tappedBlip, 6) == 0) hit = d;
+                }
+                if (hit) { enterLog(); openConfirmFor(hit); }
+            } else if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
                        Theme::backgroundTap(tp.x, tp.y, now)) {
                 // Something tappable in the background itself claimed
                 // this touch -- currently only the moon on the FIRE
@@ -5652,16 +5677,7 @@ void loop() {
                     const Detection* d = (row >= 0) ? uiLogRow(engine, row) : nullptr;
                     if (d) {
                         rowHoldFired = true;
-                        memcpy(s_confirmMac, d->mac, 6);
-                        s_confirmIsBle = (d->channel == 0);
-                        s_confirmType  = d->type;
-                        snprintf(s_confirmVendor, sizeof s_confirmVendor, "%s", vendorText(*d));
-                        memcpy(s_confirmName,   d->name,   sizeof s_confirmName);
-                        const char* lbl = d->name[0] ? d->name : vendorText(*d);
-                        strncpy(s_confirmLabel, lbl, sizeof(s_confirmLabel) - 1);
-                        s_confirmLabel[sizeof(s_confirmLabel) - 1] = 0;
-                        s_confirmPending = true;
-                        s_confirmArmed   = false;
+                        openConfirmFor(d);
                     }
                 }
             }

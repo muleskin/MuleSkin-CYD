@@ -4,6 +4,7 @@
 #include "fast_sprite.h"
 #include "muleskin_art.h"
 #include "radar_art.h"
+#include "radar_blip.h"
 #include "frame_prof.h"
 #include "caustic_tile.h"
 #include "lil_guy.h"
@@ -1353,54 +1354,75 @@ static uint16_t scale565(uint16_t c, uint8_t k) {   // k/255 of c
     return (uint16_t)((r << 11) | (g << 5) | b);
 }
 
+// Where each blip was last drawn, for radarBlipAt(): the main screen's tap
+// handler asks which device a finger landed on. Stale after 250 ms, like the
+// other tap targets -- a blip not redrawn lately is not on screen.
+static const int MAX_BLIPS = 24;
+static int16_t  s_blipX[MAX_BLIPS], s_blipY[MAX_BLIPS];
+static uint8_t  s_blipMac[MAX_BLIPS][6];
+static uint8_t  s_blipN = 0, s_blipR = 3;
+static uint32_t s_blipAt = 0;
+
 static void drawRadarBlips(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,
                            const DetectionEngine& eng) {
     using namespace RadarArt;
     static const uint32_t SHOW_MS = 60000;
-    static const int MAX_BLIPS = 24;
     const int W = t.width(), H = t.height();
     // The same cover transform drawRadarBackground() uses.
     const int coverW = (W * REF_H >= H * REF_W) ? W : H * REF_W / REF_H;
     const int coverH = (W * REF_H >= H * REF_W) ? W * REF_H / REF_W : H;
     const int ox = (W - coverW) / 2, oy = (H - coverH) / 2;
     const uint8_t sweep = (uint8_t)(PHASE + (uint32_t)((uint64_t)(now % PERIOD_MS) * 256u / PERIOD_MS));
-    const float rim = (BOX_W < BOX_H ? BOX_W : BOX_H) * 0.5f - 6.0f;
+    // The scope in screen pixels, centre and rim.
+    const int cx = ox + (int)(CX * coverW / REF_W), cy = oy + (int)(CY * coverH / REF_H);
+    const int rim = ((BOX_W < BOX_H ? BOX_W : BOX_H) / 2 - 6) * coverW / REF_W;
     int rad = 4 * coverW / REF_W;
     if (rad < 3) rad = 3;
 
-    int drawn = 0;
+    // A band pass that starts at the top rebuilds the tap list; the second
+    // band (cyd35) adds to it.
+    if (yStart == 0) s_blipN = 0;
     const uint8_t n = eng.logCount();
-    for (uint8_t i = 0; i < n && drawn < MAX_BLIPS; i++) {
+    for (uint8_t i = 0; i < n && s_blipN < MAX_BLIPS; i++) {
         const Detection* d = eng.logAt(i);
         if (!d || d->restored || !d->lastSeen) continue;
         const uint32_t age = now - d->lastSeen;
         if (age >= SHOW_MS) continue;
-        // FNV-1a over the address: one bearing per device, the same every frame.
-        uint32_t hsh = 2166136261u;
-        for (int k = 0; k < 6; k++) { hsh ^= d->mac[k]; hsh *= 16777619u; }
-        const uint8_t a = (uint8_t)(hsh >> 24);
-        // -35 dBm and stronger at the centre, -100 at the rim.
-        float f = (float)(-35 - d->rssi) / 65.0f;
-        if (f < 0) f = 0;
-        if (f > 1) f = 1;
-        const float r = rim * (0.12f + 0.88f * f);
-        const float th = (float)a * (6.2831853f / 256.0f);   // 0 = north, clockwise
-        const float rx = CX + r * sinf(th), ry = CY - r * cosf(th);
-        const int x = ox + (int)(rx * coverW / REF_W);
-        const int y = oy + (int)(ry * coverH / REF_H);
+        const uint8_t a = RadarBlip::bearing(d->mac);
+        int x, y;
+        RadarBlip::point(a, rim * RadarBlip::radius256(d->rssi) / 256, cx, cy, x, y);
         if (y - rad - 2 < yStart || y + rad + 2 >= yEnd) continue;
-        // Paint: full as the arm crosses, down to a third a turn later; then
-        // the minute's fade on top.
+        // Paint, then the minute's fade on top.
         const uint8_t behind = (uint8_t)(sweep - a);
-        int k = 255 - behind * 170 / 255;
-        k = k * (int)(SHOW_MS - age) / (int)SHOW_MS;
+        int k = RadarBlip::paint(behind) * (int)(SHOW_MS - age) / (int)SHOW_MS;
         if (k < 90) k = 90;
-        const uint16_t col = scale565(colorFor(d->type), (uint8_t)k);
+        const uint16_t base = colorFor(d->type);
         t.fillCircle(x, y, rad + 1, BLACK);   // lifts it off the weather behind
-        t.fillCircle(x, y, rad, col);
-        if (behind < 16) t.drawCircle(x, y, rad + 2, scale565(colorFor(d->type), 200));
-        drawn++;
+        t.fillCircle(x, y, rad, scale565(base, (uint8_t)k));
+        if (behind < 16) t.drawCircle(x, y, rad + 2, scale565(base, 200));
+        s_blipX[s_blipN] = (int16_t)x;
+        s_blipY[s_blipN] = (int16_t)y;
+        memcpy(s_blipMac[s_blipN], d->mac, 6);
+        s_blipN++;
     }
+    s_blipR = (uint8_t)rad;
+    s_blipAt = now;
+}
+
+bool radarBlipAt(int x, int y, uint32_t now, uint8_t macOut[6]) {
+    if (!s_blipN || now - s_blipAt > 250) return false;
+    // Nearest within a finger's reach: blips are small and can sit close.
+    const int reach = s_blipR + 10;
+    int best = -1;
+    int32_t bestD = (int32_t)reach * reach + 1;
+    for (int i = 0; i < s_blipN; i++) {
+        const int32_t dx = x - s_blipX[i], dy = y - s_blipY[i];
+        const int32_t d2 = dx * dx + dy * dy;
+        if (d2 < bestD) { bestD = d2; best = i; }
+    }
+    if (best < 0) return false;
+    memcpy(macOut, s_blipMac[best], 6);
+    return true;
 }
 
 void drawActiveBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd,

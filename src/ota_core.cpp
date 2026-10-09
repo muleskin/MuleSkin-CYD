@@ -3,6 +3,7 @@
 #include "ota_core.h"
 #include "serial_flush.h"
 #include "ota_pubkey.h"
+#include "version_cmp.h"
 #include <Arduino.h>
 #include <Preferences.h>
 #include <esp_ota_ops.h>
@@ -194,18 +195,8 @@ static char     s_relName[20] = "";
 static char     s_news[NEWS_MAX][40];
 static uint8_t  s_newsN = 0;
 
-// "1.7.8" or "v1.7.8" into three numbers; false for anything else.
-static bool verParts(const char* s, unsigned v[3]) {
-    if (!s) return false;
-    if (*s == 'v' || *s == 'V') s++;
-    return sscanf(s, "%u.%u.%u", &v[0], &v[1], &v[2]) == 3;
-}
-static bool verNewer(const char* a, const char* b) {   // a newer than b
-    unsigned x[3], y[3];
-    if (!verParts(a, x) || !verParts(b, y)) return false;
-    for (int i = 0; i < 3; i++) { if (x[i] != y[i]) return x[i] > y[i]; }
-    return false;
-}
+// Releases compare through Version::newer() (version_cmp.cpp, tested on the desktop).
+static bool verNewer(const char* a, const char* b) { return Version::newer(a, b); }
 
 void noteAvailable(const char* version, const char* who) {
     if (!verNewer(version, runningVersion())) return;

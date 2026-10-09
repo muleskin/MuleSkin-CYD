@@ -136,6 +136,7 @@ inline bool psramFound() { return false; }
 // spliced ASCII into the pixel payload).
 struct SerialShim {
     void begin(unsigned long) {}
+    size_t setRxBufferSize(size_t n) { return n; }
     void print(const char* s) { fputs(s, stderr); }
     void print(int v) { fprintf(stderr, "%d", v); }
     void println(const char* s) { fputs(s, stderr); fputc('\n', stderr); }
