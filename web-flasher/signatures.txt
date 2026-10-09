@@ -21,4 +21,95 @@
 #   OUI 12:34:56 FLOCK HIGH NewCamCo
 #   SSID Spycam- CAMERA SpyCamInc
 
-SERIAL 1
+SERIAL 2
+
+# ---- Set 2 (2026-10-09) ----------------------------------------------------
+# Every prefix below was read out of the IEEE registry itself
+# (standards-oui.ieee.org/oui/oui.txt) and cross-checked against Wireshark's
+# manuf file -- not copied from another detector. The registered name follows
+# each group. None of them is a prefix the firmware already knows.
+
+# Body cams, in-car video, gunshot sensors
+# WatchGuard Video (Plano TX, now Motorola Solutions)
+OUI 00:1d:96 CAMERA HIGH WatchGuard
+# Digital Ally, Inc.
+OUI 00:23:bd CAMERA HIGH DigitalAlly
+# Utility, Inc (Decatur GA: BodyWorn)
+OUI 00:09:bc CAMERA HIGH BodyWorn
+OUI 00:16:ed CAMERA HIGH BodyWorn
+# Safety Vision, LLC (in-car and transit video)
+OUI 00:22:af CAMERA HIGH SafetyVision
+# ShotSpotter, Inc. -- CAMERA because there is no gunshot type
+OUI d4:11:d6 CAMERA HIGH ShotSpotter
+# MOTOROLA SOLUTIONS MALAYSIA SDN. BHD. -- a broad company, so MED
+OUI 10:74:6f CAMERA MED MotorolaSol
+OUI 9c:86:2b CAMERA MED MotorolaSol
+
+# Plate readers and tolling
+# Neology (Poway CA)
+OUI 00:17:3d ALPR MED Neology
+# KAPSCH AG
+OUI 00:e0:6a ALPR MED Kapsch
+
+# Camera makers
+# Axis Communications AB
+OUI ac:cc:8e CAMERA HIGH Axis
+OUI e8:27:25 CAMERA HIGH Axis
+# Vivotek, Inc.
+OUI 00:02:d1 CAMERA HIGH Vivotek
+# Mobotix AG
+OUI 00:03:c5 CAMERA HIGH Mobotix
+# HANWHA VISION VIETNAM COMPANY LIMITED / Hanwha Vision VietNam
+OUI 44:b4:23 CAMERA HIGH Hanwha
+OUI e4:30:22 CAMERA HIGH Hanwha
+# SAMSUNG TECHWIN CO.,LTD (Hanwha's predecessor)
+OUI 00:09:18 CAMERA MED SamsungTechwin
+# i-PRO Co., Ltd. (formerly Panasonic security)
+OUI d4:2d:c5 CAMERA HIGH i-PRO
+# Lorex Technology Inc.
+OUI 00:1f:54 CAMERA HIGH Lorex
+# Amcrest Technologies
+OUI 00:65:1e CAMERA HIGH Amcrest
+OUI 9c:8e:cd CAMERA HIGH Amcrest
+OUI a0:60:32 CAMERA HIGH Amcrest
+# Reolink Innovation Limited
+OUI ec:71:db CAMERA HIGH Reolink
+# Bosch Security Systems -- also alarm panels, so MED
+OUI 00:01:31 CAMERA MED Bosch
+OUI 00:04:63 CAMERA MED Bosch
+# Xiamen Milesight IoT Co., Ltd. -- also IoT sensors, so MED
+OUI 1c:c3:16 CAMERA MED Milesight
+OUI c0:ba:1f CAMERA MED Milesight
+# Zhejiang Uniview Technologies Co., Ltd.
+OUI 14:ba:88 CAMERA HIGH Uniview
+OUI 48:ea:63 CAMERA HIGH Uniview
+OUI 88:26:3f CAMERA HIGH Uniview
+# Zhejiang Dahua Technology Co., Ltd.
+OUI 08:ed:ed CAMERA HIGH Dahua
+OUI 14:a7:8b CAMERA HIGH Dahua
+OUI 3c:ef:8c CAMERA HIGH Dahua
+OUI 4c:11:bf CAMERA HIGH Dahua
+OUI 9c:14:63 CAMERA HIGH Dahua
+OUI e0:50:8b CAMERA HIGH Dahua
+# Hangzhou Hikvision Digital Technology Co.,Ltd.
+OUI 00:bc:99 CAMERA HIGH Hikvision
+OUI 04:03:12 CAMERA HIGH Hikvision
+OUI 08:54:11 CAMERA HIGH Hikvision
+OUI 18:68:cb CAMERA HIGH Hikvision
+OUI 24:0f:9b CAMERA HIGH Hikvision
+OUI 4c:bd:8f CAMERA HIGH Hikvision
+OUI a4:14:37 CAMERA HIGH Hikvision
+OUI bc:ad:28 CAMERA HIGH Hikvision
+
+# Camera setup hotspots: the SSID a camera puts up before it is configured
+# Hikvision WiFi cameras' open default network (CVE-2017-14953)
+SSID davinci CAMERA Hikvision
+# Hikvision WiFi camera setup AP, HAP_ plus the label's verification code
+SSID HAP_ CAMERA Hikvision
+# Dahua WiFi camera setup hotspot, DAP- plus serial (IPC-HDBW1230DE-SW guide)
+SSID DAP- CAMERA Dahua
+
+# Considered and left out: Cradlepoint and Sierra Wireless (police cars use
+# them, but so do buses, shops and ambulances -- a router is not a camera);
+# Elsag Datamat (an old block, not known on current plate readers); "Ring-"
+# as an SSID (one third-party source, and too short a prefix).
