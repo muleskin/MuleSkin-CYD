@@ -67,6 +67,7 @@
 #include "ui_dex.h"
 #include "ui_meeting.h"
 #include "ui_timesync.h"
+#include "ui_today.h"
 #include "regulars.h"
 #include "notices.h"
 #include "theme.h"            // the crash card on the splash
@@ -1498,6 +1499,12 @@ static void enterWatchAlert() {
 }
 
 // IN A MEETING, from the main screen's bar. BACK goes home.
+static void enterToday() {
+    state = AppState::TODAY;
+    transitionStart = millis();
+    uiTodayInit(*canvas);
+}
+
 static void enterMeeting() {
     state = AppState::MEETING;
     transitionStart = millis();
@@ -4870,6 +4877,18 @@ void loop() {
             }
             break;
         }
+        case AppState::TODAY: {
+            drawTwoBand([&](TFT_eSPI& t, bool) { uiTodayTick(t, now); });
+            // BACK on the finger lifting, like the meeting sign's.
+            static bool backArmed = false;
+            if (touchJustDown) backArmed = uiTodayHitBack(tp.x, tp.y, tft.width(), tft.height());
+            if (touchJustUp && backArmed) {
+                backArmed = false;
+                lastTouch = now;
+                enterClear();
+            }
+            break;
+        }
         case AppState::TIME_SYNC: {
             drawTwoBand([&](TFT_eSPI& t, bool) { uiTimeSyncTick(t, now); });
             // Detection comes back in serviceTimeSyncRadio(), every loop.
@@ -5238,6 +5257,11 @@ void loop() {
                 sqActive  = false;
                 enterLoraChat();
 #endif
+            } else if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
+                       uiClearClockHit(tp.x, tp.y)) {
+                // The clock: TODAY, what has been around since midnight.
+                lastTouch = now;
+                enterToday();
             } else if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
                        uiClearWatchPillHit(tp.x, tp.y)) {
                 // The watch/hunt pill. Opens the alert screen, which names the

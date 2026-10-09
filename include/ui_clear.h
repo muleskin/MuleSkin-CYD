@@ -54,6 +54,8 @@ bool uiClearSquadHit(int x, int y);
 // named and where REMOVE FROM WATCH LIST lives. Only ever true while a watch
 // or a hunt is actually set -- the pill is not drawn otherwise.
 bool uiClearWatchPillHit(int x, int y);
+// The clock at the top centre (once it is set): a tap opens TODAY.
+bool uiClearClockHit(int x, int y);
 // The NEARBY headline, which only exists while something is live. Long-pressing
 // it opens the closest device -- see main.cpp. False whenever it is not drawn.
 bool uiClearNearbyHit(int x, int y);

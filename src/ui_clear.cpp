@@ -1736,8 +1736,12 @@ static int16_t drawCornerClock(TFT_eSPI& t, int w) {
 #if !defined(TWATCH_S3)
 // Every other board: the same clock, at the top centre, once the time is real
 // (WIFI TIME on the bar sets it). Returns where the WATCH pill's free span
-// must end, so a pill sits left of the clock rather than under it.
+// must end, so a pill sits left of the clock rather than under it. A tap on
+// it opens TODAY (uiClearClockHit()).
+static int16_t s_clkX = 0, s_clkW = 0;
+static bool    s_clkOn = false;
 static int16_t drawCornerClock(TFT_eSPI& t, int w) {
+    s_clkOn = false;
     if (!Clock::trusted()) return -1;
     char hm[8], tm[12];
     bool pm = false;
@@ -1750,8 +1754,14 @@ static int16_t drawCornerClock(TFT_eSPI& t, int w) {
     t.setTextColor(Theme::CYAN, TFT_BLACK);
     t.setCursor(x, 3);
     t.print(tm);
+    s_clkX = (int16_t)(x - 8); s_clkW = (int16_t)(tw + 16); s_clkOn = true;
     return (int16_t)(x - 3 - 4);
 }
+bool uiClearClockHit(int x, int y) {
+    return s_clkOn && x >= s_clkX && x < s_clkX + s_clkW && y >= 0 && y < 28;
+}
+#else
+bool uiClearClockHit(int, int) { return false; }
 #endif
 static int16_t s_wpX = 0, s_wpY = 0, s_wpW = 0, s_wpH = 0;
 

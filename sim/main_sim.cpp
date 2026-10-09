@@ -65,6 +65,7 @@
 #include "ui_invite.h"
 #include "ui_meeting.h"
 #include "ui_timesync.h"
+#include "ui_today.h"
 #include "ota_wifi.h"
 #include "ui_update.h"
 #include "ui_wifipass.h"
@@ -684,6 +685,7 @@ int main(int argc, char** argv) {
         else if (screen == "invite")   uiInviteTick(frame, t, engine);
         else if (screen == "meeting")  uiMeetingTick(frame, t);
         else if (screen == "timesync") uiTimeSyncTick(frame, t);
+        else if (screen == "today")    uiTodayTick(frame, t);
         else if (screen == "wifipass") uiWifiPassTick(frame, t);
         else if (screen == "petunlock" || screen == "unlock") uiOutfitUnlockTick(frame, t, engine);
         else if (screen == "sysprops") uiSysPropsTick(frame, t, engine);
@@ -802,6 +804,16 @@ int main(int argc, char** argv) {
             for (int i = atoi(n); i > 0; i--) uiMeetingCycleTimer(millis());
     }
     else if (screen == "timesync")   { OtaWifi::timeSyncStart(); uiTimeSyncInit(frame); }
+    else if (screen == "today")      {
+        uiTodayInit(frame);
+        // MULESKINSIM_TODAY=1: a made-up busy day, to see the chart with bars in it.
+        if (getenv("MULESKINSIM_TODAY")) {
+            Today::Stats& s = Today::current();
+            static const uint8_t H[24] = { 0,0,0,0,0,1,3,8,12,6,4,5,9,7,3,4,6,10,14,9,5,2,1,0 };
+            for (int h = 0; h < 24; h++) for (int k = 0; k < H[h]; k++)
+                Today::add(s, 126, 281, h, (uint8_t)(1 + (h * 7 + k * 3) % 13), 1791500000u + h * 3600u + k * 60u, 126, 281);
+        }
+    }
     else if (screen == "invite") {
         // --pose N picks the page: 0 offering, 1 asked, 2 code, 3 sending, 4 joined,
         // 5 failed, 6 waiting, 7 done, 8 done with the other board's answer.

@@ -183,7 +183,9 @@ and UPDATE OVER WIFI set the clock the same way while the radio is up anyway.
 with a network saved, the board rejoins it once a day from the main screen --
 and once a couple of minutes after a boot that didn't set the clock -- for the
 few seconds a time server takes. Once the time is real it shows at the top
-centre of the main screen, 12-hour with AM/PM. The zone is yours to pick, and there are three ways: the web
+centre of the main screen, 12-hour with AM/PM. Tap it for **TODAY**: a bar
+for every hour since midnight, the types seen most, and the first and last
+sighting -- counted from the black box, so a restart doesn't lose the morning. The zone is yours to pick, and there are three ways: the web
 flasher's **Set Time & Zone** button sends this computer's clock and zone
 down the same cable right after flashing; the first time the clock is set
 with no zone chosen, a card on the main screen asks, with the live time in
