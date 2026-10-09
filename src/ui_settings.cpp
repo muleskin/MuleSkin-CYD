@@ -8,6 +8,7 @@
 #endif
 #include "ota_core.h"
 #include "ota_wifi.h"
+#include "phone_alerts.h"
 #include "theme.h"
 #include "privacy.h"
 #include "settings.h"
@@ -77,6 +78,9 @@ static const SettingsRow ALL_ROWS[] = {
     // board with a buzzer, so the emulator (no board macro) never lists it.
     SettingsRow::BUZZER,
 #endif
+    // Hidden where the board cannot (PhoneAlerts::available()).
+    SettingsRow::PHONE_ALERTS,
+    SettingsRow::SQUAD_FOLLOW,
     SettingsRow::DETECTION_FILTER,
     SettingsRow::IGNORED_DEVICES,
     // APPEARANCE opens the display page -- see APPEARANCE_ROWS. It sat at the
@@ -240,6 +244,8 @@ static RowGroupId groupFor(SettingsRow r) {
 #if SQW_HAS_BUZZER
         case SettingsRow::BUZZER:
 #endif
+        case SettingsRow::PHONE_ALERTS:
+        case SettingsRow::SQUAD_FOLLOW:
         case SettingsRow::DETECTION_FILTER:
         case SettingsRow::IGNORED_DEVICES:
             return RowGroupId::BEHAVIOR;
@@ -329,6 +335,10 @@ static uint8_t buildDisplayList(DisplayItem* out) {
         // Not a secret, just impossible: a board without a second app slot or
         // a Bluetooth server has nothing to update into.
         if ((r == SettingsRow::UPDATE_FIRMWARE || r == SettingsRow::UPDATE_CHECK || r == SettingsRow::UPDATE_CHANNEL || r == SettingsRow::AUTO_UPDATE) && !OtaCore::available()) continue;
+        if (r == SettingsRow::PHONE_ALERTS && !PhoneAlerts::available()) continue;
+#if !MULESKIN_MESH
+        if (r == SettingsRow::SQUAD_FOLLOW) continue;
+#endif
         rows[n++] = r;
     }
 
@@ -919,6 +929,16 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             break;
         case SettingsRow::AUTO_UPDATE:
             label = "AUTO UPDATE"; value = Settings::autoUpdate() ? "AT NIGHT" : "OFF";
+            break;
+        case SettingsRow::PHONE_ALERTS:
+            // CONNECTED says a phone is listening -- and, the slot being one,
+            // that nobody else can be.
+            label = "PHONE ALERTS";
+            value = !Settings::phoneAlerts() ? "OFF" : PhoneAlerts::connected() ? "CONNECTED" : "WAITING";
+            break;
+        case SettingsRow::SQUAD_FOLLOW:
+            // What gets told, not ON: only a WITH YOU, never every alert.
+            label = "TELL SQUAD"; value = Settings::squadFollow() ? "WITH YOU" : "OFF";
             break;
         case SettingsRow::UPDATE_CHANNEL:
             label = "UPDATES"; value = Settings::labChannel() ? "LAB" : "STABLE";

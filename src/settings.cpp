@@ -182,6 +182,8 @@ static bool    s_autoTime     = true;
 static uint8_t s_nightMode    = 0;
 static bool    s_labChannel   = false;
 static bool    s_autoUpdate   = false;
+static bool    s_phoneAlerts  = false;
+static bool    s_squadFollow  = false;
 static uint8_t s_timeZone     = 10;   // UTC in Clock's table
 static bool    s_tzChosen     = false;
 static const char* const LIGHT_IDLE_NAMES[]  = { "OFF", "BREATHE", "SOLID" };
@@ -539,6 +541,8 @@ void load() {
     s_nightMode    = s_prefs.getUChar("night", 0);
     s_labChannel   = s_prefs.getBool("lab", false);
     s_autoUpdate   = s_prefs.getBool("autoUpd", false);
+    s_phoneAlerts  = s_prefs.getBool("phoneAl", false);
+    s_squadFollow  = s_prefs.getBool("sqFollow", false);
     if (s_nightMode >= NightMode::PRESET_N) s_nightMode = 0;
     s_timeZone     = s_prefs.getUChar("tz", 10);
     s_tzChosen     = s_prefs.getBool("tzSet", false);
@@ -723,6 +727,10 @@ uint8_t nightMode()         { return s_nightMode; }
 bool labChannel()           { return s_labChannel; }
 bool autoUpdate()           { return s_autoUpdate; }
 void toggleAutoUpdate()     { s_autoUpdate = !s_autoUpdate; s_prefs.putBool("autoUpd", s_autoUpdate); }
+bool phoneAlerts()          { return s_phoneAlerts; }
+void togglePhoneAlerts()    { s_phoneAlerts = !s_phoneAlerts; s_prefs.putBool("phoneAl", s_phoneAlerts); }
+bool squadFollow()          { return s_squadFollow; }
+void toggleSquadFollow()    { s_squadFollow = !s_squadFollow; s_prefs.putBool("sqFollow", s_squadFollow); }
 void toggleLabChannel()     { s_labChannel = !s_labChannel; s_prefs.putBool("lab", s_labChannel); }
 void cycleNightMode()       { s_nightMode = (uint8_t)((s_nightMode + 1) % NightMode::PRESET_N); s_prefs.putUChar("night", s_nightMode); }
 uint8_t     timeZone()      { return s_timeZone; }

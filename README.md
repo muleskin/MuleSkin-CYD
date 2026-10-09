@@ -73,9 +73,9 @@ otherwise see all week. It is one tap away in `DETECTION FILTER`.
   800×480 RGB panel and GT911 touch, via the `crowpanel7` build. It renders
   at 400×240 doubled, on purpose. See [board setup and testing](docs/CROWPANEL7.md).
 
-That's it. No GPS, no extra modules. The CYD is the whole device, and the
-one board that happens to carry a buzzer keeps it silent unless you switch
-it on.
+That's it. No GPS, no extra modules. The CYD is the whole device. A small
+speaker on its SPEAK connector is optional, and stays silent unless you
+switch BUZZER on.
 
 Other boards have builds of their own -- `platformio.ini` has one
 `[env:...]` each, with what is and is not confirmed on it. The newest is the
@@ -247,6 +247,27 @@ steps, and a TEST row that plays the lot in six seconds. Boards whose LED pins
 have not been checked (the AWOK and the 3.5") compile it out and say so on
 that screen.
 
+## Sound and phone alerts
+
+**BUZZER** (Settings, off by default) chirps once for a device the board has
+never logged before (not at night or with the screen dimmed), and for every
+WITH YOU, whenever it comes. The CrowPanel 7 has a buzzer; on the 2.8" CYD, plug a small 8 ohm
+speaker into the two-pin SPEAK connector.
+
+**PHONE ALERTS** (Settings, 2.8" CYD builds, off by default) puts the board's
+alerts on your phone over Bluetooth: no WiFi, no internet, no app. Switch it
+on, open [flasher.oillie.cloud/phone](https://flasher.oillie.cloud/phone/) on
+the phone (Chrome on Android; on an iPhone, the free Bluefy browser, since
+Safari has no Bluetooth), tap CONNECT and pick MuleSkin-XXXX. Every alert the
+board raises on its own screen, and every WITH YOU, then arrives as a
+notification for as long as that page stays open. The row reads WAITING, then
+CONNECTED.
+
+There is no pairing: the first phone to connect gets the alerts. It learns
+what the board is alerting about and nothing else, and the board takes
+nothing back from it. To make room, the CYD builds no longer offer firmware
+updates over Bluetooth; USB and WiFi updates are unchanged.
+
 ## MuleSkinMesh
 
 > **Work in progress.** It is in this release because it works — two boards
@@ -337,6 +358,11 @@ are here, AWAY says when they are not, and FORGET drops them after asking
 once; they come back the next time they are heard with the phrase. A new
 phrase clears the roster, because a new phrase is a new squad.
 
+**TELL SQUAD** (Settings, off by default) sends each WITH YOU to the squad
+too, as an ordinary message, for example "AIRTAG WITH ME 23 MIN". Every
+member's board shows it, whatever firmware it runs. It waits for any message
+you are sending to finish first.
+
 ### Fox hunt
 
 **HUNT** on either SQUAD screen aims HUNT MODE's signal gauge at that board.
@@ -359,6 +385,14 @@ version of its own build, and lets go again, all before Bluetooth starts;
 to its squad carries its version, so a board that hears a member running
 something newer knows without touching WiFi. Either way the SYSTEM row reads
 UPDATE, and UPDATE FIRMWARE names the version until you install it.
+
+**AUTO UPDATE** on the SYSTEM page (off by default) installs it for you, at
+night: during NIGHT DIM's hours (1 to 5 AM without them), from the main
+screen, after ten minutes untouched and unlocked. It shows a 30 second
+countdown with SKIP first, then joins the saved WiFi, installs, checks and
+restarts; anything that fails leaves the old version running. The daily AUTO
+TIME join checks for a new release too, so a board that is never restarted
+still hears about one.
 
 **WIFI NETWORKS** on the SYSTEM page is where the board keeps the networks it
 knows: up to six, with USE marking the one it tries first. ADD picks one from

@@ -373,6 +373,16 @@ namespace Settings {
     bool        autoUpdate();
     void        toggleAutoUpdate();
 
+    // PHONE ALERTS: alerts to a phone over Bluetooth (phone_alerts.h). Off
+    // by default; only the boards that can (PhoneAlerts::available()) list it.
+    bool        phoneAlerts();
+    void        togglePhoneAlerts();
+
+    // TELL SQUAD: a WITH YOU goes to the squad as a message too (main.cpp
+    // queueSquadFollow()). Off by default; listed on mesh builds only.
+    bool        squadFollow();
+    void        toggleSquadFollow();
+
     // TIME ZONE: an index into Clock's zone table, applied at load and on
     // every change. UTC until somebody picks one; timeZoneChosen() says
     // whether anybody has, so MuleSkin can ask once.

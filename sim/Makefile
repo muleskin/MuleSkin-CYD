@@ -76,6 +76,7 @@ UI_SRCS  := $(SRC)/theme.cpp \
             $(SIM_DIR)/meshcrypto_sim.cpp \
             $(SIM_DIR)/meshsim.cpp \
             $(SRC)/ui_phone.cpp \
+            $(SRC)/phone_alerts.cpp \
             $(SRC)/qwerty.cpp \
             $(SRC)/ui_meshmenu.cpp \
             $(SRC)/ui_meshwarn.cpp \

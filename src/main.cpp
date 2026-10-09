@@ -334,6 +334,7 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "ota_core.h"
 #include "ota_ble.h"
 #include "ota_wifi.h"
+#include "phone_alerts.h"
 #include "ui_update.h"
 #include "ui_wifipass.h"
 #include "ui_sysprops.h"
@@ -1226,6 +1227,10 @@ static bool alertMayInterrupt(const Detection& d) {
         !s_screenDimmed && !Clock::night() && state != AppState::MEETING)
         Buzzer::chirp(BUZZ_CHIRP_MS);
 #endif
+    // The phone hears what the screen announces, by the same gate: every
+    // automatic alert, none of the manual ones. Nothing if no phone is
+    // listening; the same device again within a minute is not resent.
+    PhoneAlerts::alert(d, 0);
     return true;
 }
 
@@ -1618,6 +1623,7 @@ static void enterInvite() {
 volatile bool g_consoleInvert = false;
 volatile bool g_consoleAdc = false;     // ADC: the spare analog inputs, for finding a battery sense line
 volatile bool g_consoleXyzzy = false;   // XYZZY: the TERMINAL background types the magic word now
+volatile int8_t g_consolePhone = -1;      // PHONE ON / OFF: the PHONE ALERTS row, from the console
 volatile bool g_consoleSelfTest = false;  // SELFTEST: check every part, one line each (runSelfTest)
 volatile bool g_consoleLegend = false;  // LEGEND: wear the Legend look (and its aura) until the next boot, or take it off
 volatile bool g_consoleOutfitSet = false;  // OUTFIT n: wear costume n until the next boot, for timing it; -1 takes it off
@@ -1880,6 +1886,49 @@ static void serviceNightDim(uint32_t now) {
     }
 }
 
+#if MULESKIN_MESH
+// TELL SQUAD (SETTINGS, off by default): a WITH YOU goes to the squad too, as
+// an ordinary message -- "AIRTAG WITH ME 23 MIN" -- so every board in the
+// squad shows it, firmware old or new, and nobody needs a new frame type to
+// read it. Queued rather than sent on the spot: a message replaces whatever
+// is on the air, and a WITH YOU must never cut off what the owner just typed.
+// It waits up to two minutes for the air to clear, then gives up. On the heap,
+// and only while one is waiting.
+static char*    s_squadText = nullptr;
+static uint32_t s_squadAt   = 0;
+
+static void queueSquadFollow(const Detection& d, uint16_t mins) {
+    if (!Settings::squadFollow() || !MeshTalk::ready()) return;
+    if (!s_squadText) s_squadText = (char*)malloc(MeshMsg::TEXT_MAX + 1);
+    if (!s_squadText) return;
+    // The message alphabet is capitals, digits and a little punctuation:
+    // "SAMSUNG_TAG" goes as "SAMSUNG TAG", and anything else outside it is
+    // dropped rather than refused.
+    char t[24];
+    size_t n = 0;
+    for (const char* p = detectionTypeName(d.type); *p && n < sizeof t - 1; p++) {
+        char c = (*p == '_') ? ' ' : (char)toupper((unsigned char)*p);
+        if (MeshMsg::textChar(c)) t[n++] = c;
+    }
+    t[n] = 0;
+    snprintf(s_squadText, MeshMsg::TEXT_MAX + 1, "%s WITH ME %u MIN", t, (unsigned)mins);
+    s_squadAt = millis();
+}
+
+static void serviceSquadFollow(uint32_t now) {
+    if (!s_squadText) return;
+    const bool stale = now - s_squadAt > 120000u;
+    if (!stale && MeshTalk::sending(now)) return;
+    if (!stale) {
+        const MeshTalk::Send r = MeshTalk::sendText(s_squadText, now);
+        Serial.printf("[follow] told the squad: %s (%s)\n", s_squadText,
+                      r == MeshTalk::Send::OK ? "sent" : "not sent");
+    }
+    free(s_squadText);
+    s_squadText = nullptr;
+}
+#endif
+
 // A tracker travelling with you (include/tracker_follow.h): every 30 s, feed
 // the tags in the LOG to the follow table and raise the first one that has
 // stayed with you twenty minutes while the devices around kept changing. Once
@@ -1923,6 +1972,10 @@ static void serviceFollowing(uint32_t now) {
         s_alertLastFree = false;
         enterAlert(*d);
         uiAlertSetFollow(mins);
+        PhoneAlerts::alert(*d, mins ? mins : 1);
+#if MULESKIN_MESH
+        queueSquadFollow(*d, mins ? mins : 1);
+#endif
 #if SQW_HAS_BUZZER
         // The one alert that is about YOU: it chirps whatever else is true,
         // with BUZZER on -- new device or not, night or not.
@@ -2030,6 +2083,20 @@ static void serviceAutoUpdate(uint32_t now) {
     enterNudge();
 }
 #endif
+
+// PHONE ALERTS' service, registered once: at boot with the setting on, or the
+// first time it is switched on. NimBLE will not register a GATT server while a
+// scan runs, so the radios pause for it -- the same pause update mode uses,
+// a fraction of a second here -- and pick up again. Only from the main flow or
+// the settings screen, never during a raw scan or an update, which own the
+// radios themselves.
+static void phoneAlertsStart() {
+    if (!PhoneAlerts::available() || PhoneAlerts::registered()) return;
+    engine.startUpdateRadio();
+    const bool ok = PhoneAlerts::registerService();
+    engine.stopUpdateRadio();
+    if (!ok) Serial.println("[phone] not ready: switch PHONE ALERTS off and on to try again");
+}
 
 static void enterHunt() {
     state = AppState::HUNT;
@@ -3742,6 +3809,7 @@ void setup() {
     // against a frame built by an independent implementation.
     MeshTalk::begin();
 #endif
+    if (Settings::phoneAlerts()) phoneAlertsStart();
     applyBrightness();
     // After a wipe the board comes back the way the wipe asked: straight to the
     // main screen, unlocked, with no splash and no boot quip, after a duress
@@ -4565,6 +4633,7 @@ void loop() {
     serviceLive(now);
 #if MULESKIN_MESH
     serviceAutoUpdate(now);
+    serviceSquadFollow(now);
 #endif
     if (state == AppState::CLEAR) {
         const char* sub = nullptr;
@@ -4719,6 +4788,23 @@ void loop() {
     if (g_consoleSelfTest) {
         g_consoleSelfTest = false;
         runSelfTest();
+    }
+    if (g_consolePhone == 2) {
+        // PHONE TEST: one line to a connected phone.
+        g_consolePhone = -1;
+        PhoneAlerts::note("TEST from the board");
+        Serial.printf("[phone] test %s\n", PhoneAlerts::connected() ? "sent" : "not sent: no phone connected");
+    } else if (g_consolePhone >= 0) {
+        // PHONE ON / OFF: the settings row's job, for a bench with no finger
+        // on the screen.
+        const bool on = g_consolePhone == 1;
+        g_consolePhone = -1;
+        if (Settings::phoneAlerts() != on) Settings::togglePhoneAlerts();
+        PhoneAlerts::setEnabled(on);
+        if (on) phoneAlertsStart();
+        Serial.printf("[phone] %s: %s, %s\n", on ? "on" : "off",
+                      PhoneAlerts::available() ? (PhoneAlerts::registered() ? "registered" : "not registered") : "not on this board",
+                      PhoneAlerts::name());
     }
     if (g_consoleLegend) {
         g_consoleLegend = false;
@@ -6054,6 +6140,12 @@ void loop() {
                         case SettingsRow::AUTO_TIME:       Settings::toggleAutoTime();        break;
                         case SettingsRow::NIGHT_MODE:      Settings::cycleNightMode();        break;
                         case SettingsRow::AUTO_UPDATE:     Settings::toggleAutoUpdate();      break;
+                        case SettingsRow::PHONE_ALERTS:
+                            Settings::togglePhoneAlerts();
+                            PhoneAlerts::setEnabled(Settings::phoneAlerts());
+                            if (Settings::phoneAlerts()) phoneAlertsStart();
+                            break;
+                        case SettingsRow::SQUAD_FOLLOW: Settings::toggleSquadFollow(); break;
                         case SettingsRow::UPDATE_CHANNEL:
                             Settings::toggleLabChannel();
                             Theme::showToast(Settings::labChannel() ? "UPDATES: LAB" : "UPDATES: STABLE",

@@ -61,6 +61,7 @@ extern volatile bool g_consoleAdc;
 extern volatile bool g_consoleXyzzy;
 extern volatile bool g_consoleLegend;
 extern volatile bool g_consoleSelfTest;
+extern volatile int8_t g_consolePhone;   // PHONE ON / OFF: PHONE ALERTS, for the bench (main.cpp)
 extern volatile bool g_liveOn;   // LIVE ON / OFF (detection.cpp printLive)
 extern volatile bool g_consoleOutfitSet;
 extern volatile bool g_consoleAura;
@@ -543,6 +544,9 @@ void pollSerial() {
         if (strcasecmp(line, "XYZZY") == 0)  { g_consoleXyzzy = true; continue; }
         if (strcasecmp(line, "LEGEND") == 0) { g_consoleLegend = true; continue; }
         if (strcasecmp(line, "SELFTEST") == 0) { g_consoleSelfTest = true; continue; }
+        if (strcasecmp(line, "PHONE ON") == 0)  { g_consolePhone = 1; continue; }
+        if (strcasecmp(line, "PHONE OFF") == 0) { g_consolePhone = 0; continue; }
+        if (strcasecmp(line, "PHONE TEST") == 0) { g_consolePhone = 2; continue; }
         if (strcasecmp(line, "LIVE ON") == 0)  { g_liveOn = true;  Serial.println("[live] on: type,mac,rssi,channel,hits,again,vendor,name"); continue; }
         if (strcasecmp(line, "LIVE OFF") == 0) { g_liveOn = false; Serial.println("[live] off"); continue; }
         if (strcasecmp(line, "AURA") == 0)   { g_consoleAura = true; continue; }

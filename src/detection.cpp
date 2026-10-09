@@ -882,6 +882,7 @@ Stats stats() {
 #if MULESKIN_MESH
 #include "meshmsg.h"
 #include "meshtalk.h"
+#include "phone_alerts.h"
 
 // MuleSkinMesh's radio half: our advert, our scan response and our own
 // address. Everything that does not touch NimBLE -- who is visiting, the
@@ -894,6 +895,8 @@ static uint32_t        s_advAt      = 0;
 // Which outgoing message the scan response carries right now; 0 is none.
 static uint32_t        s_srGen      = 0;
 static bool            s_macSet     = false;
+// The advert on the air is connectable, for PHONE ALERTS (phone_alerts.h).
+static bool            s_advConn    = false;
 static const uint16_t  ADV_MS       = 1500;
 
 bool advertising() { return s_advOn; }
@@ -908,8 +911,15 @@ static void setAdvertising(bool on, uint32_t now) {
     if (!adv) return;
     if (!on) { if (s_advOn) adv->stop(); s_advOn = false; return; }
 
+    // PHONE ALERTS borrows this advert rather than adding a second one: it
+    // turns connectable while a phone may connect (on, registered, nobody
+    // connected yet), and back the moment one does. With the squad off it
+    // carries the board's name alone -- nothing of the squad's -- so a phone
+    // can still find it.
+    const bool conn  = PhoneAlerts::wantConnectable();
+    const bool squad = Settings::meshTransmit();
     uint8_t buf[MuleSkinMesh::LEN_MAX];
-    const size_t n = buildSelf(buf);
+    const size_t n = squad ? buildSelf(buf) : 0;
 
     // Only touch the stack when the advert actually differs.
     //
@@ -930,7 +940,7 @@ static void setAdvertising(bool on, uint32_t now) {
     uint32_t outGen = 0;
     const uint8_t* out = MeshTalk::outgoing(now, outLen, outGen);
     const bool same = (n == s_lastAdvLen) && (memcmp(buf, s_lastAdv, n) == 0) &&
-                      outGen == s_srGen;
+                      outGen == s_srGen && conn == s_advConn;
     if (same && s_advOn) return;
 
     std::string md;
@@ -940,7 +950,11 @@ static void setAdvertising(bool on, uint32_t now) {
     md.append((const char*)buf, n);
 
     NimBLEAdvertisementData d;
-    d.setManufacturerData(md);
+    // A connectable advert says it is discoverable, which some phones want
+    // before they offer it. Three bytes; the squad payload leaves room.
+    if (conn) d.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
+    if (n) d.setManufacturerData(md);
+    else   d.setName(PhoneAlerts::name());
     if (s_advOn) adv->stop();
     adv->setAdvertisementData(d);
     // A message goes in the scan response, and turning the scan response ON
@@ -959,6 +973,15 @@ static void setAdvertising(bool on, uint32_t now) {
         adv->enableScanResponse(true);
         // Scannable: a peer's scan request is how the message travels.
         adv->setDiscoverableMode(BLE_GAP_DISC_MODE_GEN);
+    } else if (conn) {
+        // A connectable advert answers scan requests whatever we say, so it
+        // answers with the name -- which is also what the phone's device
+        // picker shows -- and never with a stale message.
+        NimBLEAdvertisementData r;
+        r.setName(PhoneAlerts::name());
+        adv->setScanResponseData(r);
+        adv->enableScanResponse(true);
+        adv->setDiscoverableMode(BLE_GAP_DISC_MODE_GEN);
     } else {
         // 2.x pushes scan-response data to the controller the moment it is
         // set and enableScanResponse(false) only clears a flag, so the last
@@ -972,17 +995,24 @@ static void setAdvertising(bool on, uint32_t now) {
         adv->enableScanResponse(false);
         adv->setDiscoverableMode(BLE_GAP_DISC_MODE_NON);
     }
-    // Never connectable. Update mode's server shares this advertiser, and a
-    // stack with the peripheral role compiled in defaults to connectable.
-    adv->setConnectableMode(BLE_GAP_CONN_MODE_NON);
-    adv->setMinInterval((uint16_t)(ADV_MS * 8 / 5));
-    adv->setMaxInterval((uint16_t)(ADV_MS * 8 / 5 + 16));
+    // Connectable only for PHONE ALERTS, above. Otherwise never: update
+    // mode's server shares this advertiser, and a stack with the peripheral
+    // role compiled in defaults to connectable.
+    adv->setConnectableMode(conn ? BLE_GAP_CONN_MODE_UND : BLE_GAP_CONN_MODE_NON);
+    // Faster while a phone may connect: at 1.5 s, sharing the radio with the
+    // scan and the WiFi sniffer, a PC on the bench caught the board in one
+    // five-second scan of three. The same advert either way, so no more
+    // allocations -- only more airtime, a third of a millisecond a go.
+    const uint16_t ms = conn ? 500 : ADV_MS;
+    adv->setMinInterval((uint16_t)(ms * 8 / 5));
+    adv->setMaxInterval((uint16_t)(ms * 8 / 5 + 16));
     adv->start();
 
     memcpy(s_lastAdv, buf, n);
     s_lastAdvLen = n;
     s_advOn = true;
     s_srGen = outGen;
+    s_advConn = conn;
 }
 
 void radioTick(uint32_t now) {
@@ -999,7 +1029,8 @@ void radioTick(uint32_t now) {
         s_macSet = true;
     }
 
-    const bool want = Settings::meshTransmit();
+    // PHONE ALERTS needs the advert too, squad or no squad.
+    const bool want = Settings::meshTransmit() || PhoneAlerts::wantConnectable();
     // Polled rather than event-driven, but setAdvertising() now returns on a
     // memcmp when nothing changed, so this costs one comparison every ten
     // seconds instead of rebuilding the advert 360 times an hour. A message
@@ -1008,7 +1039,11 @@ void radioTick(uint32_t now) {
     size_t   ol = 0;
     uint32_t og = 0;
     MeshTalk::outgoing(now, ol, og);
-    if (want && (!s_advOn || (now - s_advAt) > 10000 || og != s_srGen)) {
+    // A phone connecting stops the advert (the controller ends a connectable
+    // one on connect), and wantConnectable() turning false is what says so:
+    // rebuilt at once, non-connectable, so the squad never loses this board.
+    if (want && (!s_advOn || (now - s_advAt) > 10000 || og != s_srGen ||
+                 PhoneAlerts::wantConnectable() != s_advConn)) {
         setAdvertising(true, now);
         s_advAt = now;
     }
