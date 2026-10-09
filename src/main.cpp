@@ -125,6 +125,21 @@ static void takeHealCount() {
     s_healCount = ((esp_reset_reason() == ESP_RST_DEEPSLEEP || esp_reset_reason() == ESP_RST_SW) && (v & 0xFFFF0000u) == HEAL_MAGIC) ? (uint8_t)(v & 0xFF) : 0;
 }
 #endif
+// Power dips: how many boots in a row have been brownout resets. A board on
+// a weak USB port or hub can brown out several times at WiFi start before a
+// boot sticks; the one that sticks says so on the main screen. Same RTC-memory
+// shape as the flags above, magic in the top bits.
+static const uint32_t BROWN_MAGIC = 0xB0B0B000u;
+RTC_NOINIT_ATTR static uint32_t g_brownWord;
+static uint8_t s_brownouts = 0;   // this boot's count, 0 when it was not one
+static void takeBrownouts(esp_reset_reason_t r) {
+    if (r != ESP_RST_BROWNOUT) { g_brownWord = 0; s_brownouts = 0; return; }
+    const uint32_t v = g_brownWord;
+    const uint8_t prev = ((v & 0xFFFFFF00u) == BROWN_MAGIC) ? (uint8_t)(v & 0xFF) : 0;
+    s_brownouts = prev < 255 ? (uint8_t)(prev + 1) : 255;
+    g_brownWord = BROWN_MAGIC | s_brownouts;
+}
+
 static WipeBoot takeWipeBoot() {
     const uint32_t v = g_wipeBoot;
     g_wipeBoot = 0;
@@ -142,6 +157,7 @@ static void crashReportInit() {
     takeHealCount();
 #endif
     g_resetReason = r;
+    takeBrownouts(r);
     const bool panicked = (r == ESP_RST_PANIC || r == ESP_RST_INT_WDT ||
                            r == ESP_RST_TASK_WDT || r == ESP_RST_WDT);
     // A magic that survived with garbage behind it -- 31 days up and 20 MB
@@ -4384,6 +4400,18 @@ void loop() {
         bool good = false;
         if (const char* head = OtaCore::takeBootNote(&sub, &good))
             Theme::showToast(head, sub, good ? Theme::CYAN : Theme::AMBER);
+        // A brownout restart: say so once, with what to do about it. A
+        // hub-powered CYD dips at WiFi start; the fix is power, not firmware.
+        // The toast's second line holds 21 characters.
+        else if (s_brownouts) {
+            char head[24];
+            if (s_brownouts > 1) snprintf(head, sizeof head, "POWER DIPPED x%u", (unsigned)s_brownouts);
+            else                 snprintf(head, sizeof head, "POWER DIPPED");
+            Theme::showToast(head, "Use 2A or direct USB", Theme::AMBER, 8000);
+            Serial.printf("[power] %u brownout restart(s) in a row: weak USB supply -- use a direct port or a 2 A supply\n",
+                          (unsigned)s_brownouts);
+            s_brownouts = 0;
+        }
     }
 #if MULESKIN_MESH
     MeshProbe::tick(now);
