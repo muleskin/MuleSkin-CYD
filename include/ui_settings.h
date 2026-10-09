@@ -1,6 +1,7 @@
 // MuleSkin-CYD — settings screen (theme, background, invert,
 // brightness, alert confidence filter, calibration entry, reset stats)
 #pragma once
+#include "buzzer.h"   // SQW_HAS_BUZZER, for the BUZZER row
 #include <TFT_eSPI.h>
 #include "detection.h"
 
@@ -56,8 +57,8 @@ enum class SettingsRow : uint8_t {
     WATCH_QUIET_TAGS, // the T-Watch only: TAGS + RINGS, logged without waking the watch
     WATCH_LORA,      // the T-Watch only: LORA, which networks the LoRa radio listens to
     WATCH_LORA_CHATS, // the T-Watch only: LORA CHATS, what it decoded, one chat per network
-#if defined(CROWPANEL7)
-    BUZZER,          // the CrowPanel 7 only, the one board with a buzzer: OFF, or NEW ONLY
+#if SQW_HAS_BUZZER
+    BUZZER,          // boards that can chirp (buzzer.h): the CrowPanel 7, the 2.8" CYD's speaker
 #endif
     BOARD_BATTERY,   // the Freenove S3 only: the cell's voltage, on the SYSTEM page
     CHARGE_MODE,     // the CYD boards: radios and screen off so a battery charges faster

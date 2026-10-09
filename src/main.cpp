@@ -15,7 +15,7 @@
 #include "crowpanel7_backlight.h"
 #include "gt911_touch.h"
 #include "crowpanel7_probe.h"
-#include "crowpanel7_buzzer.h"
+#include "buzzer.h"   // the alert chirp: the CrowPanel 7 buzzer or the 2.8" CYD speaker
 // The [frame] line's "rows" is whoever actually wrote them.
 #define SQW_PUSH_ROWS() CrowBlit::lastRows()
 #else
@@ -1148,7 +1148,7 @@ static const char* privName(const char* in)  { static char b[40]; return Privacy
 static bool    s_confirmIsBle = true;
 static bool s_alertLastFree = false;
 static bool s_alertSpam     = false;   // this alert is a spam flood's one announcement
-#if defined(CROWPANEL7)
+#if SQW_HAS_BUZZER
 // The chirp's length. A pass on this board is 34-59 ms and the OFF goes out
 // on the first pass at or after this, so the real sound runs 80-140 ms:
 // a chirp, not an alarm. The probe's bench chirp is 120.
@@ -1207,7 +1207,7 @@ static bool alertMayInterrupt(const Detection& d) {
         case DetectionEngine::AlertGate::ALLOW_LAST: s_alertLastFree = true;  break;
         default:                                     s_alertLastFree = false; break;
     }
-#if defined(CROWPANEL7)
+#if SQW_HAS_BUZZER
     // The chirp, on the board that has something to chirp with. HERE and not
     // in enterAlert(): this is the one gate every AUTOMATIC announcement
     // passes -- the main screen, the lock screen, the update window -- and
@@ -1224,7 +1224,7 @@ static bool alertMayInterrupt(const Detection& d) {
     // through a wipe (performWipe() silences it first).
     if (Settings::buzzerOn() && &d == engine.latest() && engine.latestIsNew() &&
         !s_screenDimmed && !Clock::night() && state != AppState::MEETING)
-        CrowBuzzer::chirp(BUZZ_CHIRP_MS);
+        Buzzer::chirp(BUZZ_CHIRP_MS);
 #endif
     return true;
 }
@@ -1922,6 +1922,11 @@ static void serviceFollowing(uint32_t now) {
         s_alertLastFree = false;
         enterAlert(*d);
         uiAlertSetFollow(mins);
+#if SQW_HAS_BUZZER
+        // The one alert that is about YOU: it chirps whatever else is true,
+        // with BUZZER on -- new device or not, night or not.
+        if (Settings::buzzerOn()) Buzzer::chirp(BUZZ_CHIRP_MS);
+#endif
         lastTouch = now;   // lights a dimmed screen, like any alert
         return;
     }
@@ -2274,9 +2279,9 @@ static void performWipe(WipeBoot after) {
     // Dark first. A duress restart has to look like any other restart, and
     // the light is the one thing visible from the back of the board.
     StatusLight::off();
-#if defined(CROWPANEL7)
+#if SQW_HAS_BUZZER
     // And silent: a chirp mid-wipe would be the one sound this restart makes.
-    CrowBuzzer::quiet();
+    Buzzer::quiet();
 #endif
     Security::wipeSecrets();
     engine.sd().wipe();
@@ -3297,6 +3302,9 @@ void setup() {
     applyCpuClock();
     // The light on the back, and its half-second sweep during the splash.
     StatusLight::begin();
+#if defined(SQW_CYD_SPEAKER)
+    Buzzer::begin();   // silent until an alert, with BUZZER on
+#endif
     StatusLight::boot(millis());
 
     // The boot check: a few seconds on the saved WiFi asking the site whether
@@ -3464,7 +3472,7 @@ void setup() {
     // I2C bus is up and the helper has been spoken to. Sends OFF only, for a
     // buzzer a crash may have left sounding -- the helper keeps its state
     // across our reset. Not a boot beep.
-    CrowBuzzer::begin();
+    Buzzer::begin();
 #elif defined(CYD32C)
     // The GT911, on the CYD's capacitive I2C pins. Raw panel pixels in the
     // panel's own portrait frame, so the five-target calibration maps them
@@ -6037,13 +6045,13 @@ void loop() {
                             break;
                         case SettingsRow::CONFIDENCE: Settings::cycleMinConfidence(); break;
                         case SettingsRow::AUTO_QUIET:  Settings::cycleAutoQuiet(); break;
-#if defined(CROWPANEL7)
+#if SQW_HAS_BUZZER
                         case SettingsRow::BUZZER:
                             // Switching it ON plays the chirp once, the job the
                             // light's TEST row does: the owner hears what they
                             // signed up for before a camera does. OFF is silent.
                             Settings::toggleBuzzer();
-                            if (Settings::buzzerOn()) CrowBuzzer::chirp(BUZZ_CHIRP_MS);
+                            if (Settings::buzzerOn()) Buzzer::chirp(BUZZ_CHIRP_MS);
                             break;
 #endif
                         case SettingsRow::DETECTION_FILTER: enterDetFilter(); break;
@@ -7354,10 +7362,10 @@ void loop() {
         lc.screenDimmed = s_screenDimmed;
         lc.screenDark   = s_screenDimmed && Settings::dimLevel() == 0;
         StatusLight::tick(now, lc);
-#if defined(CROWPANEL7)
+#if SQW_HAS_BUZZER
         // Every pass in every state, so the chirp's OFF lands whatever
         // screen the alert opened.
-        CrowBuzzer::tick();
+        Buzzer::tick();
 #endif
     }
     prevTouchValid = tp.valid;

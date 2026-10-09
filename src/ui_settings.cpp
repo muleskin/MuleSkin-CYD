@@ -1,5 +1,6 @@
 // MuleSkin-CYD — settings screen implementation
 #include "ui_settings.h"
+#include "buzzer.h"
 #include "night_mode.h"
 #include "wardrive.h"
 #if MULESKIN_LORA
@@ -70,7 +71,7 @@ static const SettingsRow ALL_ROWS[] = {
     SettingsRow::WATCH_SETTINGS,
 #endif
     SettingsRow::BORING_MODE, SettingsRow::CONFIDENCE, SettingsRow::AUTO_QUIET,
-#if defined(CROWPANEL7)
+#if SQW_HAS_BUZZER
     // Beside ALERT FILTER and AUTO SNOOZE because it is about alerts: one
     // switch, not a page of knobs like the light. Compiled only for the
     // board with a buzzer, so the emulator (no board macro) never lists it.
@@ -236,7 +237,7 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::BORING_MODE:
         case SettingsRow::CONFIDENCE:
         case SettingsRow::AUTO_QUIET:
-#if defined(CROWPANEL7)
+#if SQW_HAS_BUZZER
         case SettingsRow::BUZZER:
 #endif
         case SettingsRow::DETECTION_FILTER:
@@ -784,7 +785,7 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
         case SettingsRow::AUTO_QUIET:
             label = "AUTO SNOOZE"; value = Settings::autoQuietLabel();
             break;
-#if defined(CROWPANEL7)
+#if SQW_HAS_BUZZER
         case SettingsRow::BUZZER:
             // NEW ONLY rather than ON: the value says what the switch does,
             // the way AT BOOT and AFTER 5 do, so nobody expects a beep per
