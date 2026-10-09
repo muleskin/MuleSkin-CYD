@@ -358,6 +358,11 @@ namespace Settings {
     bool        autoTime();
     void        toggleAutoTime();
 
+    // NIGHT DIM: an index into NightMode::PRESETS (include/night_mode.h);
+    // 0 = OFF. Needs the clock set to do anything.
+    uint8_t     nightMode();
+    void        cycleNightMode();
+
     // TIME ZONE: an index into Clock's zone table, applied at load and on
     // every change. UTC until somebody picks one; timeZoneChosen() says
     // whether anybody has, so MuleSkin can ask once.

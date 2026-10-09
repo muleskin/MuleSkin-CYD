@@ -1,5 +1,6 @@
 // MuleSkin-CYD — persisted user settings implementation
 #include "settings.h"
+#include "night_mode.h"
 #include <string.h>
 #include "clock.h"
 #include "theme.h"
@@ -178,6 +179,7 @@ static bool    s_remoteUpdate = false;
 static bool    s_phraseShown  = true;
 static bool    s_updateCheck  = true;
 static bool    s_autoTime     = true;
+static uint8_t s_nightMode    = 0;
 static uint8_t s_timeZone     = 10;   // UTC in Clock's table
 static bool    s_tzChosen     = false;
 static const char* const LIGHT_IDLE_NAMES[]  = { "OFF", "BREATHE", "SOLID" };
@@ -532,6 +534,8 @@ void load() {
     s_phraseShown  = s_prefs.getBool("phrShow", true);
     s_updateCheck  = s_prefs.getBool("updChk", true);
     s_autoTime     = s_prefs.getBool("autoTime", true);
+    s_nightMode    = s_prefs.getUChar("night", 0);
+    if (s_nightMode >= NightMode::PRESET_N) s_nightMode = 0;
     s_timeZone     = s_prefs.getUChar("tz", 10);
     s_tzChosen     = s_prefs.getBool("tzSet", false);
     if (s_timeZone >= Clock::zoneCount()) s_timeZone = 10;
@@ -711,6 +715,8 @@ bool updateCheck()          { return s_updateCheck; }
 void toggleUpdateCheck()    { s_updateCheck = !s_updateCheck; s_prefs.putBool("updChk", s_updateCheck); }
 bool autoTime()             { return s_autoTime; }
 void toggleAutoTime()       { s_autoTime = !s_autoTime; s_prefs.putBool("autoTime", s_autoTime); }
+uint8_t nightMode()         { return s_nightMode; }
+void cycleNightMode()       { s_nightMode = (uint8_t)((s_nightMode + 1) % NightMode::PRESET_N); s_prefs.putUChar("night", s_nightMode); }
 uint8_t     timeZone()      { return s_timeZone; }
 const char* timeZoneName()  { return Clock::zoneName(s_timeZone); }
 bool        timeZoneChosen(){ return s_tzChosen; }

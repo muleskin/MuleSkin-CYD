@@ -64,6 +64,7 @@ enum class SettingsRow : uint8_t {
     LAST_RUN,        // the CYD boards: how long the previous boot ran, on the SYSTEM page
     PRIVACY,         // PRIVACY MODE: addresses and names masked on screen, on the SYSTEM page
     AUTO_TIME,       // on the SYSTEM page: rejoin the saved WiFi daily to keep the clock right
+    NIGHT_MODE,      // on the APPEARANCE page: NIGHT DIM, the hours the screen runs dim
     BACK,
     COUNT,
     NONE = 255

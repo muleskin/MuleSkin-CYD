@@ -190,7 +190,10 @@ tag and the hour lines wait for a real answer.
 
 Once it is set, the LOG shows the real time of each catch (or the date, for
 one from another day), and the alert card says **AT NIGHT** for anything
-caught between eleven and five.
+caught between eleven and five. **NIGHT DIM** on the APPEARANCE page
+(10PM-6AM, 11PM-7AM or 12AM-7AM) runs the screen at a quarter of its
+brightness through those hours, full again for half a minute after a touch
+or an alert; scanning carries on at full rate.
 
 ### Detection pauses while it's on WiFi
 

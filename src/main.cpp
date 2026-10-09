@@ -27,6 +27,7 @@
 #include <XPT2046_Touchscreen.h>
 #include <Preferences.h>  // AWOK's own per-rotation touch-cal storage; see the AWOK block below pollTouch()'s globals
 #include "auto_time.h"    // AUTO TIME's schedule (tested on the desktop)
+#include "night_mode.h"   // NIGHT DIM's hours (tested on the desktop)
 #include <esp_heap_caps.h>   // heap_caps_get_largest_free_block() -- diagnostics screen
 #if defined(NM_CYD_C5)
 #include <esp_memory_utils.h> // esp_ptr_external_ram(): is the frame in PSRAM? (IDF 5 only)
@@ -941,8 +942,12 @@ static uint32_t s_crownLitUntil = 0;
 #endif
 
 static void applyCpuClock();
+// NIGHT DIM in force right now (see nightDimNow()); applyBrightness() reads it.
+static bool s_nightDim = false;
 static void applyBrightness() {
-    uint8_t duty = s_screenDimmed ? Settings::dimLevel() : Settings::brightness();
+    uint8_t duty = s_screenDimmed ? Settings::dimLevel()
+                 : s_nightDim    ? NightMode::duty(Settings::brightness())
+                 :                 Settings::brightness();
 #if defined(TWATCH_S3)
     if (s_screenDimmed) {
         if (!s_panelAsleep) {
@@ -1828,6 +1833,24 @@ static void serviceAutoTime(uint32_t now) {
     if (!OtaWifi::timeSyncStart()) { engine.stopUpdateRadio(); return; }
     s_timeSyncRadio = true;
     Serial.println("[time] AUTO TIME: joining for the clock");
+}
+
+// NIGHT DIM: inside the chosen hours, with the clock set, the screen runs at
+// a quarter of its brightness -- except for half a minute after a touch, and
+// an alert counts as one (it moves lastTouch). Checked every loop; the
+// backlight is only touched when the answer changes.
+static bool nightDimNow(uint32_t now) {
+    if (!Settings::nightMode() || !Clock::trusted()) return false;
+    if (now - lastTouch < 30000) return false;
+    return NightMode::active(Settings::nightMode(), Clock::hour());
+}
+static void serviceNightDim(uint32_t now) {
+    const bool want = nightDimNow(now);
+    if (want != s_nightDim) {
+        s_nightDim = want;
+        applyBrightness();
+        Serial.printf("[night] %s\n", want ? "dim" : "full brightness");
+    }
 }
 
 static void enterHunt() {
@@ -4355,6 +4378,7 @@ void loop() {
     OtaWifi::tick(now);
     serviceTimeSyncRadio();
     serviceAutoTime(now);
+    serviceNightDim(now);
     if (state == AppState::CLEAR) {
         const char* sub = nullptr;
         bool good = false;
@@ -5807,6 +5831,7 @@ void loop() {
                         case SettingsRow::BACKGROUND_LOCK: Settings::toggleBackgroundLocked(); break;
                         case SettingsRow::UPDATE_CHECK:    Settings::toggleUpdateCheck();     break;
                         case SettingsRow::AUTO_TIME:       Settings::toggleAutoTime();        break;
+                        case SettingsRow::NIGHT_MODE:      Settings::cycleNightMode();        break;
                         case SettingsRow::TIME_ZONE:
                             // Left half back, right half forward -- see the row's label.
                             Settings::stepTimeZone(gestureStartX < tft.width() / 2 ? -1 : 1);
