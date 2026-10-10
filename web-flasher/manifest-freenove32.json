@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Freenove 3.2\")",
-  "version": "3.1.7",
-  "release_name": "Push control",
-  "whats_new": ["Choose which alerts push", "Night: only WITH YOU pushes", "8 PM daily summary push", "PUSH n pill while alerts wait"],
+  "version": "3.1.8",
+  "release_name": "BT updates back",
+  "whats_new": ["Bluetooth firmware updates are back", "Phone page removed: use ntfy push", "One push notification per device", "Fixes and cleanups"],
   "new_install_prompt_erase": true,
   "builds": [
     {
