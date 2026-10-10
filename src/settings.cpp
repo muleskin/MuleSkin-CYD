@@ -163,8 +163,6 @@ static bool    s_autoTime     = true;
 static uint8_t s_nightMode    = 0;
 static bool    s_labChannel   = false;
 static uint8_t s_autoUpdate   = 0;     // 0 OFF, 1 AFTER 3 DAYS, 2 EARLY
-static bool    s_phoneAlerts  = false;
-static uint16_t s_phoneCode   = 0;
 static bool    s_pushOn       = false;
 static char    s_pushUrl[100] = "";
 static char    s_pushTok[48]  = "";
@@ -510,8 +508,6 @@ void load() {
     if (s_prefs.isKey("autoUpd2")) s_autoUpdate = s_prefs.getUChar("autoUpd2", 0);
     else                           s_autoUpdate = s_prefs.getBool("autoUpd", false) ? 1 : 0;
     if (s_autoUpdate > 2) s_autoUpdate = 0;
-    s_phoneAlerts  = s_prefs.getBool("phoneAl", false);
-    s_phoneCode    = (uint16_t)s_prefs.getUInt("phCode", 0);
     s_pushOn       = s_prefs.getBool("pushOn", false);
     s_prefs.getString("pushUrl", s_pushUrl, sizeof s_pushUrl);
     s_prefs.getString("pushTok", s_pushTok, sizeof s_pushTok);
@@ -708,10 +704,6 @@ uint32_t autoSeen(const char* version, uint32_t now) {
     }
     return s_prefs.getUInt("auSeen", now);
 }
-bool phoneAlerts()          { return s_phoneAlerts; }
-void togglePhoneAlerts()    { s_phoneAlerts = !s_phoneAlerts; s_prefs.putBool("phoneAl", s_phoneAlerts); }
-uint16_t phoneCode()        { return s_phoneCode; }
-void setPhoneCode(uint16_t c) { s_phoneCode = c; s_prefs.putUInt("phCode", c); }
 bool        pushOn()        { return s_pushOn && s_pushUrl[0]; }
 void        togglePush()    { s_pushOn = !s_pushOn && s_pushUrl[0]; s_prefs.putBool("pushOn", s_pushOn); }
 const char* pushUrl()       { return s_pushUrl; }

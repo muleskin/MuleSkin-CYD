@@ -8,7 +8,6 @@
 #endif
 #include "ota_core.h"
 #include "ota_wifi.h"
-#include "phone_alerts.h"
 #include "theme.h"
 #include "privacy.h"
 #include "settings.h"
@@ -78,9 +77,6 @@ static const SettingsRow ALL_ROWS[] = {
     // board with a buzzer, so the emulator (no board macro) never lists it.
     SettingsRow::BUZZER,
 #endif
-    // Hidden where the board cannot (PhoneAlerts::available()).
-    SettingsRow::PHONE_ALERTS,
-    SettingsRow::PHONE_CODE,
     SettingsRow::PUSH_ALERTS,
     SettingsRow::PUSH_WHAT,
     SettingsRow::PUSH_NIGHT,
@@ -240,8 +236,6 @@ static RowGroupId groupFor(SettingsRow r) {
 #if SQW_HAS_BUZZER
         case SettingsRow::BUZZER:
 #endif
-        case SettingsRow::PHONE_ALERTS:
-        case SettingsRow::PHONE_CODE:
         case SettingsRow::PUSH_ALERTS:
         case SettingsRow::PUSH_WHAT:
         case SettingsRow::PUSH_NIGHT:
@@ -330,7 +324,6 @@ static uint8_t buildDisplayList(DisplayItem* out) {
         // Not a secret, just impossible: a board without a second app slot or
         // a Bluetooth server has nothing to update into.
         if ((r == SettingsRow::UPDATE_FIRMWARE || r == SettingsRow::UPDATE_CHECK || r == SettingsRow::UPDATE_CHANNEL || r == SettingsRow::AUTO_UPDATE) && !OtaCore::available()) continue;
-        if ((r == SettingsRow::PHONE_ALERTS || r == SettingsRow::PHONE_CODE) && !PhoneAlerts::available()) continue;
         // The push rows that tune it only once it is on.
         if ((r == SettingsRow::PUSH_WHAT || r == SettingsRow::PUSH_NIGHT || r == SettingsRow::PUSH_DAILY) &&
             !Settings::pushOn()) continue;
@@ -927,13 +920,6 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             label = "AUTO UPDATE";
             value = Settings::autoUpdateMode() == 2 ? "EARLY" : Settings::autoUpdateMode() == 1 ? "AFTER 3 DAYS" : "OFF";
             break;
-        case SettingsRow::PHONE_ALERTS:
-            // CONNECTED says a phone is listening -- and, the slot being one,
-            // that nobody else can be.
-            label = "PHONE ALERTS";
-            value = !Settings::phoneAlerts() ? "OFF" : PhoneAlerts::listening() ? "CONNECTED"
-                  : PhoneAlerts::connected() ? "CODE?" : "WAITING";
-            break;
         case SettingsRow::PUSH_ALERTS:
             // NOT SET until the flasher page (or PUSH URL) gives it a topic.
             label = "PUSH ALERTS";
@@ -949,13 +935,6 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             break;
         case SettingsRow::PUSH_DAILY:
             label = "DAILY SUMMARY"; value = Settings::pushSummary() ? "8 PM" : "OFF";
-            break;
-        case SettingsRow::PHONE_CODE:
-            // The digits themselves: they are what the phone asks for, and
-            // the settings screen is behind the PIN lock when there is one.
-            label = "PHONE CODE";
-            if (Settings::phoneCode()) { snprintf(valBuf, valBufN, "%04u", (unsigned)Settings::phoneCode()); value = valBuf; }
-            else value = "OFF";
             break;
         case SettingsRow::UPDATE_CHANNEL:
             label = "UPDATES"; value = Settings::labChannel() ? "LAB" : "STABLE";

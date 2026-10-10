@@ -5,7 +5,6 @@
 #include "serial_flush.h"
 #include "signatures.h"
 #include "settings.h"
-#include "phone_alerts.h"
 #include "blackbox.h"
 #include "bingo.h"
 #include "dex.h"
@@ -1401,8 +1400,6 @@ void DetectionEngine::startUpdateRadio() {
     if (g_rawMode == RawScanMode::WIFI) WiFi.scanDelete();
     g_rawMode = RawScanMode::UPDATE;
     esp_wifi_set_promiscuous(false);
-    // PHONE ALERTS' advert shares the radio, so it stops for the duration.
-    PhoneAlerts::pauseRadio(true);
     ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_updStopEv);
 }
 
@@ -1410,7 +1407,6 @@ void DetectionEngine::stopUpdateRadio() {
     if (g_rawMode != RawScanMode::UPDATE) return;
     g_rawMode = RawScanMode::NONE;
     esp_wifi_set_promiscuous(true);
-    PhoneAlerts::pauseRadio(false);
     if (s_updEvReady) ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_updStartEv);
 }
 

@@ -1122,6 +1122,7 @@ void psRun(void*) {
             snprintf(pr, sizeof pr, "%u", (unsigned)s_psMsgs[i].prio);
             http.addHeader("Priority", pr);
             if (s_psMsgs[i].tags[0]) http.addHeader("Tags", s_psMsgs[i].tags);
+            if (s_psMsgs[i].seq[0])  http.addHeader("X-Sequence-ID", s_psMsgs[i].seq);
             if (Settings::pushToken()[0]) http.addHeader("Authorization", String("Bearer ") + Settings::pushToken());
             const int code = http.POST((uint8_t*)s_psMsgs[i].body, strlen(s_psMsgs[i].body));
             http.end();

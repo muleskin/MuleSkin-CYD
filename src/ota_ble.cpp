@@ -14,9 +14,7 @@
 
 using OtaCore::Fail;
 
-// Not on a board whose GATT server is PHONE ALERTS' (the CYDs): one server,
-// one job -- see phone_alerts.h.
-#if CONFIG_BT_NIMBLE_ROLE_PERIPHERAL && !defined(SQW_PHONE_ALERTS)   // nimconfig.h defines it 1 or 0, never leaves it undefined
+#if CONFIG_BT_NIMBLE_ROLE_PERIPHERAL   // nimconfig.h defines it 1 or 0, never leaves it undefined
 
 namespace OtaBle {
 namespace {

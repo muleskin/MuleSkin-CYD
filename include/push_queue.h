@@ -22,7 +22,11 @@
 
 namespace PushQueue {
 
-struct Msg { char title[40]; char body[100]; uint8_t prio; char tags[24]; };
+// `seq`, when set, is ntfy's sequence ID: a later message with the same one
+// REPLACES the earlier notification instead of adding another (ntfy server
+// 2.16+, the Android and web apps; the iPhone app, as of 1.7, shows each).
+// One per device, so a camera that keeps alerting is one notification.
+struct Msg { char title[40]; char body[100]; uint8_t prio; char tags[24]; char seq[24]; };
 
 const uint8_t  CAP       = 8;
 const uint32_t GATHER_MS = 3000;

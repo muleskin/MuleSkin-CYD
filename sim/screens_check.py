@@ -51,7 +51,9 @@ def render(name, screen, args, env, out_dir):
     nvs = tempfile.mkdtemp(prefix="msk-nvs-")
     try:
         out = os.path.join(out_dir, name + ".png")
-        e = dict(os.environ, MULESKINSIM_NVS=nvs, **env)
+        # A fixed wall clock: the LOG and the title bar print the time, and
+        # the computer's own would change the picture from run to run.
+        e = dict(os.environ, MULESKINSIM_NVS=nvs, MULESKIN_EPOCH="1791500000", **env)
         subprocess.run([EXE, screen, out, "--frames", "8"] + args, env=e, check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=HERE)
         return out

@@ -66,9 +66,7 @@ enum class SettingsRow : uint8_t {
     NIGHT_MODE,      // on the APPEARANCE page: NIGHT DIM, the hours the screen runs dim
     UPDATE_CHANNEL,  // on the SYSTEM page: UPDATES STABLE / LAB
     AUTO_UPDATE,     // on the SYSTEM page: AUTO UPDATE OFF / AT NIGHT
-    PHONE_ALERTS,    // beside BUZZER: alerts to a phone over Bluetooth (phone_alerts.h)
-    PHONE_CODE,      // ...and the four digits a phone must send first (OFF / 4821)
-    PUSH_ALERTS,     // ...or alerts as push notifications through an ntfy server, over WiFi
+    PUSH_ALERTS,     // beside BUZZER: alerts as push notifications through an ntfy server, over WiFi
     PUSH_WHAT,       // ...which ones: WITH YOU / IMPORTANT / ALL
     PUSH_NIGHT,      // ...through the night: ALL AS SET / WITH YOU
     PUSH_DAILY,      // ...and the 8 PM summary: ON / OFF

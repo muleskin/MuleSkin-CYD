@@ -271,39 +271,14 @@ TEST row that plays an alert and the idle in four seconds. Boards whose LED pins
 have not been checked (the AWOK and the 3.5") compile it out and say so on
 that screen.
 
-## Sound and phone alerts
+## Sound and push alerts
 
 **BUZZER** (Settings, off by default) chirps once for a device the board has
 never logged before (not at night or with the screen dimmed), and for every
 WITH YOU, whenever it comes. The CrowPanel 7 has a buzzer; on the 2.8" CYD, plug a small 8 ohm
 speaker into the two-pin SPEAK connector.
 
-**PHONE ALERTS** (Settings, 2.8" CYD builds, off by default) puts the board's
-alerts on your phone over Bluetooth: no WiFi, no internet, no app. Switch it
-on, open [flasher.oillie.cloud/phone](https://flasher.oillie.cloud/phone/) on
-the phone (Chrome on Android; on an iPhone, the free Bluefy browser, since
-Safari has no Bluetooth), tap CONNECT and pick MuleSkin-XXXX. Every alert the
-board raises on its own screen, and every WITH YOU, then arrives as a
-notification for as long as that page stays open. The row reads WAITING, then
-CONNECTED.
-
-The page keeps a **history** on the phone, newest first, with a **map**
-(OpenStreetMap) and **CSV** and **KML** exports for a spreadsheet or Google
-Earth. Tick *Record where each alert happened* and each alert is stamped with
-the phone's own location: the board has no GPS, but the phone in your pocket
-does, so this is where a camera was seen. The history and the locations stay
-on that phone until you press Clear; the board takes nothing from the phone.
-
-With **PHONE CODE** off (the default) the first phone to connect gets the
-alerts. Switch it on and the row shows four digits -- new ones every time --
-that a phone has to send before it gets anything; the page asks once and
-remembers them. A phone without the code is let go after 30 seconds, or after
-three wrong guesses, so a stranger cannot hold the one connection slot, and
-the alert itself cannot be read off the board without it. To make room, the
-CYD builds no longer offer firmware updates over Bluetooth; USB and WiFi
-updates are unchanged.
-
-### Push alerts, over WiFi
+### Push alerts
 
 **PUSH ALERTS** (Settings, every board, off by default) sends each alert to
 your phone as a real push notification -- lock screen, phone in your pocket,
@@ -331,7 +306,10 @@ least twenty seconds apart, and each costs detection a couple of seconds of
 blindness. With no saved network in range they wait -- the eight newest, for
 up to half an hour, with an amber **PUSH n** pill in the title bar -- and go
 at the next chance, with the time they happened. If the best network in range
-will not take the board, it tries the next one.
+will not take the board, it tries the next one. Each device keeps one
+notification: on Android (and ntfy's web app) a camera that keeps alerting
+replaces its own notification rather than stacking up -- the iPhone app, as of
+ntfy 1.7, still shows each one.
 
 It uses the public ntfy.sh unless told otherwise: nothing to install, and
 the topic is the password. For alerts that stay on your own server, behind
@@ -363,6 +341,14 @@ first heard of the release; **EARLY** goes the first night. Set the board you
 test on to EARLY and the rest to AFTER 3 DAYS: a release that turns out bad
 shows itself on the test board, and once it is pulled from the site the
 others never install it.
+
+**UPDATE FIRMWARE** installs it three ways: over WiFi from the site, over
+USB from the web flasher, or over **Bluetooth** from a browser in range --
+UPDATE OVER BLUETOOTH on the board, then
+[flasher.oillie.cloud/update](https://flasher.oillie.cloud/update/) on a
+computer or phone with Web Bluetooth (Chrome, Edge; Bluefy on an iPhone),
+and the six-digit code the board shows. Every image is checked against the
+release key before it is installed, whichever way it came.
 
 **WIFI NETWORKS** on the SYSTEM page is where the board keeps the networks it
 knows: up to six, with USE marking the one it tries first. ADD picks one from
@@ -427,7 +413,7 @@ MuleSkin-CYD/
 │   ├── clock.cpp
 │   ├── ignore_list.cpp
 │   ├── pet.cpp
-│   ├── phone_alerts.cpp          (PHONE ALERTS: alerts to a phone over Bluetooth)
+│   ├── push_queue.cpp            (PUSH ALERTS: which alerts go, and when)
 │   ├── status_light.cpp
 │   ├── sd_log.cpp
 │   └── ui_*.cpp

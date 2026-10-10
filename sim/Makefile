@@ -66,7 +66,6 @@ endif
 UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/muleskin.cpp \
             $(SRC)/ui_phone.cpp \
-            $(SRC)/phone_alerts.cpp \
             $(SRC)/qwerty.cpp \
             $(SRC)/ui_beaconwarn.cpp \
             $(SRC)/security.cpp \

@@ -372,14 +372,6 @@ namespace Settings {
     // first time it is asked about a version, `now` then.
     uint32_t    autoSeen(const char* version, uint32_t now);
 
-    // PHONE ALERTS: alerts to a phone over Bluetooth (phone_alerts.h). Off
-    // by default; only the boards that can (PhoneAlerts::available()) list it.
-    bool        phoneAlerts();
-    void        togglePhoneAlerts();
-    // PHONE CODE: 0 is off; otherwise the four digits (1000..9999) a phone
-    // must send before it gets alerts. Picked by main.cpp when switched on.
-    uint16_t    phoneCode();
-    void        setPhoneCode(uint16_t code);
     // PUSH ALERTS: each alert to an ntfy server over a saved WiFi network
     // (main.cpp servicePush, ota_wifi.cpp pushStart). Off by default, and
     // only switchable once a topic URL is set -- from the flasher page or the

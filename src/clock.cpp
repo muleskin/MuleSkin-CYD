@@ -60,8 +60,8 @@ extern volatile bool g_consoleAdc;
 extern volatile bool g_consoleXyzzy;
 extern volatile bool g_consoleLegend;
 extern volatile bool g_consoleSelfTest;
+extern volatile bool g_consoleBtUpdate; // UPDATE BT (main.cpp)
 extern volatile int8_t g_consolePush;    // PUSH OFF / ON / TEST (main.cpp)
-extern volatile int8_t g_consolePhone;   // PHONE ON / OFF: PHONE ALERTS, for the bench (main.cpp)
 extern volatile bool g_liveOn;   // LIVE ON / OFF (detection.cpp printLive)
 extern volatile bool g_consoleOutfitSet;
 extern volatile bool g_consoleAura;
@@ -543,10 +543,6 @@ void pollSerial() {
         if (strcasecmp(line, "XYZZY") == 0)  { g_consoleXyzzy = true; continue; }
         if (strcasecmp(line, "LEGEND") == 0) { g_consoleLegend = true; continue; }
         if (strcasecmp(line, "SELFTEST") == 0) { g_consoleSelfTest = true; continue; }
-        if (strcasecmp(line, "PHONE ON") == 0)  { g_consolePhone = 1; continue; }
-        if (strcasecmp(line, "PHONE OFF") == 0) { g_consolePhone = 0; continue; }
-        if (strcasecmp(line, "PHONE TEST") == 0) { g_consolePhone = 2; continue; }
-        if (strcasecmp(line, "PHONE CODE") == 0) { g_consolePhone = 3; continue; }
         // PUSH ALERTS: the topic URL and the token are set here, the switch
         // and a test message in main.cpp. "PUSH URL -" clears.
         if (strncasecmp(line, "PUSH URL ", 9) == 0) {
@@ -559,6 +555,7 @@ void pollSerial() {
             Serial.printf("[push] token %s\n", Settings::pushToken()[0] ? "set" : "cleared");
             continue;
         }
+        if (strcasecmp(line, "UPDATE BT") == 0) { g_consoleBtUpdate = true; continue; }
         if (strcasecmp(line, "PUSH OFF") == 0)  { g_consolePush = 0; continue; }
         if (strcasecmp(line, "PUSH ON") == 0)   { g_consolePush = 1; continue; }
         if (strcasecmp(line, "PUSH TEST") == 0) { g_consolePush = 2; continue; }

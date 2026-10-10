@@ -4,7 +4,9 @@
 # See deploy/README.md, "Push alerts (ntfy)".
 services:
   ntfy:
-    image: binwiederhier/ntfy:v2.11.0
+    # 2.16 or later: replacing a notification by sequence ID, which the boards
+    # send (one per device) -- older servers ignore the header.
+    image: binwiederhier/ntfy:v2.26.3
     container_name: muleskin-ntfy
     command: serve
     restart: unless-stopped

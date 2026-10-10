@@ -323,7 +323,6 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "ota_core.h"
 #include "ota_ble.h"
 #include "ota_wifi.h"
-#include "phone_alerts.h"
 #include "ui_update.h"
 #include "ui_wifipass.h"
 #include "ui_sysprops.h"
@@ -1216,9 +1215,7 @@ static bool alertMayInterrupt(const Detection& d) {
         Buzzer::chirp(BUZZ_CHIRP_MS);
 #endif
     // The phone hears what the screen announces, by the same gate: every
-    // automatic alert, none of the manual ones. Nothing if no phone is
-    // listening; the same device again within a minute is not resent.
-    PhoneAlerts::alert(d, 0);
+    // automatic alert, none of the manual ones -- filtered by PUSH WHAT.
     queuePushAlert(d, 0);
     return true;
 }
@@ -1582,7 +1579,7 @@ static void enterDex() {
 volatile bool g_consoleInvert = false;
 volatile bool g_consoleAdc = false;     // ADC: the spare analog inputs, for finding a battery sense line
 volatile bool g_consoleXyzzy = false;   // XYZZY: the TERMINAL background types the magic word now
-volatile int8_t g_consolePhone = -1;      // PHONE ON / OFF: the PHONE ALERTS row, from the console
+volatile bool g_consoleBtUpdate = false;  // UPDATE BT: the UPDATE screen's Bluetooth button, from the console
 volatile int8_t g_consolePush = -1;       // PUSH OFF / ON / TEST: the PUSH ALERTS row, and a test message
 volatile bool g_consoleSelfTest = false;  // SELFTEST: check every part, one line each (runSelfTest)
 volatile bool g_consoleLegend = false;  // LEGEND: wear the Legend look (and its aura) until the next boot, or take it off
@@ -1819,7 +1816,8 @@ static bool pushNightNow() {
     return p ? NightMode::active(p, Clock::hour()) : Clock::night();
 }
 
-static void queuePush(const char* title, const char* body, uint8_t prio, const char* tags, bool urgent) {
+static void queuePush(const char* title, const char* body, uint8_t prio, const char* tags, bool urgent,
+                      const char* seq = nullptr) {
     if (!Settings::pushOn()) return;
     PushQueue::Msg m{};
     snprintf(m.title, sizeof m.title, "%s", title);
@@ -1832,6 +1830,7 @@ static void queuePush(const char* title, const char* body, uint8_t prio, const c
     snprintf(m.body, sizeof m.body, "%s%s%s", body, when[0] ? ", " : "", when);
     m.prio = prio;
     snprintf(m.tags, sizeof m.tags, "%s", tags);
+    if (seq) snprintf(m.seq, sizeof m.seq, "%s", seq);
     s_pushQ.add(m, millis(), urgent);
 }
 
@@ -1839,20 +1838,24 @@ static void queuePushAlert(const Detection& d, uint16_t followMins) {
     if (!Settings::pushOn()) return;
     if (!PushQueue::wanted((PushQueue::What)Settings::pushWhat(), Settings::pushNightWithYou(),
                            pushNightNow(), d.type, followMins != 0)) return;
-    char title[40], body[100];
+    char title[40], body[100], seq[24];
     const char* vendor = vendorText(d);
+    // One notification per device (where the phone's app supports replacing
+    // one), and a WITH YOU its own, so it never overwrites an ordinary alert.
+    snprintf(seq, sizeof seq, "%s-%02x%02x%02x%02x%02x%02x", followMins ? "withyou" : "dev",
+             d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
     if (followMins) {
         snprintf(title, sizeof title, "WITH YOU: %s", detectionTypeName(d.type));
         snprintf(body, sizeof body, "%s%swith you %u min, %d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
                  vendor, vendor[0] ? " -- " : "", (unsigned)followMins, (int)d.rssi,
                  d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
-        queuePush(title, body, 5, "rotating_light", true);
+        queuePush(title, body, 5, "rotating_light", true, seq);
     } else {
         snprintf(title, sizeof title, "%s nearby", detectionTypeName(d.type));
         snprintf(body, sizeof body, "%s%s%d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
                  vendor, vendor[0] ? ", " : "", (int)d.rssi,
                  d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
-        queuePush(title, body, 4, "warning", false);
+        queuePush(title, body, 4, "warning", false, seq);
     }
 }
 
@@ -2013,7 +2016,6 @@ static void serviceFollowing(uint32_t now) {
         s_alertLastFree = false;
         enterAlert(*d);
         uiAlertSetFollow(mins);
-        PhoneAlerts::alert(*d, mins ? mins : 1);
         queuePushAlert(*d, mins ? mins : 1);
 #if SQW_HAS_BUZZER
         // The one alert that is about YOU: it chirps whatever else is true,
@@ -2131,20 +2133,6 @@ static void serviceAutoUpdate(uint32_t now) {
     s_autoVer[0] = (uint8_t)a; s_autoVer[1] = (uint8_t)b; s_autoVer[2] = (uint8_t)c;
     Serial.printf("[auto] night update to v%u.%u.%u: counting down\n", a, b, c);
     enterAutoUpdate();
-}
-
-// PHONE ALERTS' service, registered once: at boot with the setting on, or the
-// first time it is switched on. NimBLE will not register a GATT server while a
-// scan runs, so the radios pause for it -- the same pause update mode uses,
-// a fraction of a second here -- and pick up again. Only from the main flow or
-// the settings screen, never during a raw scan or an update, which own the
-// radios themselves.
-static void phoneAlertsStart() {
-    if (!PhoneAlerts::available() || PhoneAlerts::registered()) return;
-    engine.startUpdateRadio();
-    const bool ok = PhoneAlerts::registerService();
-    engine.stopUpdateRadio();
-    if (!ok) Serial.println("[phone] not ready: switch PHONE ALERTS off and on to try again");
 }
 
 static void enterHunt() {
@@ -3820,7 +3808,6 @@ void setup() {
     Dex::begin();
     Regulars::begin();
     MuleSkin::setIdleProvider([]() { return Notices::idleLine(engine); });
-    if (Settings::phoneAlerts()) phoneAlertsStart();
     applyBrightness();
     // After a wipe the board comes back the way the wipe asked: straight to the
     // main screen, unlocked, with no splash and no boot quip, after a duress
@@ -4641,7 +4628,6 @@ void loop() {
     serviceFollowing(now);
     serviceLive(now);
     serviceAutoUpdate(now);
-    PhoneAlerts::tick(now);
     servicePush(now);
     if (state == AppState::CLEAR) {
         const char* sub = nullptr;
@@ -4753,6 +4739,18 @@ void loop() {
         g_consoleSelfTest = false;
         runSelfTest();
     }
+    if (g_consoleBtUpdate) {
+        // UPDATE BT: what UPDATE FIRMWARE > UPDATE OVER BLUETOOTH does, for a
+        // bench with no finger on the screen. The pairing code is printed.
+        g_consoleBtUpdate = false;
+        if (!OtaBle::available()) {
+            Serial.println("[ota] no Bluetooth updates on this build");
+        } else if (state != AppState::UPDATE) {
+            enterUpdate();
+            engine.startUpdateRadio();
+            if (!OtaBle::begin()) { engine.stopUpdateRadio(); Serial.println("[ota] bluetooth update mode refused"); }
+        }
+    }
     if (g_consolePush >= 0) {
         // PUSH OFF / ON / TEST, for the flasher page and the bench. URL and
         // TOKEN are set by clock.cpp directly; this is the part that needs
@@ -4767,29 +4765,6 @@ void loop() {
             Serial.printf("[push] %s: %s\n", Settings::pushOn() ? "on" : "off",
                           Settings::pushUrl()[0] ? Settings::pushUrl() : "no URL set");
         }
-    }
-    if (g_consolePhone == 3) {
-        // PHONE CODE: the settings row's toggle, and the code it picked.
-        g_consolePhone = -1;
-        Settings::setPhoneCode(Settings::phoneCode() ? 0 : (uint16_t)(1000 + (esp_random() % 9000)));
-        PhoneAlerts::codeChanged();
-        Serial.printf("[phone] code %04u\n", (unsigned)Settings::phoneCode());
-    } else if (g_consolePhone == 2) {
-        // PHONE TEST: one line to a connected phone.
-        g_consolePhone = -1;
-        PhoneAlerts::note("TEST from the board");
-        Serial.printf("[phone] test %s\n", PhoneAlerts::listening() ? "sent" : "not sent: no phone listening");
-    } else if (g_consolePhone >= 0) {
-        // PHONE ON / OFF: the settings row's job, for a bench with no finger
-        // on the screen.
-        const bool on = g_consolePhone == 1;
-        g_consolePhone = -1;
-        if (Settings::phoneAlerts() != on) Settings::togglePhoneAlerts();
-        PhoneAlerts::setEnabled(on);
-        if (on) phoneAlertsStart();
-        Serial.printf("[phone] %s: %s, %s\n", on ? "on" : "off",
-                      PhoneAlerts::available() ? (PhoneAlerts::registered() ? "registered" : "not registered") : "not on this board",
-                      PhoneAlerts::name());
     }
     if (g_consoleLegend) {
         g_consoleLegend = false;
@@ -6064,11 +6039,6 @@ void loop() {
                         case SettingsRow::AUTO_TIME:       Settings::toggleAutoTime();        break;
                         case SettingsRow::NIGHT_MODE:      Settings::cycleNightMode();        break;
                         case SettingsRow::AUTO_UPDATE:     Settings::cycleAutoUpdate();       break;
-                        case SettingsRow::PHONE_ALERTS:
-                            Settings::togglePhoneAlerts();
-                            PhoneAlerts::setEnabled(Settings::phoneAlerts());
-                            if (Settings::phoneAlerts()) phoneAlertsStart();
-                            break;
                         case SettingsRow::PUSH_ALERTS:
                             // Set up from the flasher page, where a URL and
                             // a token are typed on a real keyboard.
@@ -6080,12 +6050,6 @@ void loop() {
                         case SettingsRow::PUSH_WHAT:  Settings::cyclePushWhat();          break;
                         case SettingsRow::PUSH_NIGHT: Settings::togglePushNightWithYou(); break;
                         case SettingsRow::PUSH_DAILY: Settings::togglePushSummary();      break;
-                        case SettingsRow::PHONE_CODE:
-                            // A fresh code every time it is switched on: one
-                            // read over a shoulder is not good forever.
-                            Settings::setPhoneCode(Settings::phoneCode() ? 0 : (uint16_t)(1000 + (esp_random() % 9000)));
-                            PhoneAlerts::codeChanged();
-                            break;
                         case SettingsRow::UPDATE_CHANNEL:
                             Settings::toggleLabChannel();
                             Theme::showToast(Settings::labChannel() ? "UPDATES: LAB" : "UPDATES: STABLE",
