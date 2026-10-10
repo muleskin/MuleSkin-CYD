@@ -2,7 +2,7 @@
 //
 // What the board saw and how it last went down, kept across restarts without
 // an SD card. It lives in the 128 KB the partition table leaves unassigned
-// between app1 and the core dump (0x3D0000-0x3F0000): no table change, so no
+// between the settings store and the core dump (0x3D0000-0x3F0000): no table change, so no
 // board needs a USB reinstall to have it. See partitions_ota.csv.
 //
 // Two rings of 4 KB sectors, each sector a header and 63 records of 64 bytes:

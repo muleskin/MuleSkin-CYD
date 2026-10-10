@@ -70,6 +70,7 @@
 #include "ui_timesync.h"
 #include "ui_today.h"
 #include "push_queue.h"
+#include "nvs_move.h"
 #if defined(ARDUINO_ARCH_ESP32)
 #if __has_include(<esp_mac.h>)
 #include <esp_mac.h>          // esp_read_mac(), on IDF 5 (the C5)
@@ -2106,12 +2107,19 @@ static void runSelfTest() {
         const bool ok = p.begin("settings", true);
         p.end();
         line(ok ? 0 : 2, "settings", ok ? "readable" : "NVS will not open");
-        // How full the 20 KB store is. Full at boot, the Arduino core erases
-        // the lot -- every setting, WiFi network and the touch calibration --
-        // so this warns well before: 75% WARN, 90% FAIL.
+        // How full the store is. Full at boot, the Arduino core erases the
+        // lot -- every setting, WiFi network and the touch calibration -- so
+        // this warns well before: 75% WARN, 90% FAIL. A board still on the
+        // old table (an update that came over the air) has the 20 KB store
+        // at 0x9000; one USB install moves it to the 128 KB one.
         const uint8_t pct = nvsFullPercent();
-        line(pct >= 90 ? 2 : pct >= 75 ? 1 : 0, "settings store", "%u%% full%s", (unsigned)pct,
-             pct >= 75 ? " -- back up settings in the web flasher" : "");
+        const esp_partition_t* nvsPart =
+            esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, "nvs");
+        const bool oldTable = nvsPart && nvsPart->size < 0x10000;
+        line(pct >= 90 ? 2 : pct >= 75 ? 1 : 0, "settings store", "%u%% full of %u KB%s", (unsigned)pct,
+             nvsPart ? (unsigned)(nvsPart->size / 1024) : 0u,
+             pct >= 75 ? " -- back up settings in the web flasher"
+                       : oldTable ? " (old layout: one USB install from the web flasher makes it 128 KB)" : "");
     }
     // Time and the network it comes from.
     line(Clock::trusted() ? 0 : 1, "clock", Clock::trusted() ? "set" : "not set (WIFI TIME)");
@@ -3232,6 +3240,9 @@ static void printBootBanner() {
 static void wardriveBegin();
 #endif
 void setup() {
+    // Before anything opens NVS -- crashReportInit() does: settings left in
+    // the old 20 KB store by a USB install onto the new table move across.
+    const int nvsMoved = NvsMove::run();
     Theme::setFrameSprite(&frame);   // see Theme::drawArtwork()
     // Before anything else can allocate: the breadcrumb has to be read out
     // while it is still the previous life's, not this one's.
@@ -3255,6 +3266,8 @@ void setup() {
     delay(200);
     Serial.println();
     printBootBanner();
+    if (nvsMoved > 0)  Serial.printf("[nvs] moved %d settings into the new, larger store\n", nvsMoved);
+    if (nvsMoved < 0)  Serial.println("[nvs] could not move the old settings store; will try again next boot");
 #if defined(TWATCH_S3)
     twatchPowerUp();
 #endif

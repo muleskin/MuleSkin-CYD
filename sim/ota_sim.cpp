@@ -62,7 +62,7 @@ const char* newsAt(uint8_t i)    { return i < s_newsN ? s_news[i] : ""; }
 const char* availableVersion()   { return s_avail; }
 bool        takeAvailableNotice(){ if (s_availSaid || !s_avail[0]) return false; s_availSaid = true; return true; }
 const char* buildName()                        { return "sim"; }
-uint32_t    maxImageSize()                     { return 1966080; }
+uint32_t    maxImageSize()                     { return 1900544; }
 void        refreshOther()                     {}
 const char* otherVersion()                     { return "v1.7.0"; }
 Fail        switchToOther()                    { restartSoon(3000); return Fail::NONE; }

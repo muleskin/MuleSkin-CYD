@@ -6,27 +6,31 @@
 # table on a 16 MB part wastes three quarters of the flash while still forcing
 # the app to fit in 1.9 MB.
 #
-# nvs and otadata keep the EXACT offsets and sizes the 4 MB table uses
-# (0x9000/0x5000 and 0xe000/0x2000). That is deliberate and it is the whole
-# reason a board's settings, PIN, duress PIN, mesh pairings and MuleSkin stats
-# survive a table change: the bootloader and NVS find them in the same place
-# either way. Do not "tidy" these two lines.
+# THE SETTINGS STORE MOVED (v3.2.0). Up to v3.1.8 nvs sat at 0x9000, 20 KB.
+# That filled up: on 2026-10-10 a CYD booted to find it erased whole -- the
+# Arduino core wipes a store with no free pages -- taking every setting, WiFi
+# network and the touch calibration with it. It cannot grow where it was
+# (otadata at 0xe000, app0 at 0x10000), so it now lives up the flash at 128 KB.
+# 0x9000-0xe000 is left unnamed on purpose: a USB install that does not erase
+# leaves the old store there, and the first boot copies it across and erases
+# it (src/nvs_move.cpp). Like any table change this goes out over USB only.
 #
 # App slots are 6 MB each against a ~1.5 MB image, which is far more headroom
 # than the Xtensa boards get. That is not generosity, it is that the C5 build
 # links bigger (Arduino core 3 / IDF 5.5 pull in more than core 2 did) and the
 # space costs nothing here.
 #
-#   0x009000   20 KB  nvs
+#   0x009000   20 KB  (free)      the old nvs; see above
 #   0x00E000    8 KB  otadata     which slot the bootloader should run
 #   0x010000    6 MB  app0
 #   0x610000    6 MB  app1
 #   0xC10000   64 KB  coredump
-#   0xC20000  ~3.9 MB (free)      unassigned, room for a filesystem later
+#   0xC20000  128 KB  nvs
+#   0xC40000  ~3.8 MB (free)      unassigned, room for a filesystem later
 #
 # Name,   Type, SubType, Offset,    Size,     Flags
-nvs,      data, nvs,     0x9000,    0x5000,
 otadata,  data, ota,     0xe000,    0x2000,
 app0,     app,  ota_0,   0x10000,   0x600000,
 app1,     app,  ota_1,   0x610000,  0x600000,
 coredump, data, coredump,0xC10000,  0x10000,
+nvs,      data, nvs,     0xC20000,  0x20000,

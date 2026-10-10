@@ -3,19 +3,28 @@
 #
 # The same shape as partitions_ota.csv, with the room a 16 MB part gives:
 # two 4 MB app slots for over-the-air updates, the black box in the unnamed
-# gap after them, and the crash summary last. NVS and otadata sit where they
-# do on every other board, so nothing that reads them changes.
+# gap after them, the crash summary, and the settings store last.
 #
-#   0x009000   20 KB  nvs
+# THE SETTINGS STORE MOVED (v3.2.0). Up to v3.1.8 nvs sat at 0x9000, 20 KB.
+# That filled up: on 2026-10-10 a CYD booted to find it erased whole -- the
+# Arduino core wipes a store with no free pages -- taking every setting, WiFi
+# network and the touch calibration with it. It cannot grow where it was
+# (otadata at 0xe000, app0 at 0x10000), so it now lives up the flash at 128 KB.
+# 0x9000-0xe000 is left unnamed on purpose: a USB install that does not erase
+# leaves the old store there, and the first boot copies it across and erases
+# it (src/nvs_move.cpp). Like any table change this goes out over USB only.
+#
+#   0x009000   20 KB  (free)     the old nvs; see above
 #   0x00E000    8 KB  otadata
 #   0x010000    4 MB  app0
 #   0x410000    4 MB  app1
 #   0x810000  128 KB  (free)     the black box -- BlackBox::BASE for this board
 #   0x830000   64 KB  coredump
+#   0x840000  128 KB  nvs
 #
 # Name,   Type, SubType, Offset,   Size,     Flags
-nvs,      data, nvs,     0x9000,   0x5000,
 otadata,  data, ota,     0xe000,   0x2000,
 app0,     app,  ota_0,   0x10000,  0x400000,
 app1,     app,  ota_1,   0x410000, 0x400000,
 coredump, data, coredump,0x830000, 0x10000,
+nvs,      data, nvs,     0x840000, 0x20000,

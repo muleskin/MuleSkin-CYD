@@ -58,12 +58,12 @@ esptool --port COM5 --baud 460800 --chip esp32c5 write-flash \
 ```
 
 `firmware.factory.bin` is those same four padded into one contiguous image
-from 0x0, so it also covers **0x9000–0xe000, which is NVS**. Flashing it wipes
-settings, the touch calibration, the PIN and its duress twin, mesh pairings and
-MuleSkin's stats. The symptom is the board running the five-target calibration
-again as though it were brand new, which reads as "the calibration did not
-save" rather than as "the flash erased it". The four-part write leaves the gap
-alone and settings survive.
+from 0x0, so it also covers **0x9000–0xe000, which was NVS** up to v3.1.8.
+Flashing it then wiped settings, the touch calibration and MuleSkin's stats.
+Since v3.2.0 NVS is 128 KB at 0xC20000 (partitions_ota_16mb.csv), past the end
+of any image, and 0x9000 only holds an old store waiting to be moved (see
+src/nvs_move.cpp) -- so the four-part write is still the one to use for the
+first install of v3.2.0: it leaves the old store for the board to move.
 
 ## Pinout
 

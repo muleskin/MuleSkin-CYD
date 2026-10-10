@@ -350,6 +350,21 @@ computer or phone with Web Bluetooth (Chrome, Edge; Bluefy on an iPhone),
 and the six-digit code the board shows. Every image is checked against the
 release key before it is installed, whichever way it came.
 
+### The bigger settings store (v3.2.0): one USB install
+
+Up to v3.1.8 the board kept its settings in 20 KB of flash, and a board that
+had been in use for a while could fill it. A full store is erased whole at
+boot -- WiFi networks, push alerts, the touch calibration, everything. From
+v3.2.0 the store is 128 KB and somewhere else in flash, and that takes a new
+partition table, which only a **USB install** can write. An update over WiFi
+or Bluetooth still works but keeps the old 20 KB store; the self-test's
+"settings store" line says which one a board has.
+
+So, once per board: plug it in, **Connect & Install** from the web flasher
+**without** ticking "Erase device". The first boot moves every setting into
+the new store by itself and erases the old copy. If you do erase (or to be
+safe anyway), **Back up settings** first and **Restore settings** after.
+
 **WIFI NETWORKS** on the SYSTEM page is where the board keeps the networks it
 knows: up to six, with USE marking the one it tries first. ADD picks one from
 a scan and takes the password on the board's keyboard; it is not checked by
