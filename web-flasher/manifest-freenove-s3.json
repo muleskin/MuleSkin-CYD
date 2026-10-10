@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Freenove ESP32-S3 2.8\")",
-  "version": "3.1.8",
-  "release_name": "BT updates back",
-  "whats_new": ["Bluetooth firmware updates are back", "Phone page removed: use ntfy push", "One push notification per device", "Fixes and cleanups"],
+  "version": "3.2.0",
+  "release_name": "Bigger settings",
+  "whats_new": ["Settings store 20 KB to 128 KB", "USB install once, no erase", "Settings move over by themselves", "Push titles name the board"],
   "new_install_prompt_erase": true,
   "builds": [
     {
