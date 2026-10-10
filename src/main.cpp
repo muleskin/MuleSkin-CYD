@@ -69,6 +69,8 @@
 #include "ui_meeting.h"
 #include "ui_timesync.h"
 #include "ui_today.h"
+#include "push_queue.h"
+#include <time.h>
 #include "regulars.h"
 #include "notices.h"
 #include "theme.h"            // the crash card on the splash
@@ -1805,38 +1807,21 @@ static void serviceTimeSyncRadio() {
 // lands on the phone as a real push notification -- lock screen, no page left
 // open. The board borrows the radio for a short join of whichever saved
 // network is in range (home, work, or the phone's own hotspot), posts, and
-// lets go: a couple of seconds of blind scanning per batch.
-//
-// As they happen, but not one join per alert: the first alert waits three
-// seconds for any that come with it, and joins are at least twenty seconds
-// apart -- except for a WITH YOU, which goes at once. With no saved network
-// in range the batch waits (two minutes between tries) and keeps the eight
-// newest; an alert more than half an hour old is dropped rather than sent as
-// news. Each carries the time it happened, so a late one says so.
-// On the heap, made at the first alert to queue: a board with PUSH ALERTS off
-// (the default) never pays the 1.3 KB.
-static OtaWifi::PushMsg* s_pq   = nullptr;
-static uint32_t*         s_pqAt = nullptr; // millis() each was queued
-static uint8_t          s_pqN = 0;
-static bool             s_pqUrgent = false;
+// lets go: a couple of seconds of blind scanning per batch. Which alerts go,
+// and when a batch is sent, is include/push_queue.h (host-tested); this feeds
+// it and starts the joins.
+static PushQueue::Queue s_pushQ;
 static bool             s_pushRadio = false;
-static uint8_t          s_pushOut = 0;     // how many of the queue the join took
-static uint32_t         s_pushLast = 0, s_pushRetryAt = 0;
+
+static bool pushNightNow() {
+    if (!Clock::trusted()) return false;
+    const uint8_t p = Settings::nightMode();
+    return p ? NightMode::active(p, Clock::hour()) : Clock::night();
+}
 
 static void queuePush(const char* title, const char* body, uint8_t prio, const char* tags, bool urgent) {
     if (!Settings::pushOn()) return;
-    if (!s_pq) {
-        s_pq   = (OtaWifi::PushMsg*)calloc(8, sizeof(OtaWifi::PushMsg));
-        s_pqAt = (uint32_t*)calloc(8, sizeof(uint32_t));
-        if (!s_pq || !s_pqAt) { free(s_pq); free(s_pqAt); s_pq = nullptr; s_pqAt = nullptr; return; }
-    }
-    if (s_pqN == 8) {                      // full: the oldest goes
-        memmove(&s_pq[0], &s_pq[1], sizeof s_pq[0] * 7);
-        memmove(&s_pqAt[0], &s_pqAt[1], sizeof s_pqAt[0] * 7);
-        s_pqN = 7;
-        if (s_pushOut) s_pushOut--;
-    }
-    OtaWifi::PushMsg& m = s_pq[s_pqN];
+    PushQueue::Msg m{};
     snprintf(m.title, sizeof m.title, "%s", title);
     char when[12] = "";
     if (Clock::isSet()) {
@@ -1847,19 +1832,19 @@ static void queuePush(const char* title, const char* body, uint8_t prio, const c
     snprintf(m.body, sizeof m.body, "%s%s%s", body, when[0] ? ", " : "", when);
     m.prio = prio;
     snprintf(m.tags, sizeof m.tags, "%s", tags);
-    s_pqAt[s_pqN] = millis();
-    s_pqN++;
-    if (urgent) s_pqUrgent = true;
+    s_pushQ.add(m, millis(), urgent);
 }
 
 static void queuePushAlert(const Detection& d, uint16_t followMins) {
     if (!Settings::pushOn()) return;
+    if (!PushQueue::wanted((PushQueue::What)Settings::pushWhat(), Settings::pushNightWithYou(),
+                           pushNightNow(), d.type, followMins != 0)) return;
     char title[40], body[100];
     const char* vendor = vendorText(d);
     if (followMins) {
         snprintf(title, sizeof title, "WITH YOU: %s", detectionTypeName(d.type));
-        snprintf(body, sizeof body, "%s%s%swith you %u min, %d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
-                 vendor, vendor[0] ? " " : "", vendor[0] ? "-- " : "", (unsigned)followMins, (int)d.rssi,
+        snprintf(body, sizeof body, "%s%swith you %u min, %d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
+                 vendor, vendor[0] ? " -- " : "", (unsigned)followMins, (int)d.rssi,
                  d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
         queuePush(title, body, 5, "rotating_light", true);
     } else {
@@ -1871,49 +1856,81 @@ static void queuePushAlert(const Detection& d, uint16_t followMins) {
     }
 }
 
+// The evening summary: once a day at 8 PM, with PUSH ALERTS on and the clock
+// real -- the day's count by type from the black box (TODAY's own count), and
+// the first and last sighting. Quiet priority: it is a report, not an alarm.
+static void servicePushSummary() {
+    static uint32_t sentDay = 0;          // NVS's answer, read once
+    static bool     read = false;
+    if (!Settings::pushOn() || !Settings::pushSummary() || !Clock::trusted()) return;
+    if (Clock::hour() < 20) return;
+    if (!read) { sentDay = Settings::pushSummaryDay(); read = true; }
+    const uint32_t day = Clock::localDay();
+    if (day == sentDay) return;
+    sentDay = day;
+    Settings::setPushSummaryDay(day);
+    Today::recount();
+    const Today::Stats& s = Today::current();
+    char body[100];
+    if (!s.total) {
+        snprintf(body, sizeof body, "Nothing caught today.");
+    } else {
+        // The three most-seen types.
+        uint8_t top[3] = { 0, 0, 0 };
+        for (uint8_t t = 1; t < (uint8_t)DetectionType::COUNT && t < 32; t++)
+            for (uint8_t k = 0; k < 3; k++)
+                if (s.perType[t] > s.perType[top[k]]) {
+                    for (uint8_t j = 2; j > k; j--) top[j] = top[j - 1];
+                    top[k] = t;
+                    break;
+                }
+        int n = snprintf(body, sizeof body, "%u caught:", (unsigned)s.total);
+        for (uint8_t k = 0; k < 3 && top[k] && n < (int)sizeof body; k++)
+            n += snprintf(body + n, sizeof body - n, "%s %u %s", k ? "," : "", (unsigned)s.perType[top[k]],
+                          detectionTypeName((DetectionType)top[k]));
+        struct tm a, b;
+        const time_t fa = (time_t)s.firstEpoch, la = (time_t)s.lastEpoch;
+        localtime_r(&fa, &a);
+        localtime_r(&la, &b);
+        if (n < (int)sizeof body)
+            snprintf(body + n, sizeof body - n, ". First %d:%02d %s, last %d:%02d %s",
+                     a.tm_hour % 12 ? a.tm_hour % 12 : 12, a.tm_min, a.tm_hour < 12 ? "AM" : "PM",
+                     b.tm_hour % 12 ? b.tm_hour % 12 : 12, b.tm_min, b.tm_hour < 12 ? "AM" : "PM");
+    }
+    PushQueue::Msg m{};
+    snprintf(m.title, sizeof m.title, "MuleSkin today");
+    snprintf(m.body, sizeof m.body, "%s", body);
+    m.prio = 2;
+    snprintf(m.tags, sizeof m.tags, "bar_chart");
+    s_pushQ.add(m, millis(), false);
+    Serial.printf("[push] daily summary queued: %s\n", body);
+}
+
 static void servicePush(uint32_t now) {
     // A join finished: the radio back to detection, the sent ones off the queue.
     if (s_pushRadio && !OtaWifi::pushBusy()) {
         engine.stopUpdateRadio();
         s_pushRadio = false;
-        const uint8_t sent = OtaWifi::pushSentCount() < s_pushOut ? OtaWifi::pushSentCount() : s_pushOut;
-        if (sent) {
-            memmove(&s_pq[0], &s_pq[sent], sizeof s_pq[0] * (s_pqN - sent));
-            memmove(&s_pqAt[0], &s_pqAt[sent], sizeof s_pqAt[0] * (s_pqN - sent));
-            s_pqN = (uint8_t)(s_pqN - sent);
-        }
-        if (OtaWifi::pushResult() != OtaWifi::PushResult::SENT) s_pushRetryAt = now + 120000u;
-        if (!s_pqN) s_pqUrgent = false;
-        s_pushOut = 0;
+        s_pushQ.finished(OtaWifi::pushSentCount(), OtaWifi::pushResult() == OtaWifi::PushResult::SENT, now);
     }
-    if (!s_pqN || s_pushRadio) return;
-    // Stale ones go: half an hour on, an alert is history, not news.
-    while (s_pqN && now - s_pqAt[0] > 30u * 60u * 1000u) {
-        memmove(&s_pq[0], &s_pq[1], sizeof s_pq[0] * (s_pqN - 1));
-        memmove(&s_pqAt[0], &s_pqAt[1], sizeof s_pqAt[0] * (s_pqN - 1));
-        s_pqN--;
-    }
-    if (!s_pqN) { s_pqUrgent = false; return; }
-    if (!Settings::pushOn()) { s_pqN = 0; s_pqUrgent = false; return; }
-    if (s_pushRetryAt && (int32_t)(now - s_pushRetryAt) < 0) return;
-    if (!s_pqUrgent) {
-        if (now - s_pqAt[0] < 3000) return;                          // gather a burst
-        if (s_pushLast && now - s_pushLast < 20000) return;          // not join after join
-    }
+    servicePushSummary();
+    uiClearSetPushWaiting(Settings::pushOn() && s_pushQ.waiting() ? s_pushQ.count() : 0);
+    if (s_pushRadio) return;
+    if (!Settings::pushOn()) { if (s_pushQ.count()) s_pushQ.clear(); return; }
+    if (!s_pushQ.due(now)) return;
     // Only with the radio otherwise idle: never under an update, a time join,
     // a raw WiFi scan or a rest. They come back round in a moment.
     if (!engine.radioFree() || OtaWifi::timeSyncBusy() || OtaWifi::state() != OtaWifi::State::OFF) return;
     engine.startUpdateRadio();
-    if (!OtaWifi::pushStart(s_pq, s_pqN)) {
+    if (!OtaWifi::pushStart(s_pushQ.items(), s_pushQ.count())) {
         engine.stopUpdateRadio();
-        s_pushRetryAt = now + 120000u;
+        s_pushQ.sending(now);
+        s_pushQ.finished(0, false, now);
         return;
     }
     s_pushRadio = true;
-    s_pushOut   = s_pqN;
-    s_pushLast  = now;
-    s_pushRetryAt = 0;
-    Serial.printf("[push] sending %u%s\n", (unsigned)s_pqN, s_pqUrgent ? " (at once)" : "");
+    s_pushQ.sending(now);
+    Serial.printf("[push] sending %u\n", (unsigned)s_pushQ.count());
 }
 
 // AUTO TIME: WIFI TIME without the screen, from the main screen, once a day
@@ -6060,6 +6077,9 @@ void loop() {
                             else
                                 Settings::togglePush();
                             break;
+                        case SettingsRow::PUSH_WHAT:  Settings::cyclePushWhat();          break;
+                        case SettingsRow::PUSH_NIGHT: Settings::togglePushNightWithYou(); break;
+                        case SettingsRow::PUSH_DAILY: Settings::togglePushSummary();      break;
                         case SettingsRow::PHONE_CODE:
                             // A fresh code every time it is switched on: one
                             // read over a shoulder is not good forever.

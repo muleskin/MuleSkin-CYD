@@ -635,6 +635,8 @@ int main(int argc, char** argv) {
         // MULESKINSIM_ZONE=<index into Clock's table> shows the zone card on
         // that zone, for rendering one of them.
         if (const char* z = getenv("MULESKINSIM_ZONE")) Settings::setTimeZone((uint8_t)atoi(z));
+        // MULESKINSIM_PUSHWAIT=N: N push alerts waiting for WiFi -- the title-bar pill.
+        if (const char* pw = getenv("MULESKINSIM_PUSHWAIT")) uiClearSetPushWaiting((uint8_t)atoi(pw));
     }
     else if (screen == "log") {
         // The second row ignored, so the screen shows its IGNORED tag. The

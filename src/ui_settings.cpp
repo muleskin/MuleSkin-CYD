@@ -82,6 +82,9 @@ static const SettingsRow ALL_ROWS[] = {
     SettingsRow::PHONE_ALERTS,
     SettingsRow::PHONE_CODE,
     SettingsRow::PUSH_ALERTS,
+    SettingsRow::PUSH_WHAT,
+    SettingsRow::PUSH_NIGHT,
+    SettingsRow::PUSH_DAILY,
     SettingsRow::DETECTION_FILTER,
     SettingsRow::IGNORED_DEVICES,
     // APPEARANCE opens the display page -- see APPEARANCE_ROWS. It sat at the
@@ -240,6 +243,9 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::PHONE_ALERTS:
         case SettingsRow::PHONE_CODE:
         case SettingsRow::PUSH_ALERTS:
+        case SettingsRow::PUSH_WHAT:
+        case SettingsRow::PUSH_NIGHT:
+        case SettingsRow::PUSH_DAILY:
         case SettingsRow::DETECTION_FILTER:
         case SettingsRow::IGNORED_DEVICES:
             return RowGroupId::BEHAVIOR;
@@ -325,6 +331,9 @@ static uint8_t buildDisplayList(DisplayItem* out) {
         // a Bluetooth server has nothing to update into.
         if ((r == SettingsRow::UPDATE_FIRMWARE || r == SettingsRow::UPDATE_CHECK || r == SettingsRow::UPDATE_CHANNEL || r == SettingsRow::AUTO_UPDATE) && !OtaCore::available()) continue;
         if ((r == SettingsRow::PHONE_ALERTS || r == SettingsRow::PHONE_CODE) && !PhoneAlerts::available()) continue;
+        // The push rows that tune it only once it is on.
+        if ((r == SettingsRow::PUSH_WHAT || r == SettingsRow::PUSH_NIGHT || r == SettingsRow::PUSH_DAILY) &&
+            !Settings::pushOn()) continue;
         rows[n++] = r;
     }
 
@@ -929,6 +938,17 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             // NOT SET until the flasher page (or PUSH URL) gives it a topic.
             label = "PUSH ALERTS";
             value = !Settings::pushUrl()[0] ? "NOT SET" : Settings::pushOn() ? "ON" : "OFF";
+            break;
+        case SettingsRow::PUSH_WHAT:
+            label = "PUSH WHAT";
+            value = Settings::pushWhat() == 0 ? "WITH YOU" : Settings::pushWhat() == 2 ? "ALL" : "IMPORTANT";
+            break;
+        case SettingsRow::PUSH_NIGHT:
+            // Through NIGHT DIM's hours (11 PM-5 AM without them).
+            label = "PUSH AT NIGHT"; value = Settings::pushNightWithYou() ? "WITH YOU" : "AS SET";
+            break;
+        case SettingsRow::PUSH_DAILY:
+            label = "DAILY SUMMARY"; value = Settings::pushSummary() ? "8 PM" : "OFF";
             break;
         case SettingsRow::PHONE_CODE:
             // The digits themselves: they are what the phone asks for, and

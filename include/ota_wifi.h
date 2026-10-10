@@ -22,6 +22,7 @@
 // local server: PLATFORMIO_BUILD_FLAGS='-DOTA_WIFI_BASE=\"http://192.168.4.42:8767/\"'.
 // Plain http is accepted there and nowhere else by default.
 #pragma once
+#include "push_queue.h"
 #include <stdint.h>
 #include <stddef.h>
 #include "ota_core.h"
@@ -125,7 +126,7 @@ const char* timeSyncNetwork();   // empty until it has picked one
 // any, goes as a Bearer header. Plain HTTP, like the update check: TLS needs
 // a heap block this board does not have. The caller pauses detection first
 // (DetectionEngine::startUpdateRadio) and resumes it once pushBusy() is false.
-struct PushMsg { char title[40]; char body[100]; uint8_t prio; char tags[24]; };
+using PushMsg = PushQueue::Msg;   // push_queue.h
 enum class PushResult : uint8_t { NONE, SENT, NO_SAVED, NO_JOIN, NO_ANSWER, NO_MEMORY };
 bool        pushStart(const PushMsg* msgs, uint8_t n);   // copies them; false if the radio is taken
 bool        pushBusy();

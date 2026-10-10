@@ -130,6 +130,9 @@ static void drawWatchPill(TFT_eSPI& t, int screenW, bool watching, bool hunting,
 // check) or resting -- so the counters below are standing still. Same slot and
 // shape as the WATCH pill, which it stands in for while it lasts: a paused
 // scan is the more important thing to know. Not a tap target.
+static uint8_t s_pushWaiting = 0;
+void uiClearSetPushWaiting(uint8_t n) { s_pushWaiting = n; }
+
 static void drawPausedPill(TFT_eSPI& t, int screenW, const char* txt, int spanR = -1) {
     const uint16_t accent = Theme::AMBER;
     t.setTextSize(1);
@@ -584,6 +587,13 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
                 drawPausedPill(t, w, "RESTING", s_cornerClockPillR);
             else if (watching || hunting)
                 drawWatchPill(t, w, watching, hunting, s_cornerClockPillR);
+            else if (s_pushWaiting) {
+                // Alerts that have not reached the phone yet: no saved
+                // network in range. They go at the next one.
+                char p[10];
+                snprintf(p, sizeof p, "PUSH %u", (unsigned)s_pushWaiting);
+                drawPausedPill(t, w, p, s_cornerClockPillR);
+            }
         }
     }
 

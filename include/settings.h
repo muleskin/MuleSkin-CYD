@@ -392,6 +392,21 @@ namespace Settings {
     const char* pushToken();     // "" when none
     void        setPushUrl(const char* url);
     void        setPushToken(const char* token);
+    // PUSH WHAT: 0 WITH YOU only, 1 IMPORTANT (the default: WITH YOU plus the
+    // surveillance and attack types -- push_queue.h), 2 ALL.
+    uint8_t     pushWhat();
+    void        cyclePushWhat();
+    // PUSH AT NIGHT: true (the default) sends only WITH YOU through the night
+    // hours -- NIGHT DIM's, or 11 PM-5 AM without them.
+    bool        pushNightWithYou();
+    void        togglePushNightWithYou();
+    // DAILY SUMMARY: one push at 8 PM with the day's count. On by default.
+    bool        pushSummary();
+    void        togglePushSummary();
+    // The local day the last summary went (Clock::localDay()), kept so a
+    // restart in the evening does not send it twice.
+    uint32_t    pushSummaryDay();
+    void        setPushSummaryDay(uint32_t day);
 
     // TIME ZONE: an index into Clock's zone table, applied at load and on
     // every change. UTC until somebody picks one; timeZoneChosen() says

@@ -69,6 +69,9 @@ enum class SettingsRow : uint8_t {
     PHONE_ALERTS,    // beside BUZZER: alerts to a phone over Bluetooth (phone_alerts.h)
     PHONE_CODE,      // ...and the four digits a phone must send first (OFF / 4821)
     PUSH_ALERTS,     // ...or alerts as push notifications through an ntfy server, over WiFi
+    PUSH_WHAT,       // ...which ones: WITH YOU / IMPORTANT / ALL
+    PUSH_NIGHT,      // ...through the night: ALL AS SET / WITH YOU
+    PUSH_DAILY,      // ...and the 8 PM summary: ON / OFF
     BACK,
     COUNT,
     NONE = 255

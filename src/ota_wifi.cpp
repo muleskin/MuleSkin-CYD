@@ -1007,20 +1007,26 @@ char              s_tsSsid[33] = "";
 // saved, that one; with several, a quick passive scan, the one marked USE if
 // it is in range, else the strongest of the rest. Its name into `ssid`; the
 // pick's SavedResult recorded either way. True once connected.
-bool joinBest(char* ssid, size_t cap, const char* tag) {
+// `skip`: a saved network NOT to pick -- the one that just refused -- and
+// `picked`, when given, which one was tried. With `skip` set and nothing else
+// of ours in range, it gives up rather than trying the refuser again.
+bool joinBest(char* ssid, size_t cap, const char* tag, int8_t skip = -1, int8_t* picked = nullptr) {
     uint8_t pick = s_use;
+    if (skip >= 0 && s_n < 2) return false;
     if (s_n > 1) {
         const int found = WiFi.scanNetworks(false, false, true, 130);
         int8_t best = -1, bestRssi = -127;
         for (int j = 0; j < found; j++) {
             const int8_t k = savedIndexOf(WiFi.SSID(j).c_str());
-            if (k < 0) continue;
+            if (k < 0 || k == skip) continue;
             if (k == (int8_t)s_use) { best = k; bestRssi = 127; }
             else if (WiFi.RSSI(j) > bestRssi) { bestRssi = (int8_t)WiFi.RSSI(j); best = k; }
         }
         WiFi.scanDelete();
         if (best >= 0) pick = (uint8_t)best;
+        else if (skip >= 0) return false;
     }
+    if (picked) *picked = (int8_t)pick;
     strncpy(ssid, s_list[pick].ssid, cap - 1);
     ssid[cap - 1] = '\0';
     char pass[65] = "";
@@ -1094,7 +1100,15 @@ volatile uint8_t    s_psSent   = 0;
 void psRun(void*) {
     const uint32_t t0 = millis();
     char ssid[33];
-    if (!joinBest(ssid, sizeof ssid, "push")) {
+    // The best network in range, and if it will not take us -- a hotspot gone
+    // to sleep, a password changed -- the next best, once.
+    int8_t tried = -1;
+    bool joined = joinBest(ssid, sizeof ssid, "push", -1, &tried);
+    if (!joined && tried >= 0) {
+        WiFi.disconnect(false, false);
+        joined = joinBest(ssid, sizeof ssid, "push", tried, nullptr);
+    }
+    if (!joined) {
         s_push = PushResult::NO_JOIN;
     } else {
         // A shorter timeout than a download's: a server that does not answer

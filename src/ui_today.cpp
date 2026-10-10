@@ -12,6 +12,8 @@ static Today::Stats s_stats;
 static uint32_t     s_countedAt = 0;
 static bool         s_haveDay   = false;
 Today::Stats& Today::current() { return s_stats; }
+static void count();
+void Today::recount() { count(); }
 
 static void count() {
     Today::clear(s_stats);

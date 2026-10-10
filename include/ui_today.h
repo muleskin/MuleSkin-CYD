@@ -37,4 +37,6 @@ inline void add(Stats& s, int year, int yday, int hour, uint8_t type, uint32_t e
 }
 // The screen's current counts: the emulator fills them to render a busy day.
 Stats& current();
+// Count today again from the black box (what opening the screen does).
+void recount();
 }  // namespace Today

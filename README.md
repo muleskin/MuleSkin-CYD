@@ -314,12 +314,24 @@ board joins one of its saved WiFi networks for a couple of seconds to send it
 
 Set it up from the flasher page, **SET UP PUSH ALERTS**: it makes a long
 random topic, you subscribe to it in the ntfy app, and it sends the setup to
-the board over the cable and has it post a test. Alerts go as they happen: a
-WITH YOU at once and loud, the rest a few seconds after the first, so a
-burst is one join rather than ten; joins are at least twenty seconds apart,
-and each costs detection a couple of seconds of blindness. With no saved
-network in range they wait -- the eight newest, for up to half an hour -- and
-go at the next chance, with the time they happened.
+the board over the cable and has it post a test. Once it is on, three more
+rows tune it:
+
+- **PUSH WHAT** -- WITH YOU only; **IMPORTANT** (the default: WITH YOU plus
+  Flock, Axon, plate readers, Raven, cameras, camera glasses, skimmers and
+  WiFi attacks -- not every passing AirTag); or ALL.
+- **PUSH AT NIGHT** -- through NIGHT DIM's hours (11 PM-5 AM without them),
+  WITH YOU only (the default), or as set.
+- **DAILY SUMMARY** -- one quiet push at 8 PM: the day's count, its top three
+  types, and the first and last sighting.
+
+Alerts go as they happen: a WITH YOU at once and loud, the rest a few
+seconds after the first, so a burst is one join rather than ten; joins are at
+least twenty seconds apart, and each costs detection a couple of seconds of
+blindness. With no saved network in range they wait -- the eight newest, for
+up to half an hour, with an amber **PUSH n** pill in the title bar -- and go
+at the next chance, with the time they happened. If the best network in range
+will not take the board, it tries the next one.
 
 It uses the public ntfy.sh unless told otherwise: nothing to install, and
 the topic is the password. For alerts that stay on your own server, behind

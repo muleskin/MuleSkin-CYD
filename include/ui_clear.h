@@ -46,4 +46,7 @@ bool uiClearClockHit(int x, int y);
 // The NEARBY headline, which only exists while something is live. Long-pressing
 // it opens the closest device -- see main.cpp. False whenever it is not drawn.
 bool uiClearNearbyHit(int x, int y);
+// PUSH ALERTS waiting for a WiFi network: a "PUSH n" pill in the title bar,
+// 0 for none. Set by main.cpp every pass.
+void uiClearSetPushWaiting(uint8_t n);
 
