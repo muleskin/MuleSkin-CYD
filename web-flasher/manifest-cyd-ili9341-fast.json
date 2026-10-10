@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (2.8\" CYD, ILI9341, 80MHz)",
-  "version": "3.1.6",
-  "release_name": "Push alerts",
-  "whats_new": ["Push alerts to your phone via ntfy", "Phone code, alert map and history", "Bluetooth rules sent over the air", "Auto update: EARLY or after 3 days"],
+  "version": "3.1.7",
+  "release_name": "Push control",
+  "whats_new": ["Choose which alerts push", "Night: only WITH YOU pushes", "8 PM daily summary push", "PUSH n pill while alerts wait"],
   "new_install_prompt_erase": true,
   "builds": [
     {
