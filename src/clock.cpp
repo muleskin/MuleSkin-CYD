@@ -98,7 +98,9 @@ static uint32_t    s_greeted  = 0;
 static uint32_t    s_mileSaid = 0;
 static bool        s_guess    = false;   // running from the note to self
 static uint32_t    s_lastNote = 0;       // millis() of the last note written
-static const uint32_t NOTE_EVERY_MS = 10u * 60u * 1000u;
+// Hourly: the note only bounds a cold boot's guess, and every write is a
+// slot in a 20 KB store (see DetectionEngine::saveLifetime).
+static const uint32_t NOTE_EVERY_MS = 60u * 60u * 1000u;
 
 #if !defined(ARDUINO_ARCH_ESP32)
 // The emulator: MULESKIN_EPOCH in the environment pins the clock to a moment
@@ -548,6 +550,11 @@ void pollSerial() {
         if (strncasecmp(line, "PUSH URL ", 9) == 0) {
             Settings::setPushUrl(line + 9);
             Serial.printf("[push] url %s\n", Settings::pushUrl()[0] ? Settings::pushUrl() : "cleared");
+            continue;
+        }
+        if (strncasecmp(line, "PUSH NAME ", 10) == 0) {
+            Settings::setPushName(line + 10);
+            Serial.printf("[push] name %s\n", Settings::pushName()[0] ? Settings::pushName() : "(the Bluetooth name)");
             continue;
         }
         if (strncasecmp(line, "PUSH TOKEN ", 11) == 0) {

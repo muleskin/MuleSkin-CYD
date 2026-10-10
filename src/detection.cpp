@@ -1907,8 +1907,13 @@ void logDump() {
 }
 
 
-// The lifetime tally, to flash: at most once every five seconds while it
-// has changed. Five seconds of counting is what a power cut can lose.
+// The lifetime tally, to flash: at most once every five minutes while it has
+// changed. It was every five seconds -- a 128-byte table and a count, through
+// a 20 KB settings store, every five seconds of a busy room -- which cycled
+// the whole store every few minutes. On 2026-10-10 a CYD's store was found
+// erased at boot (the Arduino core's "no free pages" reset) after a day of
+// that and a lot of resets; the churn is the likely accomplice. Five minutes
+// of counting is now what a power cut can lose.
 void DetectionEngine::saveLifetime(uint32_t now) {
 #if defined(CROWPANEL7)
     // Once a minute, not every five seconds. On the CrowPanel every flash
@@ -1919,7 +1924,7 @@ void DetectionEngine::saveLifetime(uint32_t now) {
     // lifetime counts, which is what these are.
     static const uint32_t LIFETIME_EVERY_MS = 60000;
 #else
-    static const uint32_t LIFETIME_EVERY_MS = 5000;
+    static const uint32_t LIFETIME_EVERY_MS = 300000;
 #endif
     if (!_lifetimeDirty || now - _lifetimeSavedMs < LIFETIME_EVERY_MS) return;
     _lifetimeDirty   = false;

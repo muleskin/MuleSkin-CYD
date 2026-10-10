@@ -176,7 +176,9 @@ void tick(uint32_t now) {
     // Written a second after the last change, not on the spot: a walk past a
     // row of cameras marks several squares in a few seconds, and that is one
     // write, not four.
-    if (s_dirty && !s_saveAt) s_saveAt = now + 1000;
+    // A minute after the first mark of a batch: nine keys a save, and a busy
+    // room marks often (see DetectionEngine::saveLifetime).
+    if (s_dirty && !s_saveAt) s_saveAt = now + 60000;
     if (s_saveAt && now >= s_saveAt) {
         s_saveAt = 0;
         s_dirty  = false;

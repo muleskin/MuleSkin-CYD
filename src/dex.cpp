@@ -190,7 +190,7 @@ void note(DetectionType t, int8_t rssi) {
 // Ten seconds after the last change, not on every sighting: a beacon that
 // bobs in and out of range would otherwise write flash all afternoon.
 void tick(uint32_t now) {
-    if (!s_began || !s_dirty || now - s_changed < 10000) return;
+    if (!s_began || !s_dirty || now - s_changed < 60000) return;   // a quiet minute: fewer writes
     s_dirty = false;
     s_prefs.putBytes(KEY, s_rec, sizeof s_rec);
 }

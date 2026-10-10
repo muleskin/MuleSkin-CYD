@@ -112,7 +112,7 @@ void note(const uint8_t* mac, DetectionType type) {
 }
 
 void tick(uint32_t now) {
-    if (!s_began || !s_dirty || now - s_changed < 10000u) return;
+    if (!s_began || !s_dirty || now - s_changed < 60000u) return;   // a quiet minute: fewer writes
     s_dirty = false;
     s_prefs.putBytes(KEY, s_t, sizeof s_t);
 }

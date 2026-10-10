@@ -97,6 +97,9 @@ void uiDiagnosticsTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, co
         y = drawLine(t, y, Theme::CYAN, "CLOCK:", "%s%s", clk,
                      Clock::trusted() ? "" : "  (TIME <epoch> over serial)");
     }
+    // Full at boot, the store is erased whole -- see main.cpp nvsFullPercent().
+    y = drawLine(t, y, info.nvsPercent >= 75 ? Theme::AMBER : Theme::CYAN, "SETTINGS:", "%u%% of the store%s",
+                 (unsigned)info.nvsPercent, info.nvsPercent >= 75 ? " - BACK UP" : "");
     y = drawLine(t, y, Theme::CYAN, "HEAP:", "%lu free / %lu largest",
                  (unsigned long)info.freeHeap, (unsigned long)info.largestBlock);
     // Where the heap went on the way up, in KB: free/largest with WiFi up,

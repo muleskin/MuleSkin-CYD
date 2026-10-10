@@ -558,6 +558,7 @@ int main(int argc, char** argv) {
             info.frameUs = 41200;
             info.freeHeap = 180000;
             info.largestBlock = 110000;
+            info.nvsPercent = 41;
             info.resetReason = "POWERON_RESET";
             info.boardName = "cyd";
             info.usingCapTouch = false;

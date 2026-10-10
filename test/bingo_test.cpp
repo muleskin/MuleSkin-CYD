@@ -25,12 +25,13 @@ uint32_t localDay()  { return g_day; }
 
 static DetectionEngine eng;
 
-// The card saves a second after the last mark, so a test that never moves
-// millis() on never sees a write. Every step here takes the card past that.
+// The card saves a minute after the first mark of a batch, so a test that
+// never moves millis() on never sees a write. Every step here takes the card
+// past that.
 static uint32_t g_ms = 1000;
 static void settle() {
     Bingo::tick(g_ms);
-    g_ms += 1500;
+    g_ms += 61000;
     Bingo::tick(g_ms);
     g_ms += 100;
 }

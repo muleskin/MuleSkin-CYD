@@ -93,6 +93,7 @@ struct DiagnosticsInfo {
     // System.
     uint32_t    freeHeap;
     uint32_t    largestBlock;
+    uint8_t     nvsPercent;    // the settings store's fill, 0-100 (main.cpp nvsFullPercent)
     // ...and the same pair at the first pass of loop(), for the BOOT line.
     uint32_t    loopFree;
     uint32_t    loopLargest;

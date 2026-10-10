@@ -166,6 +166,7 @@ static uint8_t s_autoUpdate   = 0;     // 0 OFF, 1 AFTER 3 DAYS, 2 EARLY
 static bool    s_pushOn       = false;
 static char    s_pushUrl[100] = "";
 static char    s_pushTok[48]  = "";
+static char    s_pushName[16] = "";
 static uint8_t s_pushWhat     = 1;
 static bool    s_pushNight    = true;
 static bool    s_pushDaily    = true;
@@ -511,6 +512,7 @@ void load() {
     s_pushOn       = s_prefs.getBool("pushOn", false);
     s_prefs.getString("pushUrl", s_pushUrl, sizeof s_pushUrl);
     s_prefs.getString("pushTok", s_pushTok, sizeof s_pushTok);
+    s_prefs.getString("pushName", s_pushName, sizeof s_pushName);
     s_pushWhat     = s_prefs.getUChar("pushWhat", 1);
     if (s_pushWhat > 2) s_pushWhat = 1;
     s_pushNight    = s_prefs.getBool("pushNight", true);
@@ -718,6 +720,22 @@ static void setText(const char* key, char* dst, size_t cap, const char* v) {
 }
 void setPushUrl(const char* url)     { setText("pushUrl", s_pushUrl, sizeof s_pushUrl, url); if (!s_pushUrl[0] && s_pushOn) togglePush(); }
 void setPushToken(const char* token) { setText("pushTok", s_pushTok, sizeof s_pushTok, token); }
+const char* pushName()        { return s_pushName; }
+// It goes into an HTTP header, so only characters that are safe there -- and
+// that read well at the front of a notification -- are kept.
+void setPushName(const char* name) {
+    char clean[16];
+    size_t n = 0;
+    for (const char* p = name; p && *p && n < sizeof clean - 1; p++) {
+        const char c = *p;
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+            c == ' ' || c == '-' || c == '_' || c == '\'' || c == '.')
+            clean[n++] = c;
+    }
+    while (n && clean[n - 1] == ' ') n--;
+    clean[n] = '\0';
+    setText("pushName", s_pushName, sizeof s_pushName, (n == 1 && clean[0] == '-') ? "" : clean);
+}
 uint8_t pushWhat()                { return s_pushWhat; }
 void    cyclePushWhat()           { s_pushWhat = (uint8_t)((s_pushWhat + 1) % 3); s_prefs.putUChar("pushWhat", s_pushWhat); }
 bool    pushNightWithYou()        { return s_pushNight; }

@@ -70,6 +70,12 @@
 #include "ui_timesync.h"
 #include "ui_today.h"
 #include "push_queue.h"
+#if defined(ARDUINO_ARCH_ESP32)
+#if __has_include(<esp_mac.h>)
+#include <esp_mac.h>          // esp_read_mac(), on IDF 5 (the C5)
+#endif
+#include <esp_system.h>       // ...and on IDF 4
+#endif
 #include <time.h>
 #include "regulars.h"
 #include "notices.h"
@@ -1613,6 +1619,18 @@ volatile bool g_benchUpdateStop = false;
 // Why OtaWifi::begin() said no. It refuses while the board is locked, and
 // also while a cancelled attempt's task is still unwinding the request it was
 // waiting on -- a second or two, and nothing the owner did wrong.
+// The settings store's fill, 0-100: used entries of all it can hold. See the
+// self-test's "settings store" line and DIAGNOSTICS.
+static uint8_t nvsFullPercent() {
+#if defined(ARDUINO_ARCH_ESP32)
+    nvs_stats_t st = {};
+    if (nvs_get_stats(NULL, &st) != ESP_OK || !st.total_entries) return 0;
+    return (uint8_t)((st.used_entries * 100u + st.total_entries - 1) / st.total_entries);
+#else
+    return 0;
+#endif
+}
+
 static const char* updateRefusedWhy() {
     return Security::locked() ? "Unlock the board first" : "Try again in a moment";
 }
@@ -1816,11 +1834,29 @@ static bool pushNightNow() {
     return p ? NightMode::active(p, Clock::hour()) : Clock::night();
 }
 
+// The name at the front of every push: the one set (PUSH NAME), or this
+// board's Bluetooth name -- MuleSkin- and the last two bytes of its address,
+// the same name a Bluetooth update's picker shows.
+static const char* pushBoardName() {
+    if (Settings::pushName()[0]) return Settings::pushName();
+    static char def[16] = "";
+    if (!def[0]) {
+#if defined(ARDUINO_ARCH_ESP32)
+        uint8_t mac[6] = { 0 };
+        esp_read_mac(mac, ESP_MAC_BT);
+        snprintf(def, sizeof def, "MuleSkin-%02X%02X", mac[4], mac[5]);
+#else
+        snprintf(def, sizeof def, "MuleSkin");
+#endif
+    }
+    return def;
+}
+
 static void queuePush(const char* title, const char* body, uint8_t prio, const char* tags, bool urgent,
                       const char* seq = nullptr) {
     if (!Settings::pushOn()) return;
     PushQueue::Msg m{};
-    snprintf(m.title, sizeof m.title, "%s", title);
+    snprintf(m.title, sizeof m.title, "%s: %s", pushBoardName(), title);
     char when[12] = "";
     if (Clock::isSet()) {
         bool pm = false;
@@ -1901,7 +1937,7 @@ static void servicePushSummary() {
                      b.tm_hour % 12 ? b.tm_hour % 12 : 12, b.tm_min, b.tm_hour < 12 ? "AM" : "PM");
     }
     PushQueue::Msg m{};
-    snprintf(m.title, sizeof m.title, "MuleSkin today");
+    snprintf(m.title, sizeof m.title, "%s today", pushBoardName());
     snprintf(m.body, sizeof m.body, "%s", body);
     m.prio = 2;
     snprintf(m.tags, sizeof m.tags, "bar_chart");
@@ -2070,6 +2106,12 @@ static void runSelfTest() {
         const bool ok = p.begin("settings", true);
         p.end();
         line(ok ? 0 : 2, "settings", ok ? "readable" : "NVS will not open");
+        // How full the 20 KB store is. Full at boot, the Arduino core erases
+        // the lot -- every setting, WiFi network and the touch calibration --
+        // so this warns well before: 75% WARN, 90% FAIL.
+        const uint8_t pct = nvsFullPercent();
+        line(pct >= 90 ? 2 : pct >= 75 ? 1 : 0, "settings store", "%u%% full%s", (unsigned)pct,
+             pct >= 75 ? " -- back up settings in the web flasher" : "");
     }
     // Time and the network it comes from.
     line(Clock::trusted() ? 0 : 1, "clock", Clock::trusted() ? "set" : "not set (WIFI TIME)");
@@ -6884,6 +6926,7 @@ void loop() {
             info.lastScreenUs   = s_lastScreenUs;
             info.freeHeap = ESP.getFreeHeap();
             info.largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+            info.nvsPercent   = nvsFullPercent();
             info.resetReason = resetReasonName();
             info.loopFree    = s_loopHeapFree;
             info.loopLargest = s_loopHeapLargest;

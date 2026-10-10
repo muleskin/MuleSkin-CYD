@@ -549,6 +549,8 @@
     <div class="browser-note" id="pushForm" style="display:none">
       <label>Topic -- the private name your phone subscribes to. Keep it long; anyone who knows it can read it.
         <input id="pushTopic" type="text" style="width:100%;font-family:inherit" spellcheck="false" autocomplete="off"></label>
+      <label>Board name -- at the front of every push, so several boards can share one topic (blank: its Bluetooth name, MuleSkin-XXXX)
+        <input id="pushName" type="text" maxlength="15" placeholder="e.g. Car" style="width:100%;font-family:inherit" spellcheck="false" autocomplete="off"></label>
       <label>Server <input id="pushServer" type="text" value="ntfy.sh" style="width:100%;font-family:inherit" spellcheck="false"></label>
       <label>Access token (only for a server that needs one) <input id="pushToken" type="text" style="width:100%;font-family:inherit" spellcheck="false" autocomplete="off"></label>
       <button id="pushSend" class="identify-btn">[ SEND TO BOARD ]</button>
@@ -1155,6 +1157,7 @@
   async function sendPushSetup() {
     var topic = document.getElementById('pushTopic').value.trim();
     var token = document.getElementById('pushToken').value.trim();
+    var bname = document.getElementById('pushName').value.trim().replace(/[^A-Za-z0-9 _.'-]/g, '').slice(0, 15);
     if (!/^[A-Za-z0-9_-]{10,64}$/.test(topic)) {
       pushResult.className = 'identify-result err';
       pushResult.textContent = 'The topic needs 10-64 letters, digits, - or _.';
@@ -1183,6 +1186,7 @@
       if (text.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
       if (text.indexOf('[push] url') < 0) throw new Error('no answer. This needs firmware v3.1.6 or later');
       await talk(port, 'PUSH TOKEN ' + (token || '-') + '\n', /\[push\] token/, 4000);
+      await talk(port, 'PUSH NAME ' + (bname || '-') + '\n', /\[push\] name/, 4000);
       await talk(port, 'PUSH ON\n', /\[push\] (on|off)/, 4000);
       pushResult.textContent = 'Sending a test message (the board joins its WiFi for a moment)...';
       text = await talk(port, 'PUSH TEST\n', /\[push\] \d+ of \d+ sent|\[push\] test not queued/, 45000);

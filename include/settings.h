@@ -384,6 +384,12 @@ namespace Settings {
     const char* pushToken();     // "" when none
     void        setPushUrl(const char* url);
     void        setPushToken(const char* token);
+    // The board's name at the front of every push ("Car: FLOCK nearby"), so
+    // several boards can share one topic. Up to 15 characters -- letters,
+    // digits, space, - _ ' . -- anything else is dropped. "" (the default)
+    // means the Bluetooth name, MuleSkin-XXXX (main.cpp pushBoardName()).
+    const char* pushName();
+    void        setPushName(const char* name);
     // PUSH WHAT: 0 WITH YOU only, 1 IMPORTANT (the default: WITH YOU plus the
     // surveillance and attack types -- push_queue.h), 2 ALL.
     uint8_t     pushWhat();
