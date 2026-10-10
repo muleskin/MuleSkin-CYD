@@ -1,0 +1,19 @@
+# ntfy for MuleSkin PUSH ALERTS. See deploy/README.md, "Push alerts (ntfy)".
+base-url: "https://ntfy.oillie.cloud"
+behind-proxy: true
+listen-http: ":80"
+
+# Kept messages, so a phone that was off still gets what it missed.
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "24h"
+
+# Nobody reads or writes without an account or a token: the boards post with
+# a write-only token, the phone app logs in as you.
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"
+
+# iPhones only get instant notifications from a self-hosted server through
+# ntfy.sh's push relay: the server tells ntfy.sh "something arrived" (a hash
+# of the topic, never the message), ntfy.sh wakes the app, and the app then
+# fetches the message from this server.
+upstream-base-url: "https://ntfy.sh"

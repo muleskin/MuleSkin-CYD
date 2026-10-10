@@ -81,6 +81,7 @@ static const SettingsRow ALL_ROWS[] = {
     // Hidden where the board cannot (PhoneAlerts::available()).
     SettingsRow::PHONE_ALERTS,
     SettingsRow::PHONE_CODE,
+    SettingsRow::PUSH_ALERTS,
     SettingsRow::DETECTION_FILTER,
     SettingsRow::IGNORED_DEVICES,
     // APPEARANCE opens the display page -- see APPEARANCE_ROWS. It sat at the
@@ -238,6 +239,7 @@ static RowGroupId groupFor(SettingsRow r) {
 #endif
         case SettingsRow::PHONE_ALERTS:
         case SettingsRow::PHONE_CODE:
+        case SettingsRow::PUSH_ALERTS:
         case SettingsRow::DETECTION_FILTER:
         case SettingsRow::IGNORED_DEVICES:
             return RowGroupId::BEHAVIOR;
@@ -922,6 +924,11 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             label = "PHONE ALERTS";
             value = !Settings::phoneAlerts() ? "OFF" : PhoneAlerts::listening() ? "CONNECTED"
                   : PhoneAlerts::connected() ? "CODE?" : "WAITING";
+            break;
+        case SettingsRow::PUSH_ALERTS:
+            // NOT SET until the flasher page (or PUSH URL) gives it a topic.
+            label = "PUSH ALERTS";
+            value = !Settings::pushUrl()[0] ? "NOT SET" : Settings::pushOn() ? "ON" : "OFF";
             break;
         case SettingsRow::PHONE_CODE:
             // The digits themselves: they are what the phone asks for, and

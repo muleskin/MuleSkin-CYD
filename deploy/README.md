@@ -10,6 +10,7 @@ one changes there, update it here too.
 |---|---|
 | `traefik/docker-compose.yml` | `/docker/traefik-a5as/docker-compose.yml` (its `.env` holds `ACME_EMAIL`, see `traefik/.env.example`) |
 | `muleskin-flasher/docker-compose.yml` | `/docker/muleskin-flasher/docker-compose.yml` |
+| `ntfy/docker-compose.yml`, `ntfy/server.yml` | `/docker/muleskin-ntfy/` -- optional, see [Push alerts (ntfy)](#push-alerts-ntfy) |
 
 The flasher image is built from a clone of this repo at `/root/MuleSkin-CYD`
 (`web-flasher/Dockerfile`), and the firmware it serves is that clone's
@@ -160,4 +161,44 @@ redirected), and the release list. A board then logs this at boot:
 ```
 [ota] boot check: site has v3.1.2, running v3.1.1
 [ota] newer release known: 3.1.2
+```
+
+## Push alerts (ntfy)
+
+PUSH ALERTS works with the public **ntfy.sh** and nothing here at all: the
+flasher page makes a long random topic, the phone's ntfy app subscribes to it,
+and the board posts to `http://ntfy.sh/<topic>`. The topic is the only
+secret, and the alerts cross the internet in plain HTTP on the way.
+
+Running your own ntfy instead keeps the alerts on this server and puts them
+behind accounts. One-time setup:
+
+1. DNS: an A record for `ntfy.oillie.cloud` pointing at this server.
+2. Copy `deploy/ntfy/` to `/docker/muleskin-ntfy/`, then:
+   ```bash
+   cd /docker/muleskin-ntfy && sudo docker compose up -d
+   ```
+   Traefik picks it up from the labels: HTTPS for the phone, and plain HTTP
+   on port 80 only for a POST to a `muleskin-...` topic -- the boards.
+3. Accounts (each `user add` asks for a password, which you type):
+   ```bash
+   sudo docker exec -it muleskin-ntfy ntfy user add --role=admin <you>
+   sudo docker exec -it muleskin-ntfy ntfy user add muleskin-board
+   sudo docker exec muleskin-ntfy ntfy access muleskin-board 'muleskin-*' write-only
+   sudo docker exec muleskin-ntfy ntfy token add muleskin-board
+   ```
+   The last one prints a token (`tk_...`): the board's.
+4. Phone: in the ntfy app, add the server `https://ntfy.oillie.cloud`, log in
+   as `<you>`, and subscribe to your `muleskin-...` topic.
+5. Flasher page, SET UP PUSH ALERTS: server `ntfy.oillie.cloud`, the same
+   topic, and the token.
+
+`server.yml` sets `upstream-base-url: https://ntfy.sh`: that is how an iPhone
+gets instant notifications from a self-hosted server. ntfy.sh is told only a
+hash of the topic, never the message; the app fetches the message from here.
+
+Check it from anywhere (the board's own route, plain HTTP, with the token):
+
+```bash
+curl -i -X POST http://ntfy.oillie.cloud/muleskin-yourtopic -H "Authorization: Bearer tk_..." -d "test"
 ```

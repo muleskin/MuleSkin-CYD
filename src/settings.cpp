@@ -165,6 +165,9 @@ static bool    s_labChannel   = false;
 static uint8_t s_autoUpdate   = 0;     // 0 OFF, 1 AFTER 3 DAYS, 2 EARLY
 static bool    s_phoneAlerts  = false;
 static uint16_t s_phoneCode   = 0;
+static bool    s_pushOn       = false;
+static char    s_pushUrl[100] = "";
+static char    s_pushTok[48]  = "";
 static uint8_t s_timeZone     = 10;   // UTC in Clock's table
 static bool    s_tzChosen     = false;
 static const char* const LIGHT_IDLE_NAMES[]  = { "OFF", "BREATHE", "SOLID" };
@@ -506,6 +509,9 @@ void load() {
     if (s_autoUpdate > 2) s_autoUpdate = 0;
     s_phoneAlerts  = s_prefs.getBool("phoneAl", false);
     s_phoneCode    = (uint16_t)s_prefs.getUInt("phCode", 0);
+    s_pushOn       = s_prefs.getBool("pushOn", false);
+    s_prefs.getString("pushUrl", s_pushUrl, sizeof s_pushUrl);
+    s_prefs.getString("pushTok", s_pushTok, sizeof s_pushTok);
     if (s_nightMode >= NightMode::PRESET_N) s_nightMode = 0;
     s_timeZone     = s_prefs.getUChar("tz", 10);
     s_tzChosen     = s_prefs.getBool("tzSet", false);
@@ -699,6 +705,20 @@ bool phoneAlerts()          { return s_phoneAlerts; }
 void togglePhoneAlerts()    { s_phoneAlerts = !s_phoneAlerts; s_prefs.putBool("phoneAl", s_phoneAlerts); }
 uint16_t phoneCode()        { return s_phoneCode; }
 void setPhoneCode(uint16_t c) { s_phoneCode = c; s_prefs.putUInt("phCode", c); }
+bool        pushOn()        { return s_pushOn && s_pushUrl[0]; }
+void        togglePush()    { s_pushOn = !s_pushOn && s_pushUrl[0]; s_prefs.putBool("pushOn", s_pushOn); }
+const char* pushUrl()       { return s_pushUrl; }
+const char* pushToken()     { return s_pushTok; }
+// Stored as given, if it fits; "-" or "" clears. The NVS shim and the real
+// store both refuse an empty string, so a cleared value is removed instead.
+static void setText(const char* key, char* dst, size_t cap, const char* v) {
+    if (!v || !v[0] || (v[0] == '-' && !v[1])) { dst[0] = '\0'; s_prefs.remove(key); return; }
+    if (strlen(v) >= cap) return;
+    strcpy(dst, v);
+    s_prefs.putString(key, dst);
+}
+void setPushUrl(const char* url)     { setText("pushUrl", s_pushUrl, sizeof s_pushUrl, url); if (!s_pushUrl[0] && s_pushOn) togglePush(); }
+void setPushToken(const char* token) { setText("pushTok", s_pushTok, sizeof s_pushTok, token); }
 void toggleLabChannel()     { s_labChannel = !s_labChannel; s_prefs.putBool("lab", s_labChannel); }
 void cycleNightMode()       { s_nightMode = (uint8_t)((s_nightMode + 1) % NightMode::PRESET_N); s_prefs.putUChar("night", s_nightMode); }
 uint8_t     timeZone()      { return s_timeZone; }

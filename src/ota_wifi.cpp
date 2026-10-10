@@ -512,6 +512,7 @@ void run(void*) {
 int8_t bestSavedInScan();   // below, with the rest of the list
 
 bool begin() {
+    if (pushBusy()) return false;       // a PUSH join holds the radio
     if (s_state != State::OFF) return true;
     if (Security::locked() || !OtaCore::available()) return false;
     // A cancelled attempt's task can still be unwinding an HTTP request it is
@@ -1002,11 +1003,11 @@ volatile TimeSync s_ts     = TimeSync::IDLE;
 TaskHandle_t      s_tsTask = nullptr;
 char              s_tsSsid[33] = "";
 
-void tsRun(void*) {
-    const uint32_t t0 = millis();
-    // Which network: the boot check's rule -- with one saved, that one; with
-    // several, a quick passive scan, the one marked USE if it is in range,
-    // else the strongest of the rest.
+// The best saved network in range, joined: the boot check's rule -- with one
+// saved, that one; with several, a quick passive scan, the one marked USE if
+// it is in range, else the strongest of the rest. Its name into `ssid`; the
+// pick's SavedResult recorded either way. True once connected.
+bool joinBest(char* ssid, size_t cap, const char* tag) {
     uint8_t pick = s_use;
     if (s_n > 1) {
         const int found = WiFi.scanNetworks(false, false, true, 130);
@@ -1020,12 +1021,12 @@ void tsRun(void*) {
         WiFi.scanDelete();
         if (best >= 0) pick = (uint8_t)best;
     }
-    strncpy(s_tsSsid, s_list[pick].ssid, sizeof s_tsSsid - 1);
-    s_tsSsid[sizeof s_tsSsid - 1] = '\0';
+    strncpy(ssid, s_list[pick].ssid, cap - 1);
+    ssid[cap - 1] = '\0';
     char pass[65] = "";
     passAt(pick, pass, sizeof pass);
-    Serial.printf("[time] joining %s\n", s_tsSsid);
-    WiFi.begin(s_tsSsid, pass[0] ? pass : nullptr);
+    Serial.printf("[%s] joining %s\n", tag, ssid);
+    WiFi.begin(ssid, pass[0] ? pass : nullptr);
     memset(pass, 0, sizeof pass);
     const uint32_t tj = millis();
     wl_status_t st = WiFi.status();
@@ -1036,9 +1037,17 @@ void tsRun(void*) {
     }
     if (st != WL_CONNECTED) {
         setResult((int8_t)pick, st == WL_NO_SSID_AVAIL ? SavedResult::NOT_FOUND : SavedResult::BAD_PASSWORD);
+        return false;
+    }
+    setResult((int8_t)pick, SavedResult::JOINED);
+    return true;
+}
+
+void tsRun(void*) {
+    const uint32_t t0 = millis();
+    if (!joinBest(s_tsSsid, sizeof s_tsSsid, "time")) {
         s_ts = TimeSync::NO_JOIN;
     } else {
-        setResult((int8_t)pick, SavedResult::JOINED);
         s_ts = TimeSync::ASKING;
         Clock::syncStart();
         s_ts = Clock::syncWait(6000) ? TimeSync::DONE : TimeSync::NO_ANSWER;
@@ -1074,8 +1083,79 @@ void tsRun(void*) {
 }
 }  // namespace
 
+// ---- PUSH ALERTS ---------------------------------------------------------------
+namespace {
+volatile PushResult s_push     = PushResult::NONE;
+TaskHandle_t        s_psTask   = nullptr;
+PushMsg*            s_psMsgs   = nullptr;   // the batch, on the heap only while it is out
+uint8_t             s_psN      = 0;
+volatile uint8_t    s_psSent   = 0;
+
+void psRun(void*) {
+    const uint32_t t0 = millis();
+    char ssid[33];
+    if (!joinBest(ssid, sizeof ssid, "push")) {
+        s_push = PushResult::NO_JOIN;
+    } else {
+        // A shorter timeout than a download's: a server that does not answer
+        // in five seconds is not going to, and detection is blind meanwhile.
+        for (uint8_t i = 0; i < s_psN; i++) {
+            HTTPClient http;
+            if (!http.begin(*client(), Settings::pushUrl())) break;
+            http.setTimeout(5000);
+            http.addHeader("Title", s_psMsgs[i].title);
+            char pr[4];
+            snprintf(pr, sizeof pr, "%u", (unsigned)s_psMsgs[i].prio);
+            http.addHeader("Priority", pr);
+            if (s_psMsgs[i].tags[0]) http.addHeader("Tags", s_psMsgs[i].tags);
+            if (Settings::pushToken()[0]) http.addHeader("Authorization", String("Bearer ") + Settings::pushToken());
+            const int code = http.POST((uint8_t*)s_psMsgs[i].body, strlen(s_psMsgs[i].body));
+            http.end();
+            if (code < 200 || code >= 300) {
+                Serial.printf("[push] server said %d\n", code);
+                break;
+            }
+            s_psSent++;
+        }
+        s_push = s_psSent == s_psN ? PushResult::SENT : PushResult::NO_ANSWER;
+    }
+    // Off the network, but the station mode stays up: detection sniffs on it.
+    WiFi.disconnect(false, false);
+    Serial.printf("[push] %u of %u sent in %lu ms\n", (unsigned)s_psSent, (unsigned)s_psN,
+                  (unsigned long)(millis() - t0));
+    free(s_psMsgs);
+    s_psMsgs = nullptr;
+    s_psTask = nullptr;
+    vTaskDelete(nullptr);
+}
+}  // namespace
+
+bool pushStart(const PushMsg* msgs, uint8_t n) {
+    if (!n || s_psTask || s_tsTask || s_task || s_state != State::OFF) return false;
+    readSaved();
+    if (!s_n) { s_push = PushResult::NO_SAVED; return false; }
+    s_psMsgs = (PushMsg*)malloc(sizeof(PushMsg) * n);
+    if (!s_psMsgs) { s_push = PushResult::NO_MEMORY; return false; }
+    memcpy(s_psMsgs, msgs, sizeof(PushMsg) * n);
+    s_psN    = n;
+    s_psSent = 0;
+    s_push   = PushResult::NONE;
+    if (xTaskCreatePinnedToCore(psRun, "push", 8192, nullptr, 1, &s_psTask, 1) != pdPASS) {
+        free(s_psMsgs);
+        s_psMsgs = nullptr;
+        s_psTask = nullptr;
+        s_push   = PushResult::NO_MEMORY;
+        return false;
+    }
+    return true;
+}
+bool       pushBusy()      { return s_psTask != nullptr; }
+PushResult pushResult()    { return s_push; }
+uint8_t    pushSentCount() { return s_psSent; }
+
+
 bool timeSyncStart() {
-    if (s_tsTask || s_task || s_state != State::OFF) return false;
+    if (s_tsTask || s_psTask || s_task || s_state != State::OFF) return false;
     readSaved();
     if (!s_n) { s_ts = TimeSync::NO_SAVED; return false; }
     s_ts = TimeSync::JOINING;

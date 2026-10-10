@@ -1151,6 +1151,7 @@ static const uint16_t BUZZ_CHIRP_MS = 80;
 #if defined(TWATCH_S3)
 static bool twatchStill();
 #endif
+static void queuePushAlert(const Detection& d, uint16_t followMins);   // PUSH ALERTS, below
 static bool alertMayInterrupt(const Detection& d) {
     const bool exempt = engine.isWatched(d.mac, true) || engine.isWatched(d.mac, false);
 #if defined(TWATCH_S3)
@@ -1216,6 +1217,7 @@ static bool alertMayInterrupt(const Detection& d) {
     // automatic alert, none of the manual ones. Nothing if no phone is
     // listening; the same device again within a minute is not resent.
     PhoneAlerts::alert(d, 0);
+    queuePushAlert(d, 0);
     return true;
 }
 
@@ -1579,6 +1581,7 @@ volatile bool g_consoleInvert = false;
 volatile bool g_consoleAdc = false;     // ADC: the spare analog inputs, for finding a battery sense line
 volatile bool g_consoleXyzzy = false;   // XYZZY: the TERMINAL background types the magic word now
 volatile int8_t g_consolePhone = -1;      // PHONE ON / OFF: the PHONE ALERTS row, from the console
+volatile int8_t g_consolePush = -1;       // PUSH OFF / ON / TEST: the PUSH ALERTS row, and a test message
 volatile bool g_consoleSelfTest = false;  // SELFTEST: check every part, one line each (runSelfTest)
 volatile bool g_consoleLegend = false;  // LEGEND: wear the Legend look (and its aura) until the next boot, or take it off
 volatile bool g_consoleOutfitSet = false;  // OUTFIT n: wear costume n until the next boot, for timing it; -1 takes it off
@@ -1798,6 +1801,121 @@ static void serviceTimeSyncRadio() {
     }
 }
 
+// PUSH ALERTS (Settings, off by default): each alert to an ntfy server, so it
+// lands on the phone as a real push notification -- lock screen, no page left
+// open. The board borrows the radio for a short join of whichever saved
+// network is in range (home, work, or the phone's own hotspot), posts, and
+// lets go: a couple of seconds of blind scanning per batch.
+//
+// As they happen, but not one join per alert: the first alert waits three
+// seconds for any that come with it, and joins are at least twenty seconds
+// apart -- except for a WITH YOU, which goes at once. With no saved network
+// in range the batch waits (two minutes between tries) and keeps the eight
+// newest; an alert more than half an hour old is dropped rather than sent as
+// news. Each carries the time it happened, so a late one says so.
+// On the heap, made at the first alert to queue: a board with PUSH ALERTS off
+// (the default) never pays the 1.3 KB.
+static OtaWifi::PushMsg* s_pq   = nullptr;
+static uint32_t*         s_pqAt = nullptr; // millis() each was queued
+static uint8_t          s_pqN = 0;
+static bool             s_pqUrgent = false;
+static bool             s_pushRadio = false;
+static uint8_t          s_pushOut = 0;     // how many of the queue the join took
+static uint32_t         s_pushLast = 0, s_pushRetryAt = 0;
+
+static void queuePush(const char* title, const char* body, uint8_t prio, const char* tags, bool urgent) {
+    if (!Settings::pushOn()) return;
+    if (!s_pq) {
+        s_pq   = (OtaWifi::PushMsg*)calloc(8, sizeof(OtaWifi::PushMsg));
+        s_pqAt = (uint32_t*)calloc(8, sizeof(uint32_t));
+        if (!s_pq || !s_pqAt) { free(s_pq); free(s_pqAt); s_pq = nullptr; s_pqAt = nullptr; return; }
+    }
+    if (s_pqN == 8) {                      // full: the oldest goes
+        memmove(&s_pq[0], &s_pq[1], sizeof s_pq[0] * 7);
+        memmove(&s_pqAt[0], &s_pqAt[1], sizeof s_pqAt[0] * 7);
+        s_pqN = 7;
+        if (s_pushOut) s_pushOut--;
+    }
+    OtaWifi::PushMsg& m = s_pq[s_pqN];
+    snprintf(m.title, sizeof m.title, "%s", title);
+    char when[12] = "";
+    if (Clock::isSet()) {
+        bool pm = false;
+        Clock::formatTime(when, sizeof when, true, &pm);
+        strncat(when, pm ? " PM" : " AM", sizeof when - strlen(when) - 1);
+    }
+    snprintf(m.body, sizeof m.body, "%s%s%s", body, when[0] ? ", " : "", when);
+    m.prio = prio;
+    snprintf(m.tags, sizeof m.tags, "%s", tags);
+    s_pqAt[s_pqN] = millis();
+    s_pqN++;
+    if (urgent) s_pqUrgent = true;
+}
+
+static void queuePushAlert(const Detection& d, uint16_t followMins) {
+    if (!Settings::pushOn()) return;
+    char title[40], body[100];
+    const char* vendor = vendorText(d);
+    if (followMins) {
+        snprintf(title, sizeof title, "WITH YOU: %s", detectionTypeName(d.type));
+        snprintf(body, sizeof body, "%s%s%swith you %u min, %d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
+                 vendor, vendor[0] ? " " : "", vendor[0] ? "-- " : "", (unsigned)followMins, (int)d.rssi,
+                 d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
+        queuePush(title, body, 5, "rotating_light", true);
+    } else {
+        snprintf(title, sizeof title, "%s nearby", detectionTypeName(d.type));
+        snprintf(body, sizeof body, "%s%s%d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
+                 vendor, vendor[0] ? ", " : "", (int)d.rssi,
+                 d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
+        queuePush(title, body, 4, "warning", false);
+    }
+}
+
+static void servicePush(uint32_t now) {
+    // A join finished: the radio back to detection, the sent ones off the queue.
+    if (s_pushRadio && !OtaWifi::pushBusy()) {
+        engine.stopUpdateRadio();
+        s_pushRadio = false;
+        const uint8_t sent = OtaWifi::pushSentCount() < s_pushOut ? OtaWifi::pushSentCount() : s_pushOut;
+        if (sent) {
+            memmove(&s_pq[0], &s_pq[sent], sizeof s_pq[0] * (s_pqN - sent));
+            memmove(&s_pqAt[0], &s_pqAt[sent], sizeof s_pqAt[0] * (s_pqN - sent));
+            s_pqN = (uint8_t)(s_pqN - sent);
+        }
+        if (OtaWifi::pushResult() != OtaWifi::PushResult::SENT) s_pushRetryAt = now + 120000u;
+        if (!s_pqN) s_pqUrgent = false;
+        s_pushOut = 0;
+    }
+    if (!s_pqN || s_pushRadio) return;
+    // Stale ones go: half an hour on, an alert is history, not news.
+    while (s_pqN && now - s_pqAt[0] > 30u * 60u * 1000u) {
+        memmove(&s_pq[0], &s_pq[1], sizeof s_pq[0] * (s_pqN - 1));
+        memmove(&s_pqAt[0], &s_pqAt[1], sizeof s_pqAt[0] * (s_pqN - 1));
+        s_pqN--;
+    }
+    if (!s_pqN) { s_pqUrgent = false; return; }
+    if (!Settings::pushOn()) { s_pqN = 0; s_pqUrgent = false; return; }
+    if (s_pushRetryAt && (int32_t)(now - s_pushRetryAt) < 0) return;
+    if (!s_pqUrgent) {
+        if (now - s_pqAt[0] < 3000) return;                          // gather a burst
+        if (s_pushLast && now - s_pushLast < 20000) return;          // not join after join
+    }
+    // Only with the radio otherwise idle: never under an update, a time join,
+    // a raw WiFi scan or a rest. They come back round in a moment.
+    if (!engine.radioFree() || OtaWifi::timeSyncBusy() || OtaWifi::state() != OtaWifi::State::OFF) return;
+    engine.startUpdateRadio();
+    if (!OtaWifi::pushStart(s_pq, s_pqN)) {
+        engine.stopUpdateRadio();
+        s_pushRetryAt = now + 120000u;
+        return;
+    }
+    s_pushRadio = true;
+    s_pushOut   = s_pqN;
+    s_pushLast  = now;
+    s_pushRetryAt = 0;
+    Serial.printf("[push] sending %u%s\n", (unsigned)s_pqN, s_pqUrgent ? " (at once)" : "");
+}
+
 // AUTO TIME: WIFI TIME without the screen, from the main screen, once a day
 // -- or once, a couple of minutes after a boot whose own check didn't set
 // the clock -- and an hour after a try that didn't answer. The pill in the
@@ -1879,6 +1997,7 @@ static void serviceFollowing(uint32_t now) {
         enterAlert(*d);
         uiAlertSetFollow(mins);
         PhoneAlerts::alert(*d, mins ? mins : 1);
+        queuePushAlert(*d, mins ? mins : 1);
 #if SQW_HAS_BUZZER
         // The one alert that is about YOU: it chirps whatever else is true,
         // with BUZZER on -- new device or not, night or not.
@@ -4506,6 +4625,7 @@ void loop() {
     serviceLive(now);
     serviceAutoUpdate(now);
     PhoneAlerts::tick(now);
+    servicePush(now);
     if (state == AppState::CLEAR) {
         const char* sub = nullptr;
         bool good = false;
@@ -4615,6 +4735,21 @@ void loop() {
     if (g_consoleSelfTest) {
         g_consoleSelfTest = false;
         runSelfTest();
+    }
+    if (g_consolePush >= 0) {
+        // PUSH OFF / ON / TEST, for the flasher page and the bench. URL and
+        // TOKEN are set by clock.cpp directly; this is the part that needs
+        // the queue.
+        const int8_t c = g_consolePush;
+        g_consolePush = -1;
+        if (c < 2 && Settings::pushOn() != (c == 1)) Settings::togglePush();
+        if (c == 2) {
+            if (Settings::pushOn()) queuePush("MuleSkin test", "Push alerts reach this phone", 3, "white_check_mark", true);
+            Serial.printf("[push] test %s\n", Settings::pushOn() ? "queued" : "not queued: PUSH ALERTS is off or has no URL");
+        } else {
+            Serial.printf("[push] %s: %s\n", Settings::pushOn() ? "on" : "off",
+                          Settings::pushUrl()[0] ? Settings::pushUrl() : "no URL set");
+        }
     }
     if (g_consolePhone == 3) {
         // PHONE CODE: the settings row's toggle, and the code it picked.
@@ -5916,6 +6051,14 @@ void loop() {
                             Settings::togglePhoneAlerts();
                             PhoneAlerts::setEnabled(Settings::phoneAlerts());
                             if (Settings::phoneAlerts()) phoneAlertsStart();
+                            break;
+                        case SettingsRow::PUSH_ALERTS:
+                            // Set up from the flasher page, where a URL and
+                            // a token are typed on a real keyboard.
+                            if (!Settings::pushUrl()[0])
+                                Theme::showToast("NOT SET UP YET", "flasher.oillie.cloud: PUSH ALERTS", Theme::AMBER);
+                            else
+                                Settings::togglePush();
                             break;
                         case SettingsRow::PHONE_CODE:
                             // A fresh code every time it is switched on: one

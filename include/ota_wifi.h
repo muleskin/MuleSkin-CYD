@@ -118,6 +118,20 @@ bool        timeSyncBusy();
 TimeSync    timeSyncState();
 const char* timeSyncNetwork();   // empty until it has picked one
 
+// ---- PUSH ALERTS: alerts to an ntfy server -------------------------------
+// The same short join as WIFI TIME (the best saved network in range), then
+// one HTTP POST per message to Settings::pushUrl() -- ntfy's own format: the
+// body is the text, Title and Priority are headers, and the access token, if
+// any, goes as a Bearer header. Plain HTTP, like the update check: TLS needs
+// a heap block this board does not have. The caller pauses detection first
+// (DetectionEngine::startUpdateRadio) and resumes it once pushBusy() is false.
+struct PushMsg { char title[40]; char body[100]; uint8_t prio; char tags[24]; };
+enum class PushResult : uint8_t { NONE, SENT, NO_SAVED, NO_JOIN, NO_ANSWER, NO_MEMORY };
+bool        pushStart(const PushMsg* msgs, uint8_t n);   // copies them; false if the radio is taken
+bool        pushBusy();
+PushResult  pushResult();
+uint8_t     pushSentCount();    // how many of the last batch the server took
+
 const char* network();          // the one being joined or used
 const char* latestVersion();    // meaningful from READY on
 bool        upToDate();

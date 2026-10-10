@@ -176,6 +176,9 @@ public:
     // True while startUpdateRadio() has the radio (a WiFi join for an update
     // or the clock): nothing is being scanned until stopUpdateRadio().
     bool     updateRadioOn() const;
+    // Nothing else owns the radio: no update or time join, no raw WiFi scan,
+    // no rest. What a PUSH join waits for before it borrows it.
+    bool     radioFree() const;
 
     // ---- Watched target ("stalker tracker") --------------------------
     // Session-only (not persisted to NVS -- resets on reboot). One

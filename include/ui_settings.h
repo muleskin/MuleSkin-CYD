@@ -68,6 +68,7 @@ enum class SettingsRow : uint8_t {
     AUTO_UPDATE,     // on the SYSTEM page: AUTO UPDATE OFF / AT NIGHT
     PHONE_ALERTS,    // beside BUZZER: alerts to a phone over Bluetooth (phone_alerts.h)
     PHONE_CODE,      // ...and the four digits a phone must send first (OFF / 4821)
+    PUSH_ALERTS,     // ...or alerts as push notifications through an ntfy server, over WiFi
     BACK,
     COUNT,
     NONE = 255

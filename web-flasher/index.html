@@ -542,6 +542,18 @@
       <div class="identify-result" id="liveResult"></div>
     </div>
     <p class="browser-note"><strong>Live view</strong> shows what the board is detecting right now, on this computer, while it stays plugged in -- each device's type, name, signal and how long ago it was heard. Press it again to stop.</p>
+    <div class="identify-row">
+      <button id="pushBtn" class="identify-btn">[ SET UP PUSH ALERTS ]</button>
+      <div class="identify-result" id="pushResult"></div>
+    </div>
+    <div class="browser-note" id="pushForm" style="display:none">
+      <label>Topic -- the private name your phone subscribes to. Keep it long; anyone who knows it can read it.
+        <input id="pushTopic" type="text" style="width:100%;font-family:inherit" spellcheck="false" autocomplete="off"></label>
+      <label>Server <input id="pushServer" type="text" value="ntfy.sh" style="width:100%;font-family:inherit" spellcheck="false"></label>
+      <label>Access token (only for a server that needs one) <input id="pushToken" type="text" style="width:100%;font-family:inherit" spellcheck="false" autocomplete="off"></label>
+      <button id="pushSend" class="identify-btn">[ SEND TO BOARD ]</button>
+    </div>
+    <p class="browser-note"><strong>Push alerts</strong> send every alert to your phone as a real notification, lock screen and all, through the free <strong>ntfy</strong> app (iPhone or Android). The board joins one of its saved WiFi networks for a couple of seconds to send each one -- home, work, or your phone's hotspot -- so save those in WIFI NETWORKS first. Then install ntfy on the phone, subscribe to the topic below, and send it to the board over the cable. It sends a test message straight away.</p>
     <p class="browser-note"><strong>Away from the computer?</strong> <a href="phone/">Phone alerts</a> puts a 2.8" CYD's alerts on your phone over Bluetooth -- no WiFi, no app. Switch on SETTINGS &gt; PHONE ALERTS on the board, then open that page on the phone.</p>
     <p class="browser-note">After flashing, <strong>Set Time &amp; Zone</strong> tells the board this computer's clock and time zone over the same cable. The zone is kept for good; the clock lasts until the board is unplugged, and a saved WiFi network puts it back at every boot. A T-Watch has its clock set for it after installing, and keeps the time from then on, even through a flat battery.</p>
   </div>
@@ -1098,6 +1110,103 @@
     if (!quiet) liveResult.insertAdjacentHTML('afterbegin', '<div>STOPPED.</div>');
   }
   window.addEventListener('beforeunload', function () { if (live) stopLive(true); });
+
+  // ---- Push alerts -------------------------------------------------------------
+  // Sets the board up to send its alerts to an ntfy server: PUSH URL, PUSH
+  // TOKEN, PUSH ON and PUSH TEST over the cable. The topic is the private part
+  // (anyone who knows it can read it), so it is made here, long and random,
+  // and kept in this browser so the same one is offered next time. The board
+  // posts over plain HTTP -- TLS needs more memory than it has -- so a server
+  // typed as https:// is sent to it as http://; ntfy.sh takes both.
+  var pushBtn = document.getElementById('pushBtn');
+  var pushResult = document.getElementById('pushResult');
+  var pushForm = document.getElementById('pushForm');
+  function pushTopicNew() {
+    var a = new Uint8Array(12), c = 'abcdefghijkmnpqrstuvwxyz23456789', t = 'muleskin-';
+    crypto.getRandomValues(a);
+    for (var i = 0; i < a.length; i++) t += c[a[i] % c.length];
+    return t;
+  }
+  if (pushBtn) {
+    var savedTopic = '';
+    try { savedTopic = localStorage.getItem('muleskin-push-topic') || ''; } catch (e) {}
+    document.getElementById('pushTopic').value = savedTopic || pushTopicNew();
+    if (!('serial' in navigator)) {
+      pushBtn.disabled = true;
+      pushBtn.textContent = '[ SET UP PUSH ALERTS ] (needs a desktop browser)';
+    } else {
+      pushBtn.addEventListener('click', function () {
+        pushForm.style.display = pushForm.style.display === 'none' ? 'block' : 'none';
+        showPushHelp();
+      });
+      document.getElementById('pushSend').addEventListener('click', sendPushSetup);
+      document.getElementById('pushTopic').addEventListener('input', showPushHelp);
+      document.getElementById('pushServer').addEventListener('input', showPushHelp);
+    }
+  }
+  function pushHost() {
+    return document.getElementById('pushServer').value.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '') || 'ntfy.sh';
+  }
+  function showPushHelp() {
+    var topic = document.getElementById('pushTopic').value.trim();
+    pushResult.className = 'identify-result';
+    pushResult.textContent = 'On the phone: install ntfy, tap +, enter the topic ' + topic +
+      (pushHost() === 'ntfy.sh' ? '' : ' and the server https://' + pushHost()) + ', then press SEND TO BOARD here.';
+  }
+  async function sendPushSetup() {
+    var topic = document.getElementById('pushTopic').value.trim();
+    var token = document.getElementById('pushToken').value.trim();
+    if (!/^[A-Za-z0-9_-]{10,64}$/.test(topic)) {
+      pushResult.className = 'identify-result err';
+      pushResult.textContent = 'The topic needs 10-64 letters, digits, - or _.';
+      return;
+    }
+    var url = 'http://' + pushHost() + '/' + topic;
+    if (url.length > 99 || token.length > 47 || /\s/.test(token)) {
+      pushResult.className = 'identify-result err';
+      pushResult.textContent = 'That server, topic or token is too long for the board.';
+      return;
+    }
+    try { localStorage.setItem('muleskin-push-topic', topic); } catch (e) {}
+    var port, btn = document.getElementById('pushSend');
+    btn.disabled = true;
+    pushResult.className = 'identify-result';
+    try {
+      pushResult.textContent = 'Pick the board’s port...';
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: isNativeUsb(port) ? 115200 : 2000000, bufferSize: 65536 });
+      try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (e) {}
+      for (var sec = 10; sec > 0; sec--) {
+        pushResult.textContent = 'Letting the board boot... ' + sec;
+        await new Promise(function (r) { setTimeout(r, 1000); });
+      }
+      var text = await talk(port, '\nPUSH URL ' + url + '\n', /\[push\] url|\[security\] locked/, 4000);
+      if (text.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
+      if (text.indexOf('[push] url') < 0) throw new Error('no answer. This needs firmware v3.1.6 or later');
+      await talk(port, 'PUSH TOKEN ' + (token || '-') + '\n', /\[push\] token/, 4000);
+      await talk(port, 'PUSH ON\n', /\[push\] (on|off)/, 4000);
+      pushResult.textContent = 'Sending a test message (the board joins its WiFi for a moment)...';
+      text = await talk(port, 'PUSH TEST\n', /\[push\] \d+ of \d+ sent|\[push\] test not queued/, 45000);
+      await port.close(); port = null;
+      var m = text.match(/\[push\] (\d+) of (\d+) sent/);
+      if (m && m[1] === m[2]) {
+        pushResult.textContent = 'PUSH ALERTS ON. A test message is on its way to the topic ' + topic +
+          ' -- if the phone shows it, you are done. SETTINGS > PUSH ALERTS turns it off and on.';
+      } else if (/test not queued/.test(text)) {
+        throw new Error('the board would not switch it on');
+      } else {
+        pushResult.className = 'identify-result err';
+        pushResult.textContent = 'Set up, but the test did not get through' + (m ? ' (the server said no)' :
+          ' -- is a saved WiFi network in range? Save one in WIFI NETWORKS on the board.') +
+          ' Alerts wait and go at the next chance.';
+      }
+    } catch (err) {
+      pushResult.className = 'identify-result err';
+      pushResult.textContent = 'Couldn’t set it up: ' + (err && err.message ? err.message : 'unknown error');
+      if (port) { try { await port.close(); } catch (e) {} }
+    }
+    btn.disabled = false;
+  }
 
   // ---- Self-test ---------------------------------------------------------------
   // The firmware's SELFTEST console command checks every part it can without a

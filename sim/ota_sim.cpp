@@ -178,6 +178,11 @@ bool timeSyncStart() {
     return true;
 }
 bool        timeSyncBusy()    { return s_ts == TimeSync::JOINING || s_ts == TimeSync::ASKING; }
+// PUSH ALERTS: the emulator has no network; nothing is ever sent.
+bool        pushStart(const PushMsg*, uint8_t) { return false; }
+bool        pushBusy()        { return false; }
+PushResult  pushResult()      { return PushResult::NONE; }
+uint8_t     pushSentCount()   { return 0; }
 TimeSync    timeSyncState()   { return s_ts; }
 const char* timeSyncNetwork() { return s_ts == TimeSync::JOINING ? "" : "MuleSkinNet"; }
 void        forget()    { s_saved = false; s_n = 0; }

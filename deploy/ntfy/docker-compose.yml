@@ -1,0 +1,29 @@
+# OPTIONAL: your own ntfy server for PUSH ALERTS, instead of the public
+# ntfy.sh (which needs no setup at all). On the server it lives at
+# /docker/muleskin-ntfy/docker-compose.yml, with server.yml beside it.
+# See deploy/README.md, "Push alerts (ntfy)".
+services:
+  ntfy:
+    image: binwiederhier/ntfy:v2.11.0
+    container_name: muleskin-ntfy
+    command: serve
+    restart: unless-stopped
+    volumes:
+      - ./server.yml:/etc/ntfy/server.yml:ro
+      - ./data:/var/lib/ntfy
+      - ./cache:/var/cache/ntfy
+    labels:
+      - traefik.enable=true
+      # The phone app and the web page: HTTPS, like everything else.
+      - traefik.http.routers.ntfy.entrypoints=websecure
+      - traefik.http.routers.ntfy.rule=Host(`ntfy.oillie.cloud`)
+      - traefik.http.routers.ntfy.tls.certresolver=letsencrypt
+      - traefik.http.routers.ntfy.service=muleskin-ntfy
+      - traefik.http.services.muleskin-ntfy.loadbalancer.server.port=80
+      # The boards: plain HTTP, because TLS needs more memory than a CYD has
+      # (the same reason the update files are served on port 80). Only a POST
+      # to a muleskin-... topic; everything else on port 80 still redirects.
+      - traefik.http.routers.ntfy-board.entrypoints=web
+      - traefik.http.routers.ntfy-board.rule=Host(`ntfy.oillie.cloud`) && Method(`POST`) && PathRegexp(`^/muleskin-[A-Za-z0-9_-]+$`)
+      - traefik.http.routers.ntfy-board.priority=100
+      - traefik.http.routers.ntfy-board.service=muleskin-ntfy

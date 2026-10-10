@@ -117,6 +117,7 @@ void DetectionEngine::stopUpdateRadio() {}
 // MULESKINSIM_PAUSED=1 renders the main screen as if the radio were on WiFi.
 bool DetectionEngine::radiosResting() const { return false; }
 bool DetectionEngine::updateRadioOn() const { return getenv("MULESKINSIM_PAUSED") != nullptr; }
+bool DetectionEngine::radioFree() const     { return !updateRadioOn(); }
 
 // ---- watch / hunt ----------------------------------------------------
 void DetectionEngine::watchBle(const uint8_t* mac, const char* name) {

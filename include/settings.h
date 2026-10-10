@@ -380,6 +380,18 @@ namespace Settings {
     // must send before it gets alerts. Picked by main.cpp when switched on.
     uint16_t    phoneCode();
     void        setPhoneCode(uint16_t code);
+    // PUSH ALERTS: each alert to an ntfy server over a saved WiFi network
+    // (main.cpp servicePush, ota_wifi.cpp pushStart). Off by default, and
+    // only switchable once a topic URL is set -- from the flasher page or the
+    // console (PUSH URL / PUSH TOKEN), never typed on the board. The token is
+    // optional: ntfy's access token, for a server that does not take
+    // anonymous posts.
+    bool        pushOn();
+    void        togglePush();
+    const char* pushUrl();       // "" when unset
+    const char* pushToken();     // "" when none
+    void        setPushUrl(const char* url);
+    void        setPushToken(const char* token);
 
     // TIME ZONE: an index into Clock's zone table, applied at load and on
     // every change. UTC until somebody picks one; timeZoneChosen() says

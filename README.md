@@ -303,6 +303,30 @@ the alert itself cannot be read off the board without it. To make room, the
 CYD builds no longer offer firmware updates over Bluetooth; USB and WiFi
 updates are unchanged.
 
+### Push alerts, over WiFi
+
+**PUSH ALERTS** (Settings, every board, off by default) sends each alert to
+your phone as a real push notification -- lock screen, phone in your pocket,
+no page left open -- through the free **ntfy** app on iPhone or Android. The
+board joins one of its saved WiFi networks for a couple of seconds to send it
+-- home, work, or your phone's Personal Hotspot (on an iPhone, turn on
+*Maximize Compatibility*: the board needs 2.4 GHz) -- and lets go.
+
+Set it up from the flasher page, **SET UP PUSH ALERTS**: it makes a long
+random topic, you subscribe to it in the ntfy app, and it sends the setup to
+the board over the cable and has it post a test. Alerts go as they happen: a
+WITH YOU at once and loud, the rest a few seconds after the first, so a
+burst is one join rather than ten; joins are at least twenty seconds apart,
+and each costs detection a couple of seconds of blindness. With no saved
+network in range they wait -- the eight newest, for up to half an hour -- and
+go at the next chance, with the time they happened.
+
+It uses the public ntfy.sh unless told otherwise: nothing to install, and
+the topic is the password. For alerts that stay on your own server, behind
+an account, run ntfy there -- [deploy/README.md](deploy/README.md) has the
+setup. Either way the board posts in plain HTTP; TLS needs more memory than
+it has.
+
 ## Updates
 
 ### Knowing there is an update
