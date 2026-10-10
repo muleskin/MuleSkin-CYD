@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (LilyGo T-Watch S3)",
-  "version": "3.1.5",
-  "release_name": "Phone alerts",
-  "whats_new": ["Phone alerts over Bluetooth", "Auto update at night", "44 new camera and ALPR prefixes", "Squad mesh removed: more free memory"],
+  "version": "3.1.6",
+  "release_name": "Push alerts",
+  "whats_new": ["Push alerts to your phone via ntfy", "Phone code, alert map and history", "Bluetooth rules sent over the air", "Auto update: EARLY or after 3 days"],
   "new_install_prompt_erase": true,
   "builds": [
     {
