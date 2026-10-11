@@ -139,6 +139,40 @@ int main() {
     ck("home, WITH YOU trims IMPORTANT", atHome(What::IMPORTANT, 2, true) == What::WITH_YOU);
     ck("never more than it was", atHome(What::WITH_YOU, 1, true) == What::WITH_YOU);
 
+    suite("CHOSEN types, and the rules together");
+    {
+        Rules r;
+        r.what = What::CHOSEN;
+        r.chosen = (1u << (uint8_t)DetectionType::FLOCK) | (1u << (uint8_t)DetectionType::AIRTAG);
+        r.night = false;
+        ck("a chosen Flock goes", wanted(r, DetectionType::FLOCK, false));
+        ck("a chosen AirTag goes", wanted(r, DetectionType::AIRTAG, false));
+        ck("an unchosen Axon does not", !wanted(r, DetectionType::AXON, false));
+        ck("WITH YOU always", wanted(r, DetectionType::RING, true));
+        r.home = true; r.homeMode = 1;
+        ck("home, IMPORTANT: the chosen Flock still", wanted(r, DetectionType::FLOCK, false));
+        ck("home, IMPORTANT: the chosen AirTag not", !wanted(r, DetectionType::AIRTAG, false));
+        r.homeMode = 2;
+        ck("home, WITH YOU: nothing else", !wanted(r, DetectionType::FLOCK, false));
+        r.home = false; r.night = true; r.nightWithYouOnly = true;
+        ck("night, WITH YOU: nothing else", !wanted(r, DetectionType::FLOCK, false));
+        Rules a;
+        a.what = What::IMPORTANT;
+        ck("the old call and the new agree", wanted(a, DetectionType::FLOCK, false) ==
+                                            wanted(What::IMPORTANT, true, false, DetectionType::FLOCK, false));
+    }
+
+    suite("a retry when the server asked for one");
+    {
+        Queue q;
+        q.add(msg("a"), 1000, true);
+        ck("due", q.due(1000));
+        q.sending(1000);
+        q.finished(0, false, 2000, 15u * 60u * 1000u);
+        ck("not at the usual two minutes", !q.due(2000 + RETRY_MS));
+        ck("after fifteen", q.due(2000 + 15u * 60u * 1000u));
+    }
+
     suite("a day's cap");
     {
         DailyCap c;

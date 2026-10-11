@@ -67,6 +67,8 @@ namespace IgnoreList {
     // The same, but over after `ms` as well as at a restart -- SNOOZE 1 DAY
     // from a notification. Snoozing a device already snoozed resets it.
     void snoozeFor(const uint8_t* mac, uint32_t ms);
+    // A snooze over now: Undo on a notification's "snoozed".
+    void unsnooze(const uint8_t* mac);
     bool snoozed(const uint8_t* mac);
     // What every alert gate asks: ignored for good, or snoozed for now.
     bool silenced(const uint8_t* mac);

@@ -56,8 +56,11 @@ On a development machine (or on the server):
 tools/release.sh 3.1.2 --push
 ```
 
-That stamps every `web-flasher/manifest-*.json` with the version, commits,
-tags `v3.1.2` and pushes. Add `--name "Short name"` (19 characters) and up to
+That runs the checks CI runs -- host tests, the flasher pages, the screens
+(`--no-checks` skips them) -- then stamps every `web-flasher/manifest-*.json`
+with the version, commits, tags `v3.1.2` and pushes. Before or after, give a
+plugged-in board the bench round in [tools/bench/README.md](../tools/bench/README.md):
+settings kept, pushes and the Ignore/Snooze buttons, a real WiFi update. Add `--name "Short name"` (19 characters) and up to
 four `--note "What changed"` (39 each, plain ASCII) and boards show them with
 the update notice, in System Properties. Then on the server, one command:
 
@@ -222,6 +225,40 @@ sudo docker exec muleskin-ntfy ntfy access muleskin-board 'muleskin-*-cmd' read-
 The token travels inside the notification (the button's request needs it);
 only accounts that can read the topic ever see it. On the public ntfy.sh
 there is no token and nothing to set up.
+
+### When a board goes quiet
+
+A detector that has died, lost power or lost its WiFi sends nothing -- which
+looks just like a quiet day. `ntfy/quiet-check.py` (Python 3, standard
+library) runs hourly and pushes "<name>: quiet" when a board has pushed
+nothing in 26 hours, and "<name>: back" when it is heard again. It relies on
+each board's DAILY SUMMARY (on by default): with it, every board pushes at
+least once a day. Once:
+
+```bash
+sudo docker exec -it muleskin-ntfy ntfy token add <you>    # prints tk_...
+sudo install -m 600 /dev/null /root/.config/muleskin/quiet-check.env
+sudo nano /root/.config/muleskin/quiet-check.env
+```
+
+with
+
+```
+NTFY_URL=https://ntfy.oillie.cloud
+TOPIC=muleskin-...
+TOKEN=tk_...          # yours: it reads the topic and posts to it
+BOARDS=MuleSkin-565E  # the names the boards push under, comma-separated
+HOURS=26
+```
+
+then `sudo crontab -e` and add
+
+```
+0 * * * * /usr/bin/python3 /root/MuleSkin-CYD/deploy/ntfy/quiet-check.py
+```
+
+Run it once by hand first (`sudo python3 /root/MuleSkin-CYD/deploy/ntfy/quiet-check.py`):
+silence means every board was heard.
 
 ### iPhone notifications without ntfy.sh: Web Push
 

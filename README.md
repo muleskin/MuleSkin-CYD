@@ -121,6 +121,8 @@ The same page talks to a plugged-in board over the cable:
   erases the board.
 - **Ignored devices** lists the devices the board never alerts for, and
   removes or adds one.
+- **Push options** picks exactly which types PUSH ALERTS sends, and quiet
+  hours for PUSH AT NIGHT of their own.
 - **Download log** saves every detection the board has kept as a
   spreadsheet; **Crash report** reads what it kept about its last crash.
 - **Self-test** checks the board's parts -- memory, touch, both radios, the
@@ -296,9 +298,11 @@ rows tune it:
 
 - **PUSH WHAT** -- WITH YOU only; **IMPORTANT** (the default: WITH YOU plus
   Flock, Axon, plate readers, Raven, cameras, camera glasses, skimmers and
-  WiFi attacks -- not every passing AirTag); or ALL.
+  WiFi attacks -- not every passing AirTag); ALL; or **CHOSEN**, the types
+  ticked in the web flasher's PUSH OPTIONS.
 - **PUSH AT NIGHT** -- through NIGHT DIM's hours (11 PM-5 AM without them),
-  WITH YOU only (the default), or as set.
+  or quiet hours of its own set in PUSH OPTIONS: WITH YOU only (the
+  default), or as set.
 - **DAILY SUMMARY** -- one quiet push at 8 PM: the day's count, its top three
   types, and the first and last sighting.
 
@@ -326,8 +330,14 @@ evening summary counts them. WITH YOU always goes, either way.
   the next time the board joins WiFi -- for your own AirTag, your own
   doorbell; **Snooze 1 day** quiets it for a day (or until a restart) -- for
   a neighbour's camera. Either way the board answers with a quiet "ignored"
-  or "snoozed" push once it has done it. On your own ntfy server it needs a
-  one-time step, [deploy/README.md](deploy/README.md).
+  or "snoozed" push once it has done it, with an **Undo** button of its own.
+  On your own ntfy server it needs a one-time step,
+  [deploy/README.md](deploy/README.md).
+
+A server that says "too many" (HTTP 429) is not asked again two minutes
+later: the board waits as long as it says, or 15 minutes, then 30, 60 and
+120. With your own ntfy server, [deploy/README.md](deploy/README.md) also has
+a check that pushes "quiet" when a board has sent nothing for a day.
 
 The self-test's **push alerts** line and DIAGNOSTICS' **PUSH** row say how
 many went today, how many the limits held back, and how the last one went --

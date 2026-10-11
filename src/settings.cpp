@@ -168,6 +168,8 @@ static char    s_pushUrl[100] = "";
 static char    s_pushTok[48]  = "";
 static char    s_pushName[16] = "";
 static uint8_t s_pushWhat     = 1;
+static uint32_t s_pushTypes   = 0;
+static uint8_t s_pushQS = 255, s_pushQE = 255;
 static bool    s_pushNight    = true;
 static uint8_t s_pushHome     = 0;
 static bool    s_pushDaily    = true;
@@ -515,7 +517,11 @@ void load() {
     s_prefs.getString("pushTok", s_pushTok, sizeof s_pushTok);
     s_prefs.getString("pushName", s_pushName, sizeof s_pushName);
     s_pushWhat     = s_prefs.getUChar("pushWhat", 1);
-    if (s_pushWhat > 2) s_pushWhat = 1;
+    s_pushTypes    = s_prefs.getUInt("pushTypes", 0);
+    if (s_pushWhat > 3 || (s_pushWhat == 3 && !s_pushTypes)) s_pushWhat = 1;
+    s_pushQS       = s_prefs.getUChar("pushQS", 255);
+    s_pushQE       = s_prefs.getUChar("pushQE", 255);
+    if (s_pushQS > 23 || s_pushQE > 23) s_pushQS = s_pushQE = 255;
     s_pushNight    = s_prefs.getBool("pushNight", true);
     s_pushHome     = s_prefs.getUChar("pushHome", 0); if (s_pushHome > 2) s_pushHome = 0;
     s_pushDaily    = s_prefs.getBool("pushDaily", true);
@@ -739,7 +745,22 @@ void setPushName(const char* name) {
     setText("pushName", s_pushName, sizeof s_pushName, (n == 1 && clean[0] == '-') ? "" : clean);
 }
 uint8_t pushWhat()                { return s_pushWhat; }
-void    cyclePushWhat()           { s_pushWhat = (uint8_t)((s_pushWhat + 1) % 3); s_prefs.putUChar("pushWhat", s_pushWhat); }
+void    cyclePushWhat()           { setPushWhat((uint8_t)((s_pushWhat + 1) % (s_pushTypes ? 4 : 3))); }
+void    setPushWhat(uint8_t w)    { if (w > 3 || (w == 3 && !s_pushTypes)) return; s_pushWhat = w; s_prefs.putUChar("pushWhat", w); }
+uint32_t pushTypes()              { return s_pushTypes; }
+void    setPushTypes(uint32_t m)  {
+    s_pushTypes = m;
+    s_prefs.putUInt("pushTypes", m);
+    if (!m && s_pushWhat == 3) setPushWhat(1);
+}
+uint8_t pushQuietStart()          { return s_pushQS; }
+uint8_t pushQuietEnd()            { return s_pushQE; }
+void    setPushQuiet(uint8_t a, uint8_t b) {
+    if (a > 23 || b > 23 || a == b) a = b = 255;
+    s_pushQS = a; s_pushQE = b;
+    s_prefs.putUChar("pushQS", a);
+    s_prefs.putUChar("pushQE", b);
+}
 bool    pushNightWithYou()        { return s_pushNight; }
 void    togglePushNightWithYou()  { s_pushNight = !s_pushNight; s_prefs.putBool("pushNight", s_pushNight); }
 uint8_t pushHome()                { return s_pushHome; }

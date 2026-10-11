@@ -14,6 +14,9 @@ namespace Version {
 // a is a strictly newer release than b. False if either is not x.y.z.
 bool newer(const char* a, const char* b);
 
+// "1.7.8" or "v1.7.8" (and any tail after it) into three numbers.
+bool parse(const char* s, unsigned v[3]);
+
 // The splash screen's label: "V.3.1.2" for anything that starts with x.y.z,
 // else the text itself, cut to 12 characters.
 void label(char* out, size_t cap, const char* v);

@@ -48,6 +48,15 @@ SCREENS = [
     # at a time (src/muleskin_art.cpp) -- the one screen that draws it. It
     # prints the version, so the emulator is built with FW_VERSION=sim (CI).
     ("boot",          "boot",       [], {}),
+    # The other panels: the 3.5" (480x320) and the CrowPanel 7" (800x480).
+    # Every screen lays itself out against the panel's size, and these are
+    # otherwise only ever seen on the board itself.
+    ("settings-480",  "settings",   ["--size", "480x320"], {}),
+    ("alert-480",     "alert",      ["--alert", "1", "--size", "480x320"], {}),
+    ("log-480",       "log",        ["--size", "480x320"], {}),
+    ("settings-800",  "settings",   ["--size", "800x480"], {}),
+    ("alert-800",     "alert",      ["--alert", "1", "--size", "800x480"], {}),
+    ("log-800",       "log",        ["--size", "800x480"], {}),
 ]
 
 

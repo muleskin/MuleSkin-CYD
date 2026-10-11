@@ -392,8 +392,18 @@ namespace Settings {
     void        setPushName(const char* name);
     // PUSH WHAT: 0 WITH YOU only, 1 IMPORTANT (the default: WITH YOU plus the
     // surveillance and attack types -- push_queue.h), 2 ALL.
+    // 3 CHOSEN: the types in pushTypes() -- offered by cyclePushWhat() only
+    // once some are chosen (the web flasher's PUSH OPTIONS, or PUSH TYPES).
     uint8_t     pushWhat();
     void        cyclePushWhat();
+    void        setPushWhat(uint8_t w);
+    uint32_t    pushTypes();                 // bit (1 << DetectionType)
+    void        setPushTypes(uint32_t mask);
+    // PUSH AT NIGHT's hours: start and end hour (end not included), or 255
+    // for NIGHT DIM's (11 PM-5 AM without them) -- the default.
+    uint8_t     pushQuietStart();
+    uint8_t     pushQuietEnd();
+    void        setPushQuiet(uint8_t start, uint8_t end);
     // PUSH AT NIGHT: true (the default) sends only WITH YOU through the night
     // hours -- NIGHT DIM's, or 11 PM-5 AM without them.
     bool        pushNightWithYou();

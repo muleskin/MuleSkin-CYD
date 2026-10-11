@@ -1,15 +1,27 @@
 // MuleSkin-CYD — release versions. See include/version_cmp.h.
 #include "version_cmp.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 namespace Version {
 
-// "1.7.8" or "v1.7.8" (and any tail after it) into three numbers.
-static bool parts(const char* s, unsigned v[3]) {
+// By hand: three numbers and two dots, nothing for sscanf to do. (Taking
+// sscanf out of here does not take newlib's scanf engine out of the firmware
+// -- the Arduino core's IPv6Address parser links it anyway.)
+bool parse(const char* s, unsigned v[3]) {
     if (!s) return false;
     if (*s == 'v' || *s == 'V') s++;
-    return sscanf(s, "%u.%u.%u", &v[0], &v[1], &v[2]) == 3;
+    for (int i = 0; i < 3; i++) {
+        if (*s < '0' || *s > '9') return false;
+        char* end = nullptr;
+        v[i] = (unsigned)strtoul(s, &end, 10);
+        s = end;
+        if (i < 2) { if (*s != '.') return false; s++; }
+    }
+    return true;
 }
+
+static bool parts(const char* s, unsigned v[3]) { return parse(s, v); }
 
 bool newer(const char* a, const char* b) {
     unsigned x[3], y[3];

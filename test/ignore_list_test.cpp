@@ -98,6 +98,10 @@ int main() {
         IgnoreList::snooze(a);
         SimClock::nowMs += 120000;
         ck("a plain SNOOZE on top lasts to the restart", IgnoreList::snoozed(a));
+        IgnoreList::unsnooze(a);
+        ck("Undo ends it", !IgnoreList::snoozed(a));
+        IgnoreList::snoozeFor(a, 60000);
+        ck("and it can start again after", IgnoreList::snoozed(a));
         SimClock::virtualTime = false;
     }
 

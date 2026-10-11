@@ -930,11 +930,18 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             break;
         case SettingsRow::PUSH_WHAT:
             label = "PUSH WHAT";
-            value = Settings::pushWhat() == 0 ? "WITH YOU" : Settings::pushWhat() == 2 ? "ALL" : "IMPORTANT";
+            value = Settings::pushWhat() == 0 ? "WITH YOU" : Settings::pushWhat() == 2 ? "ALL"
+                  : Settings::pushWhat() == 3 ? "CHOSEN" : "IMPORTANT";
             break;
         case SettingsRow::PUSH_NIGHT:
             // Through NIGHT DIM's hours (11 PM-5 AM without them).
             label = "PUSH AT NIGHT"; value = Settings::pushNightWithYou() ? "WITH YOU" : "AS SET";
+            // Its own hours, when the web flasher set some: "WITH YOU 22-6".
+            if (Settings::pushQuietStart() <= 23) {
+                static char nv[24];
+                snprintf(nv, sizeof nv, "%s %u-%u", value, (unsigned)Settings::pushQuietStart(), (unsigned)Settings::pushQuietEnd());
+                value = nv;
+            }
             break;
         case SettingsRow::PUSH_HOME:
             // While the network marked USE in WIFI NETWORKS is in view.

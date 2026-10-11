@@ -1139,9 +1139,12 @@ int hexNib(char c) {
 
 // "IGNORE aabbccddeeff 12" or "SNOOZE aabbccddeeff 12" -> queued for the main loop.
 void noteCommand(const char* msg) {
-    const bool snz = strncasecmp(msg, "SNOOZE ", 7) == 0;
-    if (!snz && strncasecmp(msg, "IGNORE ", 7) != 0) return;
-    const char* p = msg + 7;
+    static const char* const KINDS[] = { "IGNORE ", "SNOOZE ", "UNIGNORE ", "UNSNOOZE " };
+    int kind = -1;
+    for (int k = 0; k < 4 && kind < 0; k++)
+        if (strncasecmp(msg, KINDS[k], strlen(KINDS[k])) == 0) kind = k;
+    if (kind < 0) return;
+    const char* p = msg + strlen(KINDS[kind]);
     uint8_t rec[8];
     for (int i = 0; i < 6; i++) {
         while (*p == ':' || *p == '-') p++;
@@ -1151,12 +1154,12 @@ void noteCommand(const char* msg) {
         p += 2;
     }
     rec[6] = (uint8_t)atoi(p);
-    rec[7] = snz ? 1 : 0;
+    rec[7] = (uint8_t)kind;
     const uint8_t next = (uint8_t)((s_ignHead + 1) % IGN_MAX);
     if (next == s_ignTail) return;               // full: the rest wait for the next join
     memcpy(s_ign[s_ignHead], rec, 8);
     s_ignHead = next;
-    Serial.printf("[push] phone says %s %02x:%02x:%02x:%02x:%02x:%02x\n", snz ? "snooze" : "ignore",
+    Serial.printf("[push] phone says %s%02x:%02x:%02x:%02x:%02x:%02x\n", KINDS[kind],
                   rec[0], rec[1], rec[2], rec[3], rec[4], rec[5]);
 }
 
@@ -1220,11 +1223,11 @@ void pollCommands() {
 
 int cmdLastCode() { return s_cmdCode; }
 
-bool takeCommand(uint8_t mac[6], uint8_t& type, bool& snooze) {
+bool takeCommand(uint8_t mac[6], uint8_t& type, uint8_t& kind) {
     if (s_ignTail == s_ignHead) return false;
     memcpy(mac, s_ign[s_ignTail], 6);
-    type   = s_ign[s_ignTail][6];
-    snooze = s_ign[s_ignTail][7] != 0;
+    type = s_ign[s_ignTail][6];
+    kind = s_ign[s_ignTail][7];
     s_ignTail = (uint8_t)((s_ignTail + 1) % IGN_MAX);
     return true;
 }
@@ -1246,6 +1249,7 @@ PushMsg*            s_psMsgs   = nullptr;   // the batch, on the heap only while
 uint8_t             s_psN      = 0;
 volatile uint8_t    s_psSent   = 0;
 volatile int        s_psCode   = 0;
+volatile uint32_t   s_psRetryS = 0;
 
 void psRun(void*) {
     const uint32_t t0 = millis();
@@ -1289,12 +1293,21 @@ void psRun(void*) {
                 // for a day ("SNOOZE" in place of "IGNORE", the rest alike).
                 const String auth = Settings::pushToken()[0]
                     ? String(", headers.Authorization=Bearer ") + Settings::pushToken() : String();
-                const String rest = String(s_psMsgs[i].act).substring(6);
-                String act = "http, Ignore, " + cmd + ", method=POST, body=IGNORE" + rest + ", clear=true" + auth +
-                             "; http, Snooze 1 day, " + cmd + ", method=POST, body=SNOOZE" + rest + ", clear=true" + auth;
+                String act;
+                if (strncmp(s_psMsgs[i].act, "IGNORE ", 7) == 0) {
+                    const String rest = String(s_psMsgs[i].act).substring(6);
+                    act = "http, Ignore, " + cmd + ", method=POST, body=IGNORE" + rest + ", clear=true" + auth +
+                          "; http, Snooze 1 day, " + cmd + ", method=POST, body=SNOOZE" + rest + ", clear=true" + auth;
+                } else {
+                    // The confirmation's one button: UNIGNORE / UNSNOOZE.
+                    act = "http, Undo, " + cmd + ", method=POST, body=" + String(s_psMsgs[i].act) + ", clear=true" + auth;
+                }
                 http.addHeader("Actions", act);
             }
+            static const char* KEEP[] = { "Retry-After" };   // collectHeaders() wants it non-const
+            http.collectHeaders(KEEP, 1);
             const int code = http.POST((uint8_t*)s_psMsgs[i].body, strlen(s_psMsgs[i].body));
+            s_psRetryS = code == 429 ? (uint32_t)http.header("Retry-After").toInt() : 0;
             http.end();
             s_psCode = code < 0 ? 0 : code;
             if (code < 200 || code >= 300) {
@@ -1341,6 +1354,7 @@ bool       pushBusy()      { return s_psTask != nullptr; }
 PushResult pushResult()    { return s_push; }
 uint8_t    pushSentCount() { return s_psSent; }
 int        pushLastCode()  { return s_psCode; }
+uint32_t   pushRetryAfterS() { return s_psRetryS; }
 
 
 bool timeSyncStart() {

@@ -166,6 +166,14 @@ static void snoozeUntil(const uint8_t* mac, uint32_t until) {
     s_snzUntil[i] = until;
 }
 
+void unsnooze(const uint8_t* mac) {
+    if (!mac) return;
+    const int i = snoozeSlot(mac);
+    if (i < 0) return;
+    const uint32_t past = millis() - 1;
+    s_snzUntil[i] = past ? past : 0xFFFFFFFFu;    // ended a moment ago (0 would mean "until the restart")
+}
+
 void snoozeFor(const uint8_t* mac, uint32_t ms) {
     uint32_t until = millis() + ms;
     snoozeUntil(mac, until ? until : 1);

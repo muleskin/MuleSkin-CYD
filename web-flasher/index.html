@@ -534,6 +534,21 @@
     </div>
     <p class="browser-note"><strong>Download log</strong> saves every detection the board has kept (it survives restarts) as a spreadsheet file. <strong>Crash report</strong> lists the last boots and why each one happened -- a crash, a brownout, a restart -- with the details a bug report needs.</p>
     <div class="identify-row">
+      <button id="optBtn" class="identify-btn">[ PUSH OPTIONS ]</button>
+      <button id="optCloseBtn" class="identify-btn" style="display:none">[ DONE ]</button>
+      <div class="identify-result" id="optResult"></div>
+    </div>
+    <div class="browser-note" id="optBox" style="display:none">
+      <div>Push only these types (and WITH YOU, always). None ticked: PUSH WHAT as set on the board.</div>
+      <div id="optTypes" style="display:flex;flex-wrap:wrap;gap:.2em 1.2em;margin:.5em 0"></div>
+      <label>Quiet hours -- PUSH AT NIGHT's own, from
+        <input id="optQs" type="number" min="0" max="23" style="width:4em;font-family:inherit"> to
+        <input id="optQe" type="number" min="0" max="23" style="width:4em;font-family:inherit"> o'clock
+        (blank: NIGHT DIM's hours)</label>
+      <div><button id="optSaveBtn" class="identify-btn" style="margin-top:.5em">[ SAVE ]</button></div>
+    </div>
+    <p class="browser-note"><strong>Push options</strong>: which detection types PUSH ALERTS sends (the board's PUSH WHAT becomes CHOSEN), and quiet hours for PUSH AT NIGHT other than the screen's NIGHT DIM. Needs firmware v3.2.4 or later.</p>
+    <div class="identify-row">
       <button id="ignBtn" class="identify-btn">[ IGNORED DEVICES ]</button>
       <button id="ignCloseBtn" class="identify-btn" style="display:none">[ DONE ]</button>
       <div class="identify-result" id="ignResult"></div>
@@ -1591,6 +1606,89 @@
       }
       ignMac.value = '';
       ignDo('IGNORE ADD ' + hex.toLowerCase());
+    });
+  }
+
+  // PUSH OPTIONS: the types CHOSEN pushes, and PUSH AT NIGHT's own hours.
+  // Like IGNORED DEVICES, the port stays open until DONE.
+  var optBtn = document.getElementById('optBtn'), optCloseBtn = document.getElementById('optCloseBtn');
+  var optResult = document.getElementById('optResult'), optBox = document.getElementById('optBox');
+  var optTypes = document.getElementById('optTypes'), optQs = document.getElementById('optQs');
+  var optQe = document.getElementById('optQe'), optSaveBtn = document.getElementById('optSaveBtn');
+  var optPort = null;
+  if (optBtn && !('serial' in navigator)) optBtn.disabled = true;
+
+  async function optRead() {
+    var text = await talk(optPort, '\nPUSH TYPES LIST\n', /PT END [^\n]*\n|\[security\] locked/, 6000);
+    if (text.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
+    var end = text.match(/PT END (\d+) (\d+) (\d+)/);
+    if (!end) throw new Error('no answer. This needs firmware v3.2.4 or later');
+    optTypes.textContent = '';
+    text.split(/\r?\n/).forEach(function (l) {
+      var m = l.match(/^PT (\d+) (\S+) ([01])/);
+      if (!m) return;
+      var lab = document.createElement('label');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.value = m[1]; cb.checked = m[3] === '1';
+      lab.appendChild(cb);
+      lab.appendChild(document.createTextNode(' ' + m[2]));
+      optTypes.appendChild(lab);
+    });
+    var qs = +end[2], qe = +end[3];
+    optQs.value = qs <= 23 ? qs : '';
+    optQe.value = qe <= 23 ? qe : '';
+    var whats = ['WITH YOU', 'IMPORTANT', 'ALL', 'CHOSEN'];
+    optResult.className = 'identify-result';
+    optResult.textContent = 'PUSH WHAT on the board: ' + (whats[+end[1]] || '?') + '.';
+  }
+
+  async function optSave() {
+    if (!optPort) return;
+    optSaveBtn.disabled = true;
+    try {
+      var mask = 0;
+      optTypes.querySelectorAll('input').forEach(function (cb) { if (cb.checked) mask |= (1 << +cb.value); });
+      mask = mask >>> 0;
+      await talk(optPort, '\nPUSH TYPES ' + (mask ? mask.toString(16) : '-') + '\n', /\[push\] types[^\n]*\n/, 4000);
+      var qs = optQs.value.trim(), qe = optQe.value.trim();
+      var quiet = (qs !== '' && qe !== '' && +qs !== +qe) ? (+qs + ' ' + +qe) : '-';
+      await talk(optPort, '\nPUSH QUIET ' + quiet + '\n', /\[push\] quiet[^\n]*\n/, 4000);
+      await optRead();
+      optResult.textContent = 'SAVED. ' + optResult.textContent;
+    } catch (err) {
+      optResult.className = 'identify-result err';
+      optResult.textContent = 'Couldn’t save: ' + (err && err.message ? err.message : 'unknown error');
+    } finally { optSaveBtn.disabled = false; }
+  }
+
+  if (optBtn && 'serial' in navigator) {
+    optBtn.addEventListener('click', async function () {
+      if (optPort) return;
+      optBtn.disabled = true;
+      try {
+        optResult.className = 'identify-result';
+        optResult.textContent = 'Pick the board’s port...';
+        optPort = await openConsole('Reading the push options.', optResult);
+        await optRead();
+        optBox.style.display = '';
+        optCloseBtn.style.display = '';
+      } catch (err) {
+        optResult.className = 'identify-result err';
+        optResult.textContent = 'Couldn’t read them: ' + (err && err.message ? err.message : 'unknown error');
+        try { if (optPort) await optPort.close(); } catch (e) {}
+        optPort = null;
+        optBtn.disabled = false;
+      }
+    });
+    optSaveBtn.addEventListener('click', optSave);
+    optCloseBtn.addEventListener('click', async function () {
+      try { if (optPort) await optPort.close(); } catch (e) {}
+      optPort = null;
+      optBox.style.display = 'none';
+      optCloseBtn.style.display = 'none';
+      optBtn.disabled = false;
+      optResult.className = 'identify-result';
+      optResult.textContent = 'Disconnected.';
     });
   }
 

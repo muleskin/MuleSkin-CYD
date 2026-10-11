@@ -32,6 +32,21 @@ bool wanted(What what, bool nightWithYouOnly, bool night, DetectionType t, bool 
     }
 }
 
+bool wanted(const Rules& r, DetectionType t, bool withYou) {
+    if (withYou) return true;
+    if (r.night && r.nightWithYouOnly) return false;
+    if (r.home && r.homeMode == 2) return false;
+    bool w;
+    switch (r.what) {
+        case What::ALL:       w = true; break;
+        case What::IMPORTANT: w = important(t); break;
+        case What::CHOSEN:    w = (uint8_t)t < 32 && ((r.chosen >> (uint8_t)t) & 1u); break;
+        default:              w = false; break;
+    }
+    if (w && r.home && r.homeMode == 1) w = important(t);
+    return w;
+}
+
 What atHome(What what, uint8_t homeMode, bool home) {
     if (!home || homeMode == 0) return what;
     const What cap = homeMode == 1 ? What::IMPORTANT : What::WITH_YOU;
@@ -117,11 +132,11 @@ void Queue::sending(uint32_t now) {
     _retry = false;
 }
 
-void Queue::finished(uint8_t sent, bool ok, uint32_t now) {
+void Queue::finished(uint8_t sent, bool ok, uint32_t now, uint32_t retryMs) {
     if (sent > _out) sent = _out;
     _out = 0;
     dropFront(sent);
-    if (!ok) { _retry = true; _retryAt = now + RETRY_MS; }
+    if (!ok) { _retry = true; _retryAt = now + retryMs; }
     // What was urgent has gone, or failed and waits like the rest.
     if (sent || !ok) _urgent = false;
 }

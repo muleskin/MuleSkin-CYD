@@ -45,7 +45,9 @@ const uint32_t GAP_MS    = 20000;
 const uint32_t RETRY_MS  = 120000;
 const uint32_t STALE_MS  = 30u * 60u * 1000u;
 
-enum class What : uint8_t { WITH_YOU = 0, IMPORTANT = 1, ALL = 2 };
+// CHOSEN: the types ticked in the web flasher's PUSH OPTIONS (Settings::
+// pushTypes(), a bit per DetectionType), and WITH YOU.
+enum class What : uint8_t { WITH_YOU = 0, IMPORTANT = 1, ALL = 2, CHOSEN = 3 };
 
 // The surveillance and attack types IMPORTANT sends.
 bool important(DetectionType t);
@@ -58,6 +60,17 @@ bool wanted(What what, bool nightWithYouOnly, bool night, DetectionType t, bool 
 // YOU only -- while the board can see the home network. What PUSH WHAT
 // becomes there; never more than it is.
 What atHome(What what, uint8_t homeMode, bool home);
+
+// Everything that decides it, at once -- what main.cpp asks. PUSH AT HOME's
+// IMPORTANT, under CHOSEN, means the chosen types that are also important.
+struct Rules {
+    What     what = What::IMPORTANT;
+    uint32_t chosen = 0;              // CHOSEN's types, bit (1 << type)
+    bool     nightWithYouOnly = true, night = false;
+    uint8_t  homeMode = 0;
+    bool     home = false;
+};
+bool wanted(const Rules& r, DetectionType t, bool withYou);
 
 // A DAY'S CAP. However the hour's cooldown spreads them, a busy day can still
 // mean a push every few minutes. Past DAILY_CAP ordinary alerts in one local
@@ -106,8 +119,9 @@ public:
     bool       due(uint32_t now);
     // A join started with every queued message.
     void       sending(uint32_t now);
-    // It ended: the first `sent` went; `ok` false means try again later.
-    void       finished(uint8_t sent, bool ok, uint32_t now);
+    // It ended: the first `sent` went; `ok` false means try again after
+    // `retryMs` -- RETRY_MS, or longer when the server asked (a 429).
+    void       finished(uint8_t sent, bool ok, uint32_t now, uint32_t retryMs = RETRY_MS);
     bool       busy() const { return _out > 0; }
     void       clear();
 private:

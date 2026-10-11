@@ -12,6 +12,8 @@
 #                                     # release notes: a name (19 chars) and up to four
 #                                     # lines (39 chars each) the boards show with the
 #                                     # update notice, in System Properties
+#   --no-checks                       # skip the host tests, flasher-page and
+#                                     # screens checks it runs before tagging
 #
 # The version is three numbers because that is all the boards compare
 # (verNewer in src/ota_core.cpp): "3.1" or a commit hash never announces an
@@ -23,15 +25,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+usage() { sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 die() { echo "release: $*" >&2; exit 1; }
 [ $# -ge 1 ] || usage
 VER=${1#v}; shift
-PUSH=0; BUILD=0; NAME=""; NOTES=()
+PUSH=0; BUILD=0; CHECKS=1; NAME=""; NOTES=()
 while [ $# -gt 0 ]; do
   case $1 in
     --push)  PUSH=1 ;;
     --build) BUILD=1 ;;
+    --no-checks) CHECKS=0 ;;
     --name)  [ $# -ge 2 ] || usage; NAME=$2; shift ;;
     --note)  [ $# -ge 2 ] || usage; NOTES+=("$2"); shift ;;
     *) usage ;;
@@ -61,6 +64,41 @@ last=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sed 's/^v//' | sort -t. -k1,1n -k2,2
 if [ -n "$last" ]; then
   newest=$(printf '%s\n%s\n' "$last" "$VER" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
   [ "$newest" = "$VER" ] && [ "$last" != "$VER" ] || die "$VER is not newer than v$last"
+fi
+
+# The checks CI runs, here too, before anything is stamped -- a release cut
+# with CI skipped, or from a tree CI never saw, still has to pass them.
+# --no-checks skips them (the server's --build run, say, after they passed).
+if [ $CHECKS = 1 ]; then
+  echo "release: checking (host tests, flasher pages, screens) -- --no-checks to skip"
+  node tools/check_flasher_js.js || die "a web-flasher page does not parse"
+  # make: here if it is installed, else MSYS2's (the Windows setup this repo
+  # is built on); neither -> say so and carry on, rather than block.
+  if command -v make >/dev/null 2>&1; then
+    run_make() { make "$@"; }
+  elif [ -x /c/msys64/usr/bin/bash ]; then
+    here=$(pwd)
+    run_make() { MSYSTEM=UCRT64 /c/msys64/usr/bin/bash -lc "cd '$here' && make $*"; }
+  else
+    run_make() { return 99; }
+  fi
+  log=$(mktemp)
+  set +e
+  run_make -C test -j8 >"$log" 2>&1; rc=$?
+  set -e
+  if [ $rc = 99 ]; then echo "warning: no make -- host tests and screens NOT run"
+  elif [ $rc != 0 ]; then tail -20 "$log"; die "host tests failed ($log)"
+  else
+    run_make -C sim -j8 muleskinsim FW_VERSION=sim >"$log" 2>&1 || { tail -20 "$log"; die "the emulator does not build ($log)"; }
+    if command -v uv >/dev/null 2>&1; then
+      uv run --no-project --with pillow python sim/screens_check.py || die "screens differ from sim/golden"
+    elif python3 -c "import PIL" >/dev/null 2>&1; then
+      python3 sim/screens_check.py || die "screens differ from sim/golden"
+    else
+      echo "warning: no Pillow -- screens NOT compared"
+    fi
+  fi
+  rm -f "$log"
 fi
 
 shopt -s nullglob
@@ -107,4 +145,10 @@ cat <<EOF
 
 Next, on the server (see deploy/README.md) -- it builds, deploys and checks:
   sudo OTA_SIGNING_KEY=<private key .pem> /root/MuleSkin-CYD/deploy/redeploy.sh $TAG
+
+And on a plugged-in board, once it is up (tools/bench/README.md):
+  python tools/bench/nvs_snapshot.py save before.json
+  python tools/bench/push_bench.py --alerts        # a BENCH_TOOLS build
+  python tools/bench/ota_e2e.py --expect $VER      # ...claiming an older version
+  python tools/bench/nvs_snapshot.py compare before.json
 EOF

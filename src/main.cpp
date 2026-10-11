@@ -71,6 +71,7 @@
 #include "ui_today.h"
 #include "push_queue.h"
 #include "nvs_move.h"
+#include "version_cmp.h"
 #if defined(ARDUINO_ARCH_ESP32)
 #if __has_include(<esp_mac.h>)
 #include <esp_mac.h>          // esp_read_mac(), on IDF 5 (the C5)
@@ -1865,6 +1866,12 @@ static bool             s_pushRadio = false;
 
 static bool pushNightNow() {
     if (!Clock::trusted()) return false;
+    // PUSH AT NIGHT's own hours, when the web flasher set some.
+    const uint8_t qs = Settings::pushQuietStart(), qe = Settings::pushQuietEnd();
+    if (qs <= 23 && qe <= 23) {
+        const uint8_t h = Clock::hour();
+        return qs < qe ? (h >= qs && h < qe) : (h >= qs || h < qe);
+    }
     const uint8_t p = Settings::nightMode();
     return p ? NightMode::active(p, Clock::hour()) : Clock::night();
 }
@@ -1914,9 +1921,14 @@ static uint32_t pushDay() { return Clock::isSet() ? Clock::localDay() : 0; }
 
 static void queuePushAlert(const Detection& d, uint16_t followMins) {
     if (!Settings::pushOn()) return;
-    const PushQueue::What what = PushQueue::atHome((PushQueue::What)Settings::pushWhat(), Settings::pushHome(),
-                                                   engine.homeInView(millis()));
-    if (!PushQueue::wanted(what, Settings::pushNightWithYou(), pushNightNow(), d.type, followMins != 0)) return;
+    PushQueue::Rules rules;
+    rules.what             = (PushQueue::What)Settings::pushWhat();
+    rules.chosen           = Settings::pushTypes();
+    rules.nightWithYouOnly = Settings::pushNightWithYou();
+    rules.night            = pushNightNow();
+    rules.homeMode         = Settings::pushHome();
+    rules.home             = engine.homeInView(millis());
+    if (!PushQueue::wanted(rules, d.type, followMins != 0)) return;
     if (!followMins && !s_pushCool.allow(d.mac, millis())) {
         s_pushCooled++;
         Serial.printf("[push] %s %02x:%02x:%02x:%02x:%02x:%02x pushed within the hour; not again\n",
@@ -2083,7 +2095,21 @@ static void servicePush(uint32_t now) {
     if (s_pushRadio && !OtaWifi::pushBusy()) {
         engine.stopUpdateRadio();
         s_pushRadio = false;
-        s_pushQ.finished(OtaWifi::pushSentCount(), OtaWifi::pushResult() == OtaWifi::PushResult::SENT, now);
+        // A rate limit (429) is not fixed by asking again in two minutes --
+        // that is what kept ntfy.sh's quota spent in 2026-10. Wait as long
+        // as the server says, or 15 minutes doubling to two hours.
+        static uint8_t limited = 0;
+        uint32_t retryMs = PushQueue::RETRY_MS;
+        if (OtaWifi::pushLastCode() == 429) {
+            if (limited < 4) limited++;
+            const uint32_t asked = OtaWifi::pushRetryAfterS();
+            retryMs = asked ? (asked < 60 ? 60000u : (asked > 7200 ? 7200000u : asked * 1000u))
+                            : (15u * 60u * 1000u) << (limited - 1);
+            Serial.printf("[push] rate limited: next try in %lu min\n", (unsigned long)(retryMs / 60000));
+        } else if (OtaWifi::pushResult() == OtaWifi::PushResult::SENT) {
+            limited = 0;
+        }
+        s_pushQ.finished(OtaWifi::pushSentCount(), OtaWifi::pushResult() == OtaWifi::PushResult::SENT, now, retryMs);
         pushStatRollDay();
         s_pushStat.sent  += OtaWifi::pushSentCount();
         s_pushStat.result = (uint8_t)OtaWifi::pushResult();
@@ -2093,29 +2119,46 @@ static void servicePush(uint32_t now) {
     servicePushSummary();
     // IGNORE pressed on a notification, read at the last join.
     {
-        uint8_t mac[6], type = 0;
-        bool snz = false;
-        while (OtaWifi::takeCommand(mac, type, snz)) {
+        uint8_t mac[6], type = 0, kind = 0;
+        while (OtaWifi::takeCommand(mac, type, kind)) {
             const DetectionType t = type < (uint8_t)DetectionType::COUNT ? (DetectionType)type : DetectionType::UNKNOWN;
-            char body[100], seq[24];
+            char body[100], seq[24], undo[24];
             snprintf(seq, sizeof seq, "done-%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-            if (snz) {
+            // The confirmation's Undo button posts this back (see ota_wifi.h).
+            snprintf(undo, sizeof undo, "%s %02x%02x%02x%02x%02x%02x", kind == 1 ? "UNSNOOZE" : "UNIGNORE",
+                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            if (kind == 2) {
+                if (IgnoreList::remove(mac)) {
+                    Serial.printf("[ignore] undone from the phone: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                    snprintf(body, sizeof body, "%02X:%02X:%02X:%02X:%02X:%02X alerts again.",
+                             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                    queuePush("un-ignored", body, 2, "leftwards_arrow_with_hook", false, seq);
+                }
+            } else if (kind == 3) {
+                IgnoreList::unsnooze(mac);
+                Serial.printf("[ignore] snooze ended from the phone: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                snprintf(body, sizeof body, "%02X:%02X:%02X:%02X:%02X:%02X alerts again.",
+                         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                queuePush("snooze ended", body, 2, "leftwards_arrow_with_hook", false, seq);
+            } else if (kind == 1) {
                 IgnoreList::snoozeFor(mac, 24u * 60u * 60u * 1000u);
                 Serial.printf("[ignore] snoozed a day from the phone: %02x:%02x:%02x:%02x:%02x:%02x %s\n",
                               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], detectionTypeName(t));
                 if (state == AppState::CLEAR) Theme::showToast("SNOOZED FROM PHONE", detectionTypeName(t), Theme::CYAN, 3000);
                 snprintf(body, sizeof body, "%s %02X:%02X:%02X:%02X:%02X:%02X: no alerts for a day (or until a restart).",
                          detectionTypeName(t), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-                queuePush("snoozed", body, 2, "zzz", false, seq);
+                queuePush("snoozed", body, 2, "zzz", false, seq, undo);
             } else if (IgnoreList::add(mac, t)) {
                 Serial.printf("[ignore] from the phone: %02x:%02x:%02x:%02x:%02x:%02x %s\n",
                               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], detectionTypeName(t));
                 if (state == AppState::CLEAR) Theme::showToast("IGNORED FROM PHONE", detectionTypeName(t), Theme::CYAN, 3000);
                 // Said back, quietly: the button only lands at the next join,
                 // and this is how the phone learns that it did.
-                snprintf(body, sizeof body, "%s %02X:%02X:%02X:%02X:%02X:%02X: no more alerts. Undo it in IGNORED DEVICES.",
+                snprintf(body, sizeof body, "%s %02X:%02X:%02X:%02X:%02X:%02X: no more alerts.",
                          detectionTypeName(t), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-                queuePush("ignored", body, 2, "white_check_mark", false, seq);
+                queuePush("ignored", body, 2, "white_check_mark", false, seq, undo);
             }
         }
     }
@@ -2355,8 +2398,9 @@ static void serviceAutoUpdate(uint32_t now) {
     if (!night || now - lastTouch < 10u * 60u * 1000u) return;
     if (lastTry && now - lastTry < 6u * 3600u * 1000u) return;
     lastTry = now;
-    unsigned a, b, c;
-    if (sscanf(OtaCore::availableVersion(), "%u.%u.%u", &a, &b, &c) != 3) return;
+    unsigned v[3];
+    if (!Version::parse(OtaCore::availableVersion(), v)) return;
+    const unsigned a = v[0], b = v[1], c = v[2];
     s_autoVer[0] = (uint8_t)a; s_autoVer[1] = (uint8_t)b; s_autoVer[2] = (uint8_t)c;
     Serial.printf("[auto] night update to v%u.%u.%u: counting down\n", a, b, c);
     enterAutoUpdate();

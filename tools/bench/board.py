@@ -46,6 +46,10 @@ class Board:
         """NVS EXPORT as {(namespace, key): (type, hex)}. Holds secrets (WiFi
         passwords, the push token): never print it whole."""
         text = self.cmd("NVS EXPORT", 8, b"NVS END")
+        if "NVS END" not in text:
+            # Half an export is worse than none: a script that "restores"
+            # what it did not read would wipe it.
+            raise RuntimeError("no complete NVS EXPORT from the board (still booting, or locked?)")
         out = {}
         for l in text.splitlines():
             p = l.split(" ")

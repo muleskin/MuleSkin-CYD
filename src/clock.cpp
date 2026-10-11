@@ -610,6 +610,40 @@ void pollSerial() {
             continue;
         }
         if (strcasecmp(line, "UPDATE BT") == 0) { g_consoleBtUpdate = true; continue; }
+        // PUSH OPTIONS, from the web flasher: which types CHOSEN pushes, and
+        // PUSH AT NIGHT's own hours.
+        if (strcasecmp(line, "PUSH TYPES LIST") == 0) {
+            const uint32_t m = Settings::pushTypes();
+            for (uint8_t t = 1; t < (uint8_t)DetectionType::COUNT && t < 32; t++)
+                Serial.printf("PT %u %s %u\n", (unsigned)t, detectionTypeName((DetectionType)t), (unsigned)((m >> t) & 1u));
+            Serial.printf("PT END %u %u %u\n", (unsigned)Settings::pushWhat(),
+                          (unsigned)Settings::pushQuietStart(), (unsigned)Settings::pushQuietEnd());
+            continue;
+        }
+        if (strncasecmp(line, "PUSH TYPES ", 11) == 0) {
+            const char* a = line + 11;
+            const uint32_t m = (a[0] == '-') ? 0u : (uint32_t)strtoul(a, nullptr, 16) & ~1u;   // bit 0: UNKNOWN, never
+            Settings::setPushTypes(m);
+            if (m) Settings::setPushWhat(3);
+            Serial.printf("[push] types %08lx, PUSH WHAT %u\n", (unsigned long)m, (unsigned)Settings::pushWhat());
+            continue;
+        }
+        if (strncasecmp(line, "PUSH QUIET ", 11) == 0) {
+            const char* a = line + 11;
+            if (a[0] == '-') {
+                Settings::setPushQuiet(255, 255);
+            } else {
+                char* end = nullptr;
+                const unsigned s = (unsigned)strtoul(a, &end, 10);
+                const unsigned e = (unsigned)strtoul(end, nullptr, 10);
+                Settings::setPushQuiet((uint8_t)s, (uint8_t)e);
+            }
+            if (Settings::pushQuietStart() <= 23)
+                Serial.printf("[push] quiet %u-%u\n", (unsigned)Settings::pushQuietStart(), (unsigned)Settings::pushQuietEnd());
+            else
+                Serial.println("[push] quiet: NIGHT DIM's hours");
+            continue;
+        }
         if (strcasecmp(line, "PUSH OFF") == 0)  { g_consolePush = 0; continue; }
         if (strcasecmp(line, "PUSH ON") == 0)   { g_consolePush = 1; continue; }
         if (strcasecmp(line, "PUSH TEST") == 0) { g_consolePush = 2; continue; }

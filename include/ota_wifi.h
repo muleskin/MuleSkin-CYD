@@ -138,7 +138,10 @@ int         pushLastCode();     // the last POST's HTTP status (0: none / no con
 // "-cmd"; every push join and AUTO TIME join reads what is new there. The
 // main loop takes them one at a time (IgnoreList is not the WiFi task's).
 // SNOOZE 1 DAY rides the same path: `snooze` says which button it was.
-bool        takeCommand(uint8_t mac[6], uint8_t& type, bool& snooze);
+// kind: 0 IGNORE, 1 SNOOZE, 2 UNIGNORE, 3 UNSNOOZE (the confirmation's Undo).
+bool        takeCommand(uint8_t mac[6], uint8_t& type, uint8_t& kind);
+// A 429's Retry-After, in seconds (0 when it gave none, or no 429).
+uint32_t    pushRetryAfterS();
 // The last read of the command topic: its HTTP status, 0 before the first.
 int         cmdLastCode();
 // The boot check's join, across boots: how many stalled (no answer, no
