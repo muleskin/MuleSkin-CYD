@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (2.8\" CYD, ILI9341)",
-  "version": "3.2.2",
-  "release_name": "Ignore from phone",
-  "whats_new": ["Ignore button on push alerts", "Push cap 30/day, PUSH AT HOME", "Ignore list in the web flasher", "Join retry; 66 KB freed"],
+  "version": "3.2.3",
+  "release_name": "Snooze from phone",
+  "whats_new": ["Snooze 1 day button on alerts", "Phone gets told when it's done", "Push stats in the 8 PM summary", "HOME and IGNORE status shown"],
   "new_install_prompt_erase": true,
   "builds": [
     {
