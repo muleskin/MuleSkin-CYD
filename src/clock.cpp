@@ -10,7 +10,8 @@
 #endif
 #include "flood_bench.h" // FLOOD N, for the bench (a no-op outside FLOOD_BENCH builds)
 #include "settings.h"
-#include "ignore_list.h"  // IGNORE LIST / ADD / DEL: the web flasher's ignore list
+#include "ignore_list.h"
+#include "muleskin_art_row.h"   // ARTBENCH, on bench builds  // IGNORE LIST / ADD / DEL: the web flasher's ignore list
 #include "blackbox.h"    // BLACKBOX dumps it
 #include "ota_core.h"    // VERTEST, on bench builds
 #include "frame_push.h"  // PUSH, the frame-push switch
@@ -809,6 +810,16 @@ void pollSerial() {
             Serial.printf("[ota] %s\n", OtaCore::testVersionDecision(line + 8));
         } else if (strncasecmp(line, "SIGTEST", 7) == 0) {
             Serial.printf("[ota] %s\n", OtaCore::testSignature());
+        } else if (strncasecmp(line, "ARTBENCH", 8) == 0) {
+            // How fast the Huffman-coded artwork decodes: every row of the
+            // splash, timed. The yardstick for compressing anything that is
+            // drawn every frame (the radar is ~34,000 pixels a frame).
+            static uint8_t row[320];
+            const uint32_t t0 = micros();
+            for (int r = 0; r < 320; r++) MuleSkinArt::row(r, row);
+            const uint32_t us = micros() - t0;
+            Serial.printf("[bench] art: 320 rows of 320 px in %lu us, %lu ns a pixel\n",
+                          (unsigned long)us, (unsigned long)(us * 1000ul / (320ul * 320ul)));
         } else if (strncasecmp(line, "ALERTPUSH", 9) == 0) {
             // A made-up Flock alert through the real push path -- the
             // cooldown, the cap, the IGNORE button -- for the bench.

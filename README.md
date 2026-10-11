@@ -324,12 +324,18 @@ evening summary counts them. WITH YOU always goes, either way.
   routine pushes, never add any.
 - **Ignore** on a notification adds that device to the board's ignore list
   the next time the board joins WiFi -- for your own AirTag, your own
-  doorbell. On your own ntfy server it needs a one-time step,
-  [deploy/README.md](deploy/README.md). The self-test's **push alerts** line and DIAGNOSTICS'
-**PUSH** row say how many went today, how many that held back, and how the
-last one went -- sent, or why not (WiFi did not join, the server refused the
-token, a rate limit) -- so a push that quietly stops arriving shows on the
-board too.
+  doorbell; **Snooze 1 day** quiets it for a day (or until a restart) -- for
+  a neighbour's camera. Either way the board answers with a quiet "ignored"
+  or "snoozed" push once it has done it. On your own ntfy server it needs a
+  one-time step, [deploy/README.md](deploy/README.md).
+
+The self-test's **push alerts** line and DIAGNOSTICS' **PUSH** row say how
+many went today, how many the limits held back, and how the last one went --
+sent, or why not (WiFi did not join, the server refused the token, a rate
+limit, the IGNORE topic failing) -- so a push that quietly stops arriving
+shows on the board too. DIAGNOSTICS' **HOME** row says whether the board
+hears the home network right now, and the 8 PM summary ends with the day's
+pushed and held-back counts.
 
 It uses the public ntfy.sh unless told otherwise: nothing to install, and
 the topic is the password. For alerts that stay on your own server, behind

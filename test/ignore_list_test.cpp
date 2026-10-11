@@ -15,6 +15,7 @@
 #include "ignore_list.h"
 #include "test_util.h"
 #include <Preferences.h>
+#include <Arduino.h>     // SimClock, for the timed snooze
 #include <cstdlib>
 #include <filesystem>
 
@@ -79,6 +80,25 @@ int main() {
         ck("heard the new way round, still ignored", IgnoreList::contains(fwd));
         ck("not added twice either way", !IgnoreList::add(fwd, DetectionType::AIRTAG));
         ck("UN-IGNORE the new way round takes it off", IgnoreList::remove(fwd) && !IgnoreList::contains(old));
+    }
+
+    suite("SNOOZE 1 DAY from a notification ends on its own");
+    {
+        SimClock::virtualTime = true;
+        SimClock::nowMs = 0xFFFFF000u;            // across millis() wrapping, too
+        const uint8_t a[6] = { 0x51, 0x52, 0x53, 0x54, 0x55, 0x56 };
+        IgnoreList::snoozeFor(a, 60000);
+        ck("snoozed at once", IgnoreList::snoozed(a) && IgnoreList::silenced(a));
+        SimClock::nowMs += 59999;
+        ck("still, a moment before the end", IgnoreList::snoozed(a));
+        SimClock::nowMs += 1;
+        ck("over at the end", !IgnoreList::snoozed(a) && !IgnoreList::silenced(a));
+        IgnoreList::snoozeFor(a, 60000);
+        ck("and can be snoozed again", IgnoreList::snoozed(a));
+        IgnoreList::snooze(a);
+        SimClock::nowMs += 120000;
+        ck("a plain SNOOZE on top lasts to the restart", IgnoreList::snoozed(a));
+        SimClock::virtualTime = false;
     }
 
     std::filesystem::remove_all(dir);

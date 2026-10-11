@@ -37,7 +37,7 @@ namespace PushQueue {
 // `act`, when set, is the body of the notification's IGNORE button: the phone
 // posts it to the board's command topic (ota_wifi.cpp), and the board picks
 // it up the next time it joins.
-struct Msg { char title[40]; char body[100]; uint8_t prio; char tags[24]; char seq[24]; char act[24]; };
+struct Msg { char title[40]; char body[160]; uint8_t prio; char tags[24]; char seq[24]; char act[24]; };
 
 const uint8_t  CAP       = 8;
 const uint32_t GATHER_MS = 3000;

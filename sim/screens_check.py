@@ -44,6 +44,9 @@ SCREENS = [
     ("wifipass",      "wifipass",   [], {}),
     ("alert-flock",   "alert",      ["--alert", "1"], {}),
     ("log",           "log",        [], {}),
+    # The splash: the MuleSkin artwork, decoded from its Huffman coding a row
+    # at a time (src/muleskin_art.cpp) -- the one screen that draws it.
+    ("boot",          "boot",       [], {}),
 ]
 
 

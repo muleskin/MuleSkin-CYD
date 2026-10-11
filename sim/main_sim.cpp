@@ -561,6 +561,7 @@ int main(int argc, char** argv) {
             info.nvsPercent = 41;
             snprintf(info.push, sizeof info.push, "4 sent today, 2 held back, last OK 12 min ago");
             snprintf(info.wifiJoin, sizeof info.wifiJoin, "boot joins never stalled");
+            snprintf(info.home, sizeof info.home, "HomeNet, heard 4s ago");
             info.resetReason = "POWERON_RESET";
             info.boardName = "cyd";
             info.usingCapTouch = false;

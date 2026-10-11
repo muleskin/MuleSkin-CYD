@@ -2,6 +2,7 @@
 #include "ignore_list.h"
 #include <Preferences.h>
 #include <string.h>
+#include <Arduino.h>   // millis(), for a snooze with an end
 
 namespace IgnoreList {
 
@@ -136,21 +137,43 @@ void clear() {
 
 // ---- SNOOZE: RAM only, gone at restart --------------------------------------
 static const uint8_t SNOOZE_MAX = 32;
-static uint8_t s_snz[SNOOZE_MAX][6];
-static uint8_t s_snzN = 0, s_snzNext = 0;
+static uint8_t  s_snz[SNOOZE_MAX][6];
+static uint32_t s_snzUntil[SNOOZE_MAX];     // millis() it ends; 0: at the restart
+static uint8_t  s_snzN = 0, s_snzNext = 0;
+
+static int snoozeSlot(const uint8_t* mac) {
+    for (uint8_t i = 0; i < s_snzN; i++)
+        if (memcmp(s_snz[i], mac, 6) == 0) return i;
+    return -1;
+}
 
 bool snoozed(const uint8_t* mac) {
     if (!mac) return false;
-    for (uint8_t i = 0; i < s_snzN; i++)
-        if (memcmp(s_snz[i], mac, 6) == 0) return true;
+    const int i = snoozeSlot(mac);
+    if (i >= 0) return !s_snzUntil[i] || (int32_t)(millis() - s_snzUntil[i]) < 0;
     return false;
 }
 
+static void snoozeUntil(const uint8_t* mac, uint32_t until) {
+    if (!mac) return;
+    int i = snoozeSlot(mac);
+    if (i < 0) {
+        i = s_snzNext;
+        memcpy(s_snz[i], mac, 6);
+        s_snzNext = (uint8_t)((s_snzNext + 1) % SNOOZE_MAX);
+        if (s_snzN < SNOOZE_MAX) s_snzN++;
+    }
+    s_snzUntil[i] = until;
+}
+
+void snoozeFor(const uint8_t* mac, uint32_t ms) {
+    uint32_t until = millis() + ms;
+    snoozeUntil(mac, until ? until : 1);
+}
+
 void snooze(const uint8_t* mac) {
-    if (!mac || snoozed(mac)) return;
-    memcpy(s_snz[s_snzNext], mac, 6);
-    s_snzNext = (uint8_t)((s_snzNext + 1) % SNOOZE_MAX);
-    if (s_snzN < SNOOZE_MAX) s_snzN++;
+    if (!mac) return;
+    snoozeUntil(mac, 0);
 }
 
 bool silenced(const uint8_t* mac) { return contains(mac) || snoozed(mac); }

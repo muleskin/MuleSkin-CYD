@@ -1959,6 +1959,21 @@ static void queuePushAlert(const Detection& d, uint16_t followMins) {
     }
 }
 
+// What PUSH ALERTS last did, for the self-test and DIAGNOSTICS: a push that
+// silently stops arriving should show on the board, not only on the phone.
+static struct {
+    uint32_t day = 0;          // Clock::localDay() the counts below belong to
+    uint16_t sent = 0;         // messages the server took today
+    uint8_t  result = 0;       // OtaWifi::PushResult of the last batch
+    int      code = 0;         // its last HTTP status
+    uint32_t atMs = 0;         // when it ended; 0: no batch since boot
+} s_pushStat;
+
+static void pushStatRollDay() {
+    const uint32_t day = Clock::isSet() ? Clock::localDay() : 0;
+    if (day != s_pushStat.day) { s_pushStat.day = day; s_pushStat.sent = 0; s_pushCooled = 0; }
+}
+
 // The evening summary: once a day at 8 PM, with PUSH ALERTS on and the clock
 // real -- the day's count by type from the black box (TODAY's own count), and
 // the first and last sighting. Quiet priority: it is a report, not an alarm.
@@ -1974,7 +1989,7 @@ static void servicePushSummary() {
     Settings::setPushSummaryDay(day);
     Today::recount();
     const Today::Stats& s = Today::current();
-    char body[100];
+    char body[160];
     if (!s.total) {
         snprintf(body, sizeof body, "Nothing caught today.");
     } else {
@@ -2000,11 +2015,14 @@ static void servicePushSummary() {
                      a.tm_hour % 12 ? a.tm_hour % 12 : 12, a.tm_min, a.tm_hour < 12 ? "AM" : "PM",
                      b.tm_hour % 12 ? b.tm_hour % 12 : 12, b.tm_min, b.tm_hour < 12 ? "AM" : "PM");
     }
-    // Over the day's push limit: say how many never left the board.
+    // How the push limits did today: sent, and what each one kept back --
+    // the numbers to look at before changing PUSH WHAT or the limits.
+    pushStatRollDay();
     const uint16_t over = s_pushCap.over(day);
     const size_t bl = strlen(body);
-    if (over && bl < sizeof body - 24)
-        snprintf(body + bl, sizeof body - bl, ". %u not pushed", (unsigned)over);
+    if (bl < sizeof body - 8)
+        snprintf(body + bl, sizeof body - bl, ". Pushed %u; held %u (hourly), %u (daily cap)",
+                 (unsigned)s_pushStat.sent, (unsigned)s_pushCooled, (unsigned)over);
     PushQueue::Msg m{};
     snprintf(m.title, sizeof m.title, "%s today", pushBoardName());
     snprintf(m.body, sizeof m.body, "%s", body);
@@ -2014,20 +2032,6 @@ static void servicePushSummary() {
     Serial.printf("[push] daily summary queued: %s\n", body);
 }
 
-// What PUSH ALERTS last did, for the self-test and DIAGNOSTICS: a push that
-// silently stops arriving should show on the board, not only on the phone.
-static struct {
-    uint32_t day = 0;          // Clock::localDay() the counts below belong to
-    uint16_t sent = 0;         // messages the server took today
-    uint8_t  result = 0;       // OtaWifi::PushResult of the last batch
-    int      code = 0;         // its last HTTP status
-    uint32_t atMs = 0;         // when it ended; 0: no batch since boot
-} s_pushStat;
-
-static void pushStatRollDay() {
-    const uint32_t day = Clock::isSet() ? Clock::localDay() : 0;
-    if (day != s_pushStat.day) { s_pushStat.day = day; s_pushStat.sent = 0; s_pushCooled = 0; }
-}
 
 // One line: "4 sent today, last OK 12 min ago" -- or why the last one failed.
 // Returns 0 fine, 1 worth a look, as the self-test grades.
@@ -2054,9 +2058,17 @@ static uint8_t pushStatusText(char* out, size_t n) {
                 : s_pushStat.code == 0   ? "server did not answer" : "server error";
             break;
     }
+    // The command topic (IGNORE / SNOOZE from a notification): only its
+    // failures are news. 404 is a server with nothing there yet.
+    const int cmd = OtaWifi::cmdLastCode();
+    const bool cmdBad = cmd != 0 && cmd != 200 && cmd != 404;
     if (!why) {
-        snprintf(out, n, "%u sent today%s, last OK %lu min ago", (unsigned)s_pushStat.sent, cooled, (unsigned long)ago);
-        return 0;
+        if (cmdBad)
+            snprintf(out, n, "%u sent today%s, last OK %lu min ago; IGNORE topic %s %d",
+                     (unsigned)s_pushStat.sent, cooled, (unsigned long)ago, cmd < 0 ? "no answer" : "HTTP", cmd < 0 ? 0 : cmd);
+        else
+            snprintf(out, n, "%u sent today%s, last OK %lu min ago", (unsigned)s_pushStat.sent, cooled, (unsigned long)ago);
+        return cmdBad ? 1 : 0;
     }
     if (s_pushStat.code > 0)
         snprintf(out, n, "last failed %lu min ago: %s (HTTP %d); %u sent today",
@@ -2082,12 +2094,28 @@ static void servicePush(uint32_t now) {
     // IGNORE pressed on a notification, read at the last join.
     {
         uint8_t mac[6], type = 0;
-        while (OtaWifi::takeIgnore(mac, type)) {
+        bool snz = false;
+        while (OtaWifi::takeCommand(mac, type, snz)) {
             const DetectionType t = type < (uint8_t)DetectionType::COUNT ? (DetectionType)type : DetectionType::UNKNOWN;
-            if (IgnoreList::add(mac, t)) {
+            char body[100], seq[24];
+            snprintf(seq, sizeof seq, "done-%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            if (snz) {
+                IgnoreList::snoozeFor(mac, 24u * 60u * 60u * 1000u);
+                Serial.printf("[ignore] snoozed a day from the phone: %02x:%02x:%02x:%02x:%02x:%02x %s\n",
+                              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], detectionTypeName(t));
+                if (state == AppState::CLEAR) Theme::showToast("SNOOZED FROM PHONE", detectionTypeName(t), Theme::CYAN, 3000);
+                snprintf(body, sizeof body, "%s %02X:%02X:%02X:%02X:%02X:%02X: no alerts for a day (or until a restart).",
+                         detectionTypeName(t), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                queuePush("snoozed", body, 2, "zzz", false, seq);
+            } else if (IgnoreList::add(mac, t)) {
                 Serial.printf("[ignore] from the phone: %02x:%02x:%02x:%02x:%02x:%02x %s\n",
                               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], detectionTypeName(t));
                 if (state == AppState::CLEAR) Theme::showToast("IGNORED FROM PHONE", detectionTypeName(t), Theme::CYAN, 3000);
+                // Said back, quietly: the button only lands at the next join,
+                // and this is how the phone learns that it did.
+                snprintf(body, sizeof body, "%s %02X:%02X:%02X:%02X:%02X:%02X: no more alerts. Undo it in IGNORED DEVICES.",
+                         detectionTypeName(t), mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+                queuePush("ignored", body, 2, "white_check_mark", false, seq);
             }
         }
     }
@@ -2255,7 +2283,7 @@ static void runSelfTest() {
         const bool ok = p.begin("settings", true);
         p.end();
         line(ok ? 0 : 2, "settings", ok ? "readable" : "NVS will not open");
-        char push[96];
+        char push[128];
         const uint8_t pg = pushStatusText(push, sizeof push);
         line(pg, "push alerts", "%s", push);
         // How full the store is. Full at boot, the Arduino core erases the
@@ -7108,6 +7136,15 @@ void loop() {
                 else        snprintf(info.wifiJoin, sizeof info.wifiJoin, "%u stalled, retry joined %u",
                                      (unsigned)stuck, (unsigned)saved);
                 info.wifiWarn = stuck > saved;
+            }
+            {
+                const char* h = engine.homeSsid();
+                const uint32_t seen = engine.homeSeenMs();
+                if (!h[0])      snprintf(info.home, sizeof info.home, "no network marked USE");
+                else if (!seen) snprintf(info.home, sizeof info.home, "%.20s, not heard", h);
+                else            snprintf(info.home, sizeof info.home, "%.20s, heard %lus ago%s", h,
+                                         (unsigned long)((millis() - seen) / 1000),
+                                         engine.homeInView(millis()) ? "" : " (away)");
             }
             info.resetReason = resetReasonName();
             info.loopFree    = s_loopHeapFree;

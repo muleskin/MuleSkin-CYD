@@ -185,6 +185,8 @@ public:
     static const uint32_t HOME_MS = 5u * 60u * 1000u;
     void     setHomeSsid(const char* ssid);
     bool     homeInView(uint32_t now) const { return _homeSeenMs && now - _homeSeenMs < HOME_MS; }
+    const char* homeSsid() const   { return _homeSsid; }
+    uint32_t    homeSeenMs() const { return _homeSeenMs; }   // 0: not heard since it was set
 
     // ---- Watched target ("stalker tracker") --------------------------
     // Session-only (not persisted to NVS -- resets on reboot). One

@@ -137,7 +137,10 @@ int         pushLastCode();     // the last POST's HTTP status (0: none / no con
 // posts "IGNORE <mac> <type>" to the command topic, Settings::pushUrl() plus
 // "-cmd"; every push join and AUTO TIME join reads what is new there. The
 // main loop takes them one at a time (IgnoreList is not the WiFi task's).
-bool        takeIgnore(uint8_t mac[6], uint8_t& type);
+// SNOOZE 1 DAY rides the same path: `snooze` says which button it was.
+bool        takeCommand(uint8_t mac[6], uint8_t& type, bool& snooze);
+// The last read of the command topic: its HTTP status, 0 before the first.
+int         cmdLastCode();
 // The boot check's join, across boots: how many stalled (no answer, no
 // reason) and how many of those the one retry then joined. Kept in NVS, but
 // written only when a join stalls.

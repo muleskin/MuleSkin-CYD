@@ -1126,7 +1126,8 @@ void tsRun(void*) {
 // ---- IGNORE from a notification --------------------------------------------------
 namespace {
 const uint8_t     IGN_MAX = 8;
-uint8_t           s_ign[IGN_MAX][7];       // mac + type, waiting for the main loop
+uint8_t           s_ign[IGN_MAX][8];       // mac + type + snooze?, waiting for the main loop
+volatile int      s_cmdCode = 0;
 volatile uint8_t  s_ignHead = 0, s_ignTail = 0;
 
 int hexNib(char c) {
@@ -1136,11 +1137,12 @@ int hexNib(char c) {
     return -1;
 }
 
-// "IGNORE aabbccddeeff 12" -> queued for the main loop.
+// "IGNORE aabbccddeeff 12" or "SNOOZE aabbccddeeff 12" -> queued for the main loop.
 void noteCommand(const char* msg) {
-    if (strncasecmp(msg, "IGNORE ", 7) != 0) return;
+    const bool snz = strncasecmp(msg, "SNOOZE ", 7) == 0;
+    if (!snz && strncasecmp(msg, "IGNORE ", 7) != 0) return;
     const char* p = msg + 7;
-    uint8_t rec[7];
+    uint8_t rec[8];
     for (int i = 0; i < 6; i++) {
         while (*p == ':' || *p == '-') p++;
         const int a = hexNib(p[0]), b = a < 0 ? -1 : hexNib(p[1]);
@@ -1149,11 +1151,12 @@ void noteCommand(const char* msg) {
         p += 2;
     }
     rec[6] = (uint8_t)atoi(p);
+    rec[7] = snz ? 1 : 0;
     const uint8_t next = (uint8_t)((s_ignHead + 1) % IGN_MAX);
     if (next == s_ignTail) return;               // full: the rest wait for the next join
-    memcpy(s_ign[s_ignHead], rec, 7);
+    memcpy(s_ign[s_ignHead], rec, 8);
     s_ignHead = next;
-    Serial.printf("[push] phone says ignore %02x:%02x:%02x:%02x:%02x:%02x\n",
+    Serial.printf("[push] phone says %s %02x:%02x:%02x:%02x:%02x:%02x\n", snz ? "snooze" : "ignore",
                   rec[0], rec[1], rec[2], rec[3], rec[4], rec[5]);
 }
 
@@ -1184,6 +1187,7 @@ void pollCommands() {
         since[0] = '\0';
         if (p.begin(NVS_NS, false)) { p.remove("cmdSince"); p.end(); }
     }
+    s_cmdCode = code > 0 ? code : -1;
     if (code != 200) {
         if (code != 404) Serial.printf("[push] command topic: HTTP %d\n", code);
         http.end();
@@ -1214,10 +1218,13 @@ void pollCommands() {
 }
 }  // namespace
 
-bool takeIgnore(uint8_t mac[6], uint8_t& type) {
+int cmdLastCode() { return s_cmdCode; }
+
+bool takeCommand(uint8_t mac[6], uint8_t& type, bool& snooze) {
     if (s_ignTail == s_ignHead) return false;
     memcpy(mac, s_ign[s_ignTail], 6);
-    type = s_ign[s_ignTail][6];
+    type   = s_ign[s_ignTail][6];
+    snooze = s_ign[s_ignTail][7] != 0;
     s_ignTail = (uint8_t)((s_ignTail + 1) % IGN_MAX);
     return true;
 }
@@ -1278,8 +1285,13 @@ void psRun(void*) {
                 bool named = false;
                 for (unsigned k = 0; k < host.length(); k++) if (isalpha((unsigned char)host[k])) named = true;
                 if (cmd.startsWith("http://") && named) cmd = "https://" + cmd.substring(7);
-                String act = "http, Ignore, " + cmd + ", method=POST, body=" + s_psMsgs[i].act + ", clear=true";
-                if (Settings::pushToken()[0]) act += String(", headers.Authorization=Bearer ") + Settings::pushToken();
+                // Two buttons, one command topic: Ignore for good, or Snooze
+                // for a day ("SNOOZE" in place of "IGNORE", the rest alike).
+                const String auth = Settings::pushToken()[0]
+                    ? String(", headers.Authorization=Bearer ") + Settings::pushToken() : String();
+                const String rest = String(s_psMsgs[i].act).substring(6);
+                String act = "http, Ignore, " + cmd + ", method=POST, body=IGNORE" + rest + ", clear=true" + auth +
+                             "; http, Snooze 1 day, " + cmd + ", method=POST, body=SNOOZE" + rest + ", clear=true" + auth;
                 http.addHeader("Actions", act);
             }
             const int code = http.POST((uint8_t*)s_psMsgs[i].body, strlen(s_psMsgs[i].body));

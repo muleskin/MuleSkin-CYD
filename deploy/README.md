@@ -203,8 +203,8 @@ fine. Web Push gets round it.
 
 ### The IGNORE button (v3.2.2)
 
-Every alert a board pushes carries an **Ignore** button. Pressed, the phone
-posts `IGNORE <mac> <type>` to the board's command topic -- the alert topic
+Every alert a board pushes carries **Ignore** and **Snooze 1 day** buttons. Pressed,
+the phone posts `IGNORE <mac> <type>` (or `SNOOZE ...`) to the board's command topic -- the alert topic
 with `-cmd` on the end -- using the board's own token; the board reads it the
 next time it joins WiFi (a push, or the daily AUTO TIME join) and adds the
 device to its ignore list. On your own server the board's token needs to
