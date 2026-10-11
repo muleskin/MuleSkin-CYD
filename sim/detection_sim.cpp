@@ -118,6 +118,7 @@ void DetectionEngine::stopUpdateRadio() {}
 bool DetectionEngine::radiosResting() const { return false; }
 bool DetectionEngine::updateRadioOn() const { return getenv("MULESKINSIM_PAUSED") != nullptr; }
 bool DetectionEngine::radioFree() const     { return !updateRadioOn(); }
+void DetectionEngine::setHomeSsid(const char*) {}
 
 // ---- watch / hunt ----------------------------------------------------
 void DetectionEngine::watchBle(const uint8_t* mac, const char* name) {

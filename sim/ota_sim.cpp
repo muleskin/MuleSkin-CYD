@@ -184,6 +184,8 @@ bool        pushBusy()        { return false; }
 PushResult  pushResult()      { return PushResult::NONE; }
 uint8_t     pushSentCount()   { return 0; }
 int         pushLastCode()    { return 0; }
+bool        takeIgnore(uint8_t*, uint8_t&) { return false; }
+void        joinStats(uint16_t& stuck, uint16_t& saved) { stuck = saved = 0; }
 TimeSync    timeSyncState()   { return s_ts; }
 const char* timeSyncNetwork() { return s_ts == TimeSync::JOINING ? "" : "MuleSkinNet"; }
 void        forget()    { s_saved = false; s_n = 0; }

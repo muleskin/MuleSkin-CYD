@@ -16,4 +16,8 @@ namespace Notices {
 // returned text lives in a static buffer until the next call.
 const char* idleLine(const DetectionEngine& eng);
 
+// The board is still on the 20 KB settings store (an update that came over
+// the air keeps it): now and then he says to plug in once. main.cpp sets it.
+void setSmallStore(bool small);
+
 }  // namespace Notices

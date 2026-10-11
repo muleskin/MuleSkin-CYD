@@ -119,6 +119,8 @@ The same page talks to a plugged-in board over the cable:
 - **Set Time & Zone** sends this computer's clock and time zone.
 - **Back up / Restore settings** keeps your settings across an install that
   erases the board.
+- **Ignored devices** lists the devices the board never alerts for, and
+  removes or adds one.
 - **Download log** saves every detection the board has kept as a
   spreadsheet; **Crash report** reads what it kept about its last crash.
 - **Self-test** checks the board's parts -- memory, touch, both radios, the
@@ -312,8 +314,18 @@ replaces its own notification rather than stacking up -- the iPhone app, as of
 ntfy 1.7, still shows each one.
 
 One push per device an hour: a camera you sit beside all afternoon, or a
-tracker drifting in and out of range, is one notification, not forty. WITH
-YOU always goes. The self-test's **push alerts** line and DIAGNOSTICS'
+tracker drifting in and out of range, is one notification, not forty. And at
+most 30 a day: past that the board says so once and keeps the rest, and the
+evening summary counts them. WITH YOU always goes, either way.
+
+- **PUSH AT HOME** -- while the board can see your home network (the one
+  marked USE in WIFI NETWORKS): AS SET (the default), IMPORTANT at most, or
+  WITH YOU only. Only ever quieter: a faked beacon of your network can hush
+  routine pushes, never add any.
+- **Ignore** on a notification adds that device to the board's ignore list
+  the next time the board joins WiFi -- for your own AirTag, your own
+  doorbell. On your own ntfy server it needs a one-time step,
+  [deploy/README.md](deploy/README.md). The self-test's **push alerts** line and DIAGNOSTICS'
 **PUSH** row say how many went today, how many that held back, and how the
 last one went -- sent, or why not (WiFi did not join, the server refused the
 token, a rate limit) -- so a push that quietly stops arriving shows on the
@@ -369,6 +381,9 @@ v3.2.0 the store is 128 KB and somewhere else in flash, and that takes a new
 partition table, which only a **USB install** can write. An update over WiFi
 or Bluetooth still works but keeps the old 20 KB store; the self-test's
 "settings store" line says which one a board has.
+
+A board still on the small store says so: a card on the main screen on its
+first three boots, and MuleSkin mentions it now and then after that.
 
 So, once per board: plug it in, **Connect & Install** from the web flasher
 **without** ticking "Erase device". The first boot moves every setting into

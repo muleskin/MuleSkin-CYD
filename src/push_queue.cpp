@@ -32,6 +32,20 @@ bool wanted(What what, bool nightWithYouOnly, bool night, DetectionType t, bool 
     }
 }
 
+What atHome(What what, uint8_t homeMode, bool home) {
+    if (!home || homeMode == 0) return what;
+    const What cap = homeMode == 1 ? What::IMPORTANT : What::WITH_YOU;
+    return (uint8_t)what < (uint8_t)cap ? what : cap;
+}
+
+CapSay DailyCap::take(uint32_t day) {
+    if (day != _day) { _day = day; _sent = 0; _over = 0; _told = false; }
+    if (_sent < DAILY_CAP) { _sent++; return CapSay::SEND; }
+    if (_over < 0xFFFF) _over++;
+    if (!_told) { _told = true; return CapSay::TELL; }
+    return CapSay::HOLD;
+}
+
 bool Cooldown::allow(const uint8_t mac[6], uint32_t now) {
     for (uint8_t i = 0; i < _n; i++) {
         if (memcmp(_mac[i], mac, 6) != 0) continue;

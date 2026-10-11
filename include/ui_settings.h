@@ -69,6 +69,7 @@ enum class SettingsRow : uint8_t {
     PUSH_ALERTS,     // beside BUZZER: alerts as push notifications through an ntfy server, over WiFi
     PUSH_WHAT,       // ...which ones: WITH YOU / IMPORTANT / ALL
     PUSH_NIGHT,      // ...through the night: ALL AS SET / WITH YOU
+    PUSH_HOME,       // ...while the home network is in view: AS SET / IMPORTANT / WITH YOU
     PUSH_DAILY,      // ...and the 8 PM summary: ON / OFF
     BACK,
     COUNT,

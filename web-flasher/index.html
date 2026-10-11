@@ -534,6 +534,18 @@
     </div>
     <p class="browser-note"><strong>Download log</strong> saves every detection the board has kept (it survives restarts) as a spreadsheet file. <strong>Crash report</strong> lists the last boots and why each one happened -- a crash, a brownout, a restart -- with the details a bug report needs.</p>
     <div class="identify-row">
+      <button id="ignBtn" class="identify-btn">[ IGNORED DEVICES ]</button>
+      <button id="ignCloseBtn" class="identify-btn" style="display:none">[ DONE ]</button>
+      <div class="identify-result" id="ignResult"></div>
+    </div>
+    <div class="browser-note" id="ignBox" style="display:none">
+      <table id="ignTable" style="width:100%;border-collapse:collapse"></table>
+      <label style="display:block;margin-top:.6em">Add a device by its address (twelve hex digits, colons allowed)
+        <input id="ignMac" type="text" maxlength="17" placeholder="e.g. A4:C1:38:12:34:56" style="width:100%;font-family:inherit" spellcheck="false" autocomplete="off"></label>
+      <button id="ignAddBtn" class="identify-btn" style="margin-top:.4em">[ ADD ]</button>
+    </div>
+    <p class="browser-note"><strong>Ignored devices</strong> lists the devices the board never raises an alert for -- your own AirTag, your own doorbell -- and lets you remove one or add one by its address. They are still scanned and logged. The board stays connected until DONE. Needs firmware v3.2.2 or later.</p>
+    <div class="identify-row">
       <button id="selfBtn" class="identify-btn">[ SELF-TEST ]</button>
       <div class="identify-result" id="selfResult"></div>
     </div>
@@ -1451,7 +1463,9 @@
   }
 
   // Open the board's console and let it boot (opening the port resets it).
-  async function openConsole(msg) {
+  // The countdown goes to `el`, BACK UP's result line unless told otherwise.
+  async function openConsole(msg, el) {
+    var backupResult = el || document.getElementById('backupResult');
     var port = await navigator.serial.requestPort();
     var native = isNativeUsb(port);
     await port.open({ baudRate: native ? 115200 : 2000000, bufferSize: 65536 });
@@ -1484,6 +1498,100 @@
     }
     await r.cancel(); r.releaseLock();
     return text;
+  }
+
+  // IGNORED DEVICES: the board's ignore list over the cable. The port stays
+  // open while the list is up, so a remove or an add is one line each way
+  // rather than another ten-second reboot.
+  var ignBtn = document.getElementById('ignBtn'), ignCloseBtn = document.getElementById('ignCloseBtn');
+  var ignResult = document.getElementById('ignResult'), ignBox = document.getElementById('ignBox');
+  var ignTable = document.getElementById('ignTable'), ignMac = document.getElementById('ignMac');
+  var ignAddBtn = document.getElementById('ignAddBtn');
+  var ignPort = null, ignBusy = false;
+  if (ignBtn && !('serial' in navigator)) ignBtn.disabled = true;
+
+  async function ignTalk(line, until) {
+    var text = await talk(ignPort, '\n' + line + '\n', until, 6000);
+    if (text.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
+    return text;
+  }
+
+  async function ignRefresh() {
+    var text = await ignTalk('IGNORE LIST', /IGN END \d+|\[security\] locked|\[ignore\] one of/);
+    if (!/IGN END \d+/.test(text)) throw new Error('no answer. This needs firmware v3.2.2 or later');
+    var rows = text.split(/\r?\n/).filter(function (l) { return /^IGN [0-9a-f]{12} \d+ /.test(l); });
+    ignTable.textContent = '';
+    if (!rows.length) {
+      var tr0 = ignTable.insertRow(); tr0.insertCell().textContent = 'Nothing ignored.';
+    }
+    rows.forEach(function (l) {
+      var p = l.split(' '), mac = p[1], name = p.slice(3).join(' ');
+      var tr = ignTable.insertRow();
+      tr.insertCell().textContent = mac.match(/../g).join(':').toUpperCase();
+      tr.insertCell().textContent = name;
+      var b = document.createElement('button');
+      b.className = 'identify-btn'; b.textContent = '[ REMOVE ]';
+      b.onclick = function () { ignDo('IGNORE DEL ' + mac); };
+      tr.insertCell().appendChild(b);
+    });
+    ignResult.className = 'identify-result';
+    ignResult.textContent = rows.length + ' ignored.';
+  }
+
+  async function ignDo(cmd) {
+    if (ignBusy || !ignPort) return;
+    ignBusy = true;
+    try {
+      var text = await ignTalk(cmd, /\[ignore\] [^\n]*\n/);
+      var m = text.match(/\[ignore\] ([^\r\n]*)/);
+      await ignRefresh();
+      if (m) ignResult.textContent += ' (' + m[1] + ')';
+    } catch (err) {
+      ignResult.className = 'identify-result err';
+      ignResult.textContent = 'Couldn’t: ' + (err && err.message ? err.message : 'unknown error');
+    } finally { ignBusy = false; }
+  }
+
+  async function ignClose() {
+    try { if (ignPort) await ignPort.close(); } catch (e) {}
+    ignPort = null;
+    ignBox.style.display = 'none';
+    ignCloseBtn.style.display = 'none';
+    ignBtn.disabled = false;
+    ignResult.className = 'identify-result';
+    ignResult.textContent = 'Disconnected.';
+  }
+
+  if (ignBtn && 'serial' in navigator) {
+    ignBtn.addEventListener('click', async function () {
+      if (ignPort) return;
+      ignBtn.disabled = true;
+      try {
+        ignResult.className = 'identify-result';
+        ignResult.textContent = 'Pick the board’s port...';
+        ignPort = await openConsole('Reading the ignore list.', ignResult);
+        await ignRefresh();
+        ignBox.style.display = '';
+        ignCloseBtn.style.display = '';
+      } catch (err) {
+        ignResult.className = 'identify-result err';
+        ignResult.textContent = 'Couldn’t read the list: ' + (err && err.message ? err.message : 'unknown error');
+        try { if (ignPort) await ignPort.close(); } catch (e) {}
+        ignPort = null;
+        ignBtn.disabled = false;
+      }
+    });
+    ignCloseBtn.addEventListener('click', ignClose);
+    ignAddBtn.addEventListener('click', function () {
+      var hex = ignMac.value.replace(/[^0-9a-fA-F]/g, '');
+      if (hex.length !== 12) {
+        ignResult.className = 'identify-result err';
+        ignResult.textContent = 'An address is twelve hex digits.';
+        return;
+      }
+      ignMac.value = '';
+      ignDo('IGNORE ADD ' + hex.toLowerCase());
+    });
   }
 
   async function backupSettings() {

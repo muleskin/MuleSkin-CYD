@@ -133,6 +133,15 @@ bool        pushBusy();
 PushResult  pushResult();
 uint8_t     pushSentCount();    // how many of the last batch the server took
 int         pushLastCode();     // the last POST's HTTP status (0: none / no connection)
+// IGNORE from a notification. Each pushed alert carries an IGNORE button that
+// posts "IGNORE <mac> <type>" to the command topic, Settings::pushUrl() plus
+// "-cmd"; every push join and AUTO TIME join reads what is new there. The
+// main loop takes them one at a time (IgnoreList is not the WiFi task's).
+bool        takeIgnore(uint8_t mac[6], uint8_t& type);
+// The boot check's join, across boots: how many stalled (no answer, no
+// reason) and how many of those the one retry then joined. Kept in NVS, but
+// written only when a join stalls.
+void        joinStats(uint16_t& stuck, uint16_t& saved);
 
 const char* network();          // the one being joined or used
 const char* latestVersion();    // meaningful from READY on

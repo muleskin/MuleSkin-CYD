@@ -34,7 +34,10 @@ namespace PushQueue {
 // REPLACES the earlier notification instead of adding another (ntfy server
 // 2.16+, the Android and web apps; the iPhone app, as of 1.7, shows each).
 // One per device, so a camera that keeps alerting is one notification.
-struct Msg { char title[40]; char body[100]; uint8_t prio; char tags[24]; char seq[24]; };
+// `act`, when set, is the body of the notification's IGNORE button: the phone
+// posts it to the board's command topic (ota_wifi.cpp), and the board picks
+// it up the next time it joins.
+struct Msg { char title[40]; char body[100]; uint8_t prio; char tags[24]; char seq[24]; char act[24]; };
 
 const uint8_t  CAP       = 8;
 const uint32_t GATHER_MS = 3000;
@@ -50,6 +53,30 @@ bool important(DetectionType t);
 // `night` is whether it is the night hours now, and `nightWithYouOnly`
 // whether PUSH AT NIGHT is set to WITH YOU.
 bool wanted(What what, bool nightWithYouOnly, bool night, DetectionType t, bool withYou);
+
+// PUSH AT HOME (Settings::pushHome): 0 as set, 1 IMPORTANT at most, 2 WITH
+// YOU only -- while the board can see the home network. What PUSH WHAT
+// becomes there; never more than it is.
+What atHome(What what, uint8_t homeMode, bool home);
+
+// A DAY'S CAP. However the hour's cooldown spreads them, a busy day can still
+// mean a push every few minutes. Past DAILY_CAP ordinary alerts in one local
+// day the rest stay on the board: the first one over says so (TELL), the rest
+// are held quietly, and the evening summary counts them. WITH YOU is never
+// capped. The day is the caller's (Clock::localDay(), 0 before the clock is
+// set); a new day starts the count again.
+const uint16_t DAILY_CAP = 30;
+enum class CapSay : uint8_t { SEND, TELL, HOLD };
+class DailyCap {
+public:
+    CapSay   take(uint32_t day);
+    uint16_t sent(uint32_t day) const { return day == _day ? _sent : 0; }
+    uint16_t over(uint32_t day) const { return day == _day ? _over : 0; }
+private:
+    uint32_t _day = 0xFFFFFFFFu;
+    uint16_t _sent = 0, _over = 0;
+    bool     _told = false;
+};
 
 const uint32_t COOLDOWN_MS    = 60u * 60u * 1000u;
 const uint8_t  COOLDOWN_SLOTS = 24;

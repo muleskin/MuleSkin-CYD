@@ -201,6 +201,28 @@ account there -- in 2026-10 it began answering 429 (`ntfy` logs it as a WARN
 with "upstream") and iPhone notifications stopped while the server itself was
 fine. Web Push gets round it.
 
+### The IGNORE button (v3.2.2)
+
+Every alert a board pushes carries an **Ignore** button. Pressed, the phone
+posts `IGNORE <mac> <type>` to the board's command topic -- the alert topic
+with `-cmd` on the end -- using the board's own token; the board reads it the
+next time it joins WiFi (a push, or the daily AUTO TIME join) and adds the
+device to its ignore list. On your own server the board's token needs to
+READ its command topic too, and Traefik has to let a plain-HTTP GET of it
+through (the `ntfy-board-cmd` router in `docker-compose.yml`). Once:
+
+```bash
+cd /docker/muleskin-ntfy
+sudo git -C /root/MuleSkin-CYD fetch origin main
+sudo git -C /root/MuleSkin-CYD show origin/main:deploy/ntfy/docker-compose.yml | sudo tee docker-compose.yml >/dev/null
+sudo docker compose up -d
+sudo docker exec muleskin-ntfy ntfy access muleskin-board 'muleskin-*-cmd' read-write
+```
+
+The token travels inside the notification (the button's request needs it);
+only accounts that can read the topic ever see it. On the public ntfy.sh
+there is no token and nothing to set up.
+
 ### iPhone notifications without ntfy.sh: Web Push
 
 ntfy's web app, saved to the iPhone's home screen, gets Web Push straight

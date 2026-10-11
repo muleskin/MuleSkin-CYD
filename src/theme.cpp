@@ -3,6 +3,7 @@
 #include "draw_band.h"
 #include "fast_sprite.h"
 #include "muleskin_art.h"
+#include "muleskin_art_row.h"
 #include "radar_art.h"
 #include "radar_blip.h"
 #include "frame_prof.h"
@@ -1225,7 +1226,12 @@ void drawArtwork(TFT_eSPI& t, int x, int y, int w, int h, int sx, int sy, int sw
             amtL = (int)lroundf((float)left  * k * f * f);
             amtR = (int)lroundf((float)right * k * f * f);
         }
-        const uint8_t* src = MuleSkinArt::PIXELS + srow * SIZE;
+        // The picture is stored compressed (tools/make_boot_art.py): decode
+        // the row, once -- scaled up, the same row is drawn several times.
+        static uint8_t artRow[SIZE];
+        static int     artRowAt = -1;
+        if (srow != artRowAt) { MuleSkinArt::row(srow, artRow); artRowAt = srow; }
+        const uint8_t* src = artRow;
         // 1:1 across with nothing rolled -- every background row on a
         // 320-wide panel outside a twitch -- is a straight copy out of flash.
         // The sampling loop below cost the background 24 ms a frame on the

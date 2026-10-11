@@ -398,6 +398,11 @@ namespace Settings {
     // hours -- NIGHT DIM's, or 11 PM-5 AM without them.
     bool        pushNightWithYou();
     void        togglePushNightWithYou();
+    // PUSH AT HOME: while the board can see the home network (the one marked
+    // USE in WIFI NETWORKS), 0 AS SET (the default), 1 IMPORTANT at most,
+    // 2 WITH YOU only. See PushQueue::atHome().
+    uint8_t     pushHome();
+    void        cyclePushHome();
     // DAILY SUMMARY: one push at 8 PM with the day's count. On by default.
     bool        pushSummary();
     void        togglePushSummary();

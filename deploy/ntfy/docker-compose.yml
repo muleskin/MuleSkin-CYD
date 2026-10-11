@@ -35,3 +35,9 @@ services:
       - traefik.http.routers.ntfy-board.rule=Host(`ntfy.oillie.cloud`) && Method(`POST`) && PathRegexp(`^/muleskin-[A-Za-z0-9_-]+$`)
       - traefik.http.routers.ntfy-board.priority=100
       - traefik.http.routers.ntfy-board.service=muleskin-ntfy
+      # ...and a GET of a muleskin-...-cmd topic's poll: where a notification's
+      # IGNORE button leaves its request for the board to read at its next join.
+      - traefik.http.routers.ntfy-board-cmd.entrypoints=web
+      - traefik.http.routers.ntfy-board-cmd.rule=Host(`ntfy.oillie.cloud`) && Method(`GET`) && PathRegexp(`^/muleskin-[A-Za-z0-9_-]+-cmd/json$`)
+      - traefik.http.routers.ntfy-board-cmd.priority=100
+      - traefik.http.routers.ntfy-board-cmd.service=muleskin-ntfy

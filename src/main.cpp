@@ -1614,12 +1614,46 @@ volatile int32_t g_consoleFakeLat7 = 0, g_consoleFakeLon7 = 0;   // GPS FAKE lat
 // update AUTO UPDATE does, without waiting for night, and the CANCEL button.
 // Bench builds only.
 volatile bool g_benchUpdateNow  = false;
+volatile bool g_benchAlertPush  = false;
 volatile bool g_benchUpdateStop = false;
 #endif
 
 // Why OtaWifi::begin() said no. It refuses while the board is locked, and
 // also while a cancelled attempt's task is still unwinding the request it was
 // waiting on -- a second or two, and nothing the owner did wrong.
+// The settings store's size in KB: 128 on the v3.2.0 tables, 20 on an older
+// table that took its updates over the air. 0 when there is no flash to ask.
+static unsigned nvsStoreKb() {
+#if defined(ARDUINO_ARCH_ESP32)
+    const esp_partition_t* p = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, "nvs");
+    return p ? (unsigned)(p->size / 1024) : 0u;
+#else
+    return 0;
+#endif
+}
+
+// Still on the 20 KB store: a card on the main screen, on each of the first
+// three boots that reach it (the count kept in NVS, three writes in all), and
+// MuleSkin's idle line now and then after that -- until a USB install moves
+// it. The self-test's "settings store" line says the same.
+static void serviceSmallStoreNotice(uint32_t now) {
+    static bool done = false;
+    if (done || state != AppState::CLEAR || now < 20000) return;
+    done = true;
+    const unsigned kb = nvsStoreKb();
+    if (!kb || kb >= 64) return;
+    Notices::setSmallStore(true);
+    Preferences p;
+    if (!p.begin("settings", false)) return;
+    const uint8_t told = p.getUChar("smallTold", 0);
+    if (told < 3) {
+        p.putUChar("smallTold", (uint8_t)(told + 1));
+        Theme::showToast("PLUG IN ONCE", "Web flasher, no erase: bigger settings store", Theme::AMBER, 8000);
+        Serial.println("[nvs] still the 20 KB store: one USB install from the web flasher moves it to 128 KB");
+    }
+    p.end();
+}
+
 // The settings store's fill, 0-100: used entries of all it can hold. See the
 // self-test's "settings store" line and DIAGNOSTICS.
 static uint8_t nvsFullPercent() {
@@ -1854,7 +1888,7 @@ static const char* pushBoardName() {
 }
 
 static void queuePush(const char* title, const char* body, uint8_t prio, const char* tags, bool urgent,
-                      const char* seq = nullptr) {
+                      const char* seq = nullptr, const char* act = nullptr) {
     if (!Settings::pushOn()) return;
     PushQueue::Msg m{};
     snprintf(m.title, sizeof m.title, "%s: %s", pushBoardName(), title);
@@ -1868,23 +1902,43 @@ static void queuePush(const char* title, const char* body, uint8_t prio, const c
     m.prio = prio;
     snprintf(m.tags, sizeof m.tags, "%s", tags);
     if (seq) snprintf(m.seq, sizeof m.seq, "%s", seq);
+    if (act) snprintf(m.act, sizeof m.act, "%s", act);
     s_pushQ.add(m, millis(), urgent);
 }
 
 static PushQueue::Cooldown s_pushCool;   // one push per device an hour (push_queue.h)
 static uint16_t s_pushCooled = 0;        // held back by it today: the self-test's count
+static PushQueue::DailyCap s_pushCap;    // DAILY_CAP ordinary alerts a day (push_queue.h)
+
+static uint32_t pushDay() { return Clock::isSet() ? Clock::localDay() : 0; }
 
 static void queuePushAlert(const Detection& d, uint16_t followMins) {
     if (!Settings::pushOn()) return;
-    if (!PushQueue::wanted((PushQueue::What)Settings::pushWhat(), Settings::pushNightWithYou(),
-                           pushNightNow(), d.type, followMins != 0)) return;
+    const PushQueue::What what = PushQueue::atHome((PushQueue::What)Settings::pushWhat(), Settings::pushHome(),
+                                                   engine.homeInView(millis()));
+    if (!PushQueue::wanted(what, Settings::pushNightWithYou(), pushNightNow(), d.type, followMins != 0)) return;
     if (!followMins && !s_pushCool.allow(d.mac, millis())) {
         s_pushCooled++;
         Serial.printf("[push] %s %02x:%02x:%02x:%02x:%02x:%02x pushed within the hour; not again\n",
                       detectionTypeName(d.type), d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
         return;
     }
-    char title[40], body[100], seq[24];
+    if (!followMins) {
+        const PushQueue::CapSay say = s_pushCap.take(pushDay());
+        if (say == PushQueue::CapSay::HOLD) return;
+        if (say == PushQueue::CapSay::TELL) {
+            char b[100];
+            snprintf(b, sizeof b, "%u alerts pushed today. The rest stay on the board until tomorrow; WITH YOU still comes.",
+                     (unsigned)PushQueue::DAILY_CAP);
+            queuePush("daily push limit", b, 3, "no_bell", false, "daily-limit");
+            Serial.println("[push] daily limit reached");
+            return;
+        }
+    }
+    char title[40], body[100], seq[24], act[24];
+    // The notification's IGNORE button posts this back (see ota_wifi.h).
+    snprintf(act, sizeof act, "IGNORE %02x%02x%02x%02x%02x%02x %u",
+             d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5], (unsigned)d.type);
     const char* vendor = vendorText(d);
     // One notification per device (where the phone's app supports replacing
     // one), and a WITH YOU its own, so it never overwrites an ordinary alert.
@@ -1895,13 +1949,13 @@ static void queuePushAlert(const Detection& d, uint16_t followMins) {
         snprintf(body, sizeof body, "%s%swith you %u min, %d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
                  vendor, vendor[0] ? " -- " : "", (unsigned)followMins, (int)d.rssi,
                  d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
-        queuePush(title, body, 5, "rotating_light", true, seq);
+        queuePush(title, body, 5, "rotating_light", true, seq, act);
     } else {
         snprintf(title, sizeof title, "%s nearby", detectionTypeName(d.type));
         snprintf(body, sizeof body, "%s%s%d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
                  vendor, vendor[0] ? ", " : "", (int)d.rssi,
                  d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
-        queuePush(title, body, 4, "warning", false, seq);
+        queuePush(title, body, 4, "warning", false, seq, act);
     }
 }
 
@@ -1946,6 +2000,11 @@ static void servicePushSummary() {
                      a.tm_hour % 12 ? a.tm_hour % 12 : 12, a.tm_min, a.tm_hour < 12 ? "AM" : "PM",
                      b.tm_hour % 12 ? b.tm_hour % 12 : 12, b.tm_min, b.tm_hour < 12 ? "AM" : "PM");
     }
+    // Over the day's push limit: say how many never left the board.
+    const uint16_t over = s_pushCap.over(day);
+    const size_t bl = strlen(body);
+    if (over && bl < sizeof body - 24)
+        snprintf(body + bl, sizeof body - bl, ". %u not pushed", (unsigned)over);
     PushQueue::Msg m{};
     snprintf(m.title, sizeof m.title, "%s today", pushBoardName());
     snprintf(m.body, sizeof m.body, "%s", body);
@@ -1976,8 +2035,10 @@ static uint8_t pushStatusText(char* out, size_t n) {
     if (!Settings::pushOn()) { snprintf(out, n, "off"); return 0; }
     if (!Settings::pushUrl()[0]) { snprintf(out, n, "on, but no server set"); return 1; }
     pushStatRollDay();
-    char cooled[24] = "";
-    if (s_pushCooled) snprintf(cooled, sizeof cooled, ", %u held back", (unsigned)s_pushCooled);
+    char cooled[40] = "";
+    const uint16_t capped = s_pushCap.over(pushDay());
+    if (s_pushCooled || capped)
+        snprintf(cooled, sizeof cooled, ", %u held back", (unsigned)(s_pushCooled + capped));
     if (!s_pushStat.atMs) { snprintf(out, n, "none sent since boot%s", cooled); return 0; }
     const uint32_t ago = (millis() - s_pushStat.atMs) / 60000u;
     using R = OtaWifi::PushResult;
@@ -2018,6 +2079,26 @@ static void servicePush(uint32_t now) {
         s_pushStat.atMs   = now ? now : 1;
     }
     servicePushSummary();
+    // IGNORE pressed on a notification, read at the last join.
+    {
+        uint8_t mac[6], type = 0;
+        while (OtaWifi::takeIgnore(mac, type)) {
+            const DetectionType t = type < (uint8_t)DetectionType::COUNT ? (DetectionType)type : DetectionType::UNKNOWN;
+            if (IgnoreList::add(mac, t)) {
+                Serial.printf("[ignore] from the phone: %02x:%02x:%02x:%02x:%02x:%02x %s\n",
+                              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], detectionTypeName(t));
+                if (state == AppState::CLEAR) Theme::showToast("IGNORED FROM PHONE", detectionTypeName(t), Theme::CYAN, 3000);
+            }
+        }
+    }
+    // PUSH AT HOME's home: the saved network marked USE, kept current.
+    {
+        static uint32_t homeAt = 0;
+        if (!homeAt || now - homeAt > 60000) {
+            homeAt = now ? now : 1;
+            engine.setHomeSsid(OtaWifi::savedCount() ? OtaWifi::savedSsidAt(OtaWifi::savedUse()) : "");
+        }
+    }
     uiClearSetPushWaiting(Settings::pushOn() && s_pushQ.waiting() ? s_pushQ.count() : 0);
     if (s_pushRadio) return;
     if (!Settings::pushOn()) { if (s_pushQ.count()) s_pushQ.clear(); return; }
@@ -2183,12 +2264,7 @@ static void runSelfTest() {
         // old table (an update that came over the air) has the 20 KB store
         // at 0x9000; one USB install moves it to the 128 KB one.
         const uint8_t pct = nvsFullPercent();
-        unsigned nvsKb = 128;
-#if defined(ARDUINO_ARCH_ESP32)
-        const esp_partition_t* nvsPart =
-            esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, "nvs");
-        nvsKb = nvsPart ? (unsigned)(nvsPart->size / 1024) : 0u;
-#endif
+        const unsigned nvsKb = nvsStoreKb();
         const bool oldTable = nvsKb && nvsKb < 64;
         line(pct >= 90 ? 2 : pct >= 75 ? 1 : 0, "settings store", "%u%% full of %u KB%s", (unsigned)pct, nvsKb,
              pct >= 75 ? " -- back up settings in the web flasher"
@@ -4656,6 +4732,15 @@ void loop() {
 #endif
     Clock::tick(now);   // the note to self, when it is due
 #ifdef BENCH_TOOLS
+    if (g_benchAlertPush) {
+        g_benchAlertPush = false;
+        Detection d{};
+        const uint8_t mac[6] = { 0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6 };
+        memcpy(d.mac, mac, 6);
+        d.type = DetectionType::FLOCK;
+        d.rssi = -60;
+        queuePushAlert(d, 0);
+    }
     if (g_benchUpdateNow && state == AppState::CLEAR) {
         // Waits for the main screen rather than barging in from wherever the
         // board happens to be -- the same place a person would start from.
@@ -4757,6 +4842,7 @@ void loop() {
     serviceLive(now);
     serviceAutoUpdate(now);
     servicePush(now);
+    serviceSmallStoreNotice(now);
     if (state == AppState::CLEAR) {
         const char* sub = nullptr;
         bool good = false;
@@ -6177,6 +6263,7 @@ void loop() {
                             break;
                         case SettingsRow::PUSH_WHAT:  Settings::cyclePushWhat();          break;
                         case SettingsRow::PUSH_NIGHT: Settings::togglePushNightWithYou(); break;
+                        case SettingsRow::PUSH_HOME:  Settings::cyclePushHome();          break;
                         case SettingsRow::PUSH_DAILY: Settings::togglePushSummary();      break;
                         case SettingsRow::UPDATE_CHANNEL:
                             Settings::toggleLabChannel();
@@ -7014,6 +7101,14 @@ void loop() {
             info.largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
             info.nvsPercent   = nvsFullPercent();
             info.pushWarn     = pushStatusText(info.push, sizeof info.push) != 0;
+            {
+                uint16_t stuck = 0, saved = 0;
+                OtaWifi::joinStats(stuck, saved);
+                if (!stuck) snprintf(info.wifiJoin, sizeof info.wifiJoin, "boot joins never stalled");
+                else        snprintf(info.wifiJoin, sizeof info.wifiJoin, "%u stalled, retry joined %u",
+                                     (unsigned)stuck, (unsigned)saved);
+                info.wifiWarn = stuck > saved;
+            }
             info.resetReason = resetReasonName();
             info.loopFree    = s_loopHeapFree;
             info.loopLargest = s_loopHeapLargest;

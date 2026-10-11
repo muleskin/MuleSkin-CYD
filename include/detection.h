@@ -179,6 +179,12 @@ public:
     // Nothing else owns the radio: no update or time join, no raw WiFi scan,
     // no rest. What a PUSH join waits for before it borrows it.
     bool     radioFree() const;
+    // PUSH AT HOME: the home network's name (the saved one marked USE), and
+    // whether a beacon of it was heard in the last HOME_MS. A beacon can be
+    // faked, so this only ever makes pushes QUIETER, never louder.
+    static const uint32_t HOME_MS = 5u * 60u * 1000u;
+    void     setHomeSsid(const char* ssid);
+    bool     homeInView(uint32_t now) const { return _homeSeenMs && now - _homeSeenMs < HOME_MS; }
 
     // ---- Watched target ("stalker tracker") --------------------------
     // Session-only (not persisted to NVS -- resets on reboot). One
@@ -431,6 +437,8 @@ private:
     ApEntry  _aps[AP_CAP];
     uint8_t  _apCount = 0;
     uint8_t  _apNext  = 0;          // round-robin eviction cursor
+    char     _homeSsid[33] = "";
+    uint32_t _homeSeenMs = 0;
     // Returns true if this beacon looks like an evil twin of an SSID
     // already on file. Records the SSID on first sighting.
     bool noteApBeacon(const uint8_t* bssid, const char* ssid, bool encrypted);

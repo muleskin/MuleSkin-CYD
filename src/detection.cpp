@@ -1596,7 +1596,16 @@ static inline bool sameVendor(const uint8_t* a, const uint8_t* b) {
 // The pair is still surfaced either way -- the device is telling you
 // two boxes claim one name and disagree about security, which is the
 // finding; it can't tell you which of them is lying.
+void DetectionEngine::setHomeSsid(const char* ssid) {
+    if (!ssid) ssid = "";
+    if (strncmp(_homeSsid, ssid, sizeof _homeSsid - 1) == 0) return;
+    strncpy(_homeSsid, ssid, sizeof _homeSsid - 1);
+    _homeSsid[sizeof _homeSsid - 1] = 0;
+    _homeSeenMs = 0;
+}
+
 bool DetectionEngine::noteApBeacon(const uint8_t* bssid, const char* ssid, bool encrypted) {
+    if (_homeSsid[0] && strcmp(ssid, _homeSsid) == 0) { _homeSeenMs = millis(); if (!_homeSeenMs) _homeSeenMs = 1; }
     for (uint8_t i = 0; i < _apCount; i++) {
         if (strncmp(_aps[i].ssid, ssid, sizeof(_aps[i].ssid) - 1) != 0) continue;
         // Same SSID, same BSSID -- just this AP beaconing again. Refresh

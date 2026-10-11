@@ -10,6 +10,7 @@
 #endif
 #include "flood_bench.h" // FLOOD N, for the bench (a no-op outside FLOOD_BENCH builds)
 #include "settings.h"
+#include "ignore_list.h"  // IGNORE LIST / ADD / DEL: the web flasher's ignore list
 #include "blackbox.h"    // BLACKBOX dumps it
 #include "ota_core.h"    // VERTEST, on bench builds
 #include "frame_push.h"  // PUSH, the frame-push switch
@@ -51,6 +52,7 @@ extern volatile bool g_benchPrimNow;
 #ifdef BENCH_TOOLS
 // Set by UPDATE NOW below, acted on by main.cpp's loop, which owns it.
 extern volatile bool g_benchUpdateNow;
+extern volatile bool g_benchAlertPush;
 extern volatile bool g_benchUpdateStop;
 #endif
 // INVERT and ROT: the colour-check toggles and the corner rotate button,
@@ -505,6 +507,50 @@ void pollSerial() {
             continue;
         }
         if (NvsBackup::handle(line)) continue;
+        // The ignore list, for the web flasher: IGNORE LIST prints one
+        // "IGN <mac> <type> <name>" line each and "IGN END <n>"; IGNORE ADD
+        // <mac> [type] and IGNORE DEL <mac> change it. A MAC is twelve hex
+        // digits, colons allowed.
+        if (strncasecmp(line, "IGNORE ", 7) == 0) {
+            const char* a = line + 7;
+            if (strcasecmp(a, "LIST") == 0) {
+                const uint8_t n = IgnoreList::count();
+                for (uint8_t i = 0; i < n; i++) {
+                    const uint8_t* m = IgnoreList::macAt(i);
+                    const DetectionType t = IgnoreList::typeAt(i);
+                    if (m) Serial.printf("IGN %02x%02x%02x%02x%02x%02x %u %s\n", m[0], m[1], m[2], m[3], m[4], m[5],
+                                         (unsigned)t, detectionTypeName(t));
+                }
+                Serial.printf("IGN END %u\n", (unsigned)n);
+                continue;
+            }
+            const bool add = strncasecmp(a, "ADD ", 4) == 0, del = strncasecmp(a, "DEL ", 4) == 0;
+            if (add || del) {
+                const char* p = a + 4;
+                uint8_t mac[6];
+                bool ok = true;
+                for (int i = 0; i < 6 && ok; i++) {
+                    while (*p == ':' || *p == '-' || *p == ' ') p++;
+                    char hx[3] = { p[0], p[0] ? p[1] : '\0', '\0' };
+                    char* end = nullptr;
+                    const long v = strtol(hx, &end, 16);
+                    ok = hx[0] && hx[1] && end == hx + 2;
+                    mac[i] = (uint8_t)v;
+                    p += 2;
+                }
+                if (!ok) { Serial.println("[ignore] bad: a MAC is twelve hex digits"); continue; }
+                if (add) {
+                    const int ty = atoi(p);
+                    const DetectionType t = ty > 0 && ty < (int)DetectionType::COUNT ? (DetectionType)ty : DetectionType::UNKNOWN;
+                    Serial.println(IgnoreList::add(mac, t) ? "[ignore] added" : "[ignore] not added: full, or already there");
+                } else {
+                    Serial.println(IgnoreList::remove(mac) ? "[ignore] removed" : "[ignore] not on the list");
+                }
+                continue;
+            }
+            Serial.println("[ignore] one of: IGNORE LIST, IGNORE ADD <mac> [type], IGNORE DEL <mac>");
+            continue;
+        }
 
         if (strncasecmp(line, "FLOOD ", 6) == 0) {
             // A thousand a second is five times the loudest room measured;
@@ -763,6 +809,11 @@ void pollSerial() {
             Serial.printf("[ota] %s\n", OtaCore::testVersionDecision(line + 8));
         } else if (strncasecmp(line, "SIGTEST", 7) == 0) {
             Serial.printf("[ota] %s\n", OtaCore::testSignature());
+        } else if (strncasecmp(line, "ALERTPUSH", 9) == 0) {
+            // A made-up Flock alert through the real push path -- the
+            // cooldown, the cap, the IGNORE button -- for the bench.
+            g_benchAlertPush = true;
+            Serial.println("[bench] a test alert for the push queue");
         } else if (strncasecmp(line, "UPDATE NOW", 10) == 0) {
             // A whole WiFi update, start to finish, with nobody at the board.
             // main.cpp picks this up on its next pass; see g_benchUpdateNow.

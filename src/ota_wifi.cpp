@@ -891,7 +891,9 @@ bool bootCheck(uint32_t budgetMs) {
     // clock and the rule set until AUTO TIME's daily join. A wrong password
     // or a missing network says so and is not retried. The retry gets half
     // the first try's window, and the fetch's clock starts again with it.
+    bool retried = false;
     if (st != WL_CONNECTED && st != WL_CONNECT_FAILED && st != WL_NO_SSID_AVAIL && !s_dropReason) {
+        retried = true;
         Serial.printf("[ota] boot check: join stuck (status %d) after %lu ms; once more\n",
                       (int)st, (unsigned long)(millis() - tj));
         WiFi.disconnect(false, false);
@@ -906,6 +908,14 @@ bool bootCheck(uint32_t budgetMs) {
         }
     }
     WiFi.removeEvent(dropEv);
+    if (retried) {
+        Preferences jp;
+        if (jp.begin(NVS_NS, false)) {
+            jp.putUShort("jStuck", (uint16_t)(jp.getUShort("jStuck", 0) + 1));
+            if (st == WL_CONNECTED) jp.putUShort("jSaved", (uint16_t)(jp.getUShort("jSaved", 0) + 1));
+            jp.end();
+        }
+    }
     if (st != WL_CONNECTED)
         Serial.printf("[ota] boot check: join gave up after %lu ms, status %d, last drop reason %u\n",
                       (unsigned long)(millis() - tj), (int)st, (unsigned)s_dropReason);
@@ -1070,6 +1080,8 @@ bool joinBest(char* ssid, size_t cap, const char* tag, int8_t skip = -1, int8_t*
     return true;
 }
 
+void pollCommands();   // below: IGNORE from a notification
+
 void tsRun(void*) {
     const uint32_t t0 = millis();
     if (!joinBest(s_tsSsid, sizeof s_tsSsid, "time")) {
@@ -1096,6 +1108,7 @@ void tsRun(void*) {
             }
             free(body);
         }
+        pollCommands();
     }
     Clock::syncStop();
     // Off the network, but the station mode stays up: detection sniffs on it.
@@ -1109,6 +1122,102 @@ void tsRun(void*) {
     vTaskDelete(nullptr);
 }
 }  // namespace
+
+// ---- IGNORE from a notification --------------------------------------------------
+namespace {
+const uint8_t     IGN_MAX = 8;
+uint8_t           s_ign[IGN_MAX][7];       // mac + type, waiting for the main loop
+volatile uint8_t  s_ignHead = 0, s_ignTail = 0;
+
+int hexNib(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+// "IGNORE aabbccddeeff 12" -> queued for the main loop.
+void noteCommand(const char* msg) {
+    if (strncasecmp(msg, "IGNORE ", 7) != 0) return;
+    const char* p = msg + 7;
+    uint8_t rec[7];
+    for (int i = 0; i < 6; i++) {
+        while (*p == ':' || *p == '-') p++;
+        const int a = hexNib(p[0]), b = a < 0 ? -1 : hexNib(p[1]);
+        if (a < 0 || b < 0) return;
+        rec[i] = (uint8_t)(a << 4 | b);
+        p += 2;
+    }
+    rec[6] = (uint8_t)atoi(p);
+    const uint8_t next = (uint8_t)((s_ignHead + 1) % IGN_MAX);
+    if (next == s_ignTail) return;               // full: the rest wait for the next join
+    memcpy(s_ign[s_ignHead], rec, 7);
+    s_ignHead = next;
+    Serial.printf("[push] phone says ignore %02x:%02x:%02x:%02x:%02x:%02x\n",
+                  rec[0], rec[1], rec[2], rec[3], rec[4], rec[5]);
+}
+
+// What is new on the command topic since the last one read. ntfy's poll: one
+// JSON object a line, each with an "id" and a "message". Plain HTTP and the
+// board's token, like the pushes; the last id read is kept in NVS (written
+// only when it moves) so a restart does not replay the lot.
+void pollCommands() {
+    if (!Settings::pushOn() || !Settings::pushUrl()[0]) return;
+    Preferences p;
+    char since[24] = "";
+    if (p.begin(NVS_NS, true)) { strncpy(since, p.getString("cmdSince", "").c_str(), sizeof since - 1); p.end(); }
+    String url = String(Settings::pushUrl()) + "-cmd/json?poll=1&since=" + (since[0] ? since : "12h");
+    HTTPClient http;
+    if (!http.begin(*client(), url)) return;
+    http.setTimeout(4000);
+    if (Settings::pushToken()[0]) http.addHeader("Authorization", String("Bearer ") + Settings::pushToken());
+    const int code = http.GET();
+    if (code != 200) {
+        if (code != 404) Serial.printf("[push] command topic: HTTP %d\n", code);
+        http.end();
+        return;
+    }
+    String body = http.getString();
+    http.end();
+    char last[24] = "";
+    int at = 0;
+    while (at < (int)body.length()) {
+        int nl = body.indexOf('\n', at);
+        if (nl < 0) nl = body.length();
+        const String line = body.substring(at, nl);
+        at = nl + 1;
+        if (line.indexOf("\"event\":\"message\"") < 0) continue;
+        const int i = line.indexOf("\"id\":\"");
+        const int m = line.indexOf("\"message\":\"");
+        if (i < 0 || m < 0) continue;
+        const int ie = line.indexOf('"', i + 6), me = line.indexOf('"', m + 11);
+        if (ie < 0 || me < 0) continue;
+        strncpy(last, line.substring(i + 6, ie).c_str(), sizeof last - 1);
+        noteCommand(line.substring(m + 11, me).c_str());
+    }
+    if (last[0] && strcmp(last, since) != 0 && p.begin(NVS_NS, false)) {
+        p.putString("cmdSince", last);
+        p.end();
+    }
+}
+}  // namespace
+
+bool takeIgnore(uint8_t mac[6], uint8_t& type) {
+    if (s_ignTail == s_ignHead) return false;
+    memcpy(mac, s_ign[s_ignTail], 6);
+    type = s_ign[s_ignTail][6];
+    s_ignTail = (uint8_t)((s_ignTail + 1) % IGN_MAX);
+    return true;
+}
+
+void joinStats(uint16_t& stuck, uint16_t& saved) {
+    stuck = saved = 0;
+    Preferences p;
+    if (!p.begin(NVS_NS, true)) return;
+    stuck = p.getUShort("jStuck", 0);
+    saved = p.getUShort("jSaved", 0);
+    p.end();
+}
 
 // ---- PUSH ALERTS ---------------------------------------------------------------
 namespace {
@@ -1146,6 +1255,21 @@ void psRun(void*) {
             if (s_psMsgs[i].tags[0]) http.addHeader("Tags", s_psMsgs[i].tags);
             if (s_psMsgs[i].seq[0])  http.addHeader("X-Sequence-ID", s_psMsgs[i].seq);
             if (Settings::pushToken()[0]) http.addHeader("Authorization", String("Bearer ") + Settings::pushToken());
+            // The IGNORE button: the phone posts the act to the command topic
+            // itself, so over HTTPS when the server has a name (a bare IP
+            // is a LAN box, plain HTTP), with the same token -- the board's,
+            // which can write muleskin-* topics. The notification carries
+            // it; only accounts that can read the topic ever see that.
+            if (s_psMsgs[i].act[0]) {
+                String cmd = String(Settings::pushUrl()) + "-cmd";
+                const String host = cmd.substring(7, cmd.indexOf('/', 7) < 0 ? cmd.length() : cmd.indexOf('/', 7));
+                bool named = false;
+                for (unsigned k = 0; k < host.length(); k++) if (isalpha((unsigned char)host[k])) named = true;
+                if (cmd.startsWith("http://") && named) cmd = "https://" + cmd.substring(7);
+                String act = "http, Ignore, " + cmd + ", method=POST, body=" + s_psMsgs[i].act + ", clear=true";
+                if (Settings::pushToken()[0]) act += String(", headers.Authorization=Bearer ") + Settings::pushToken();
+                http.addHeader("Actions", act);
+            }
             const int code = http.POST((uint8_t*)s_psMsgs[i].body, strlen(s_psMsgs[i].body));
             http.end();
             s_psCode = code < 0 ? 0 : code;
@@ -1156,6 +1280,7 @@ void psRun(void*) {
             s_psSent++;
         }
         s_push = s_psSent == s_psN ? PushResult::SENT : PushResult::NO_ANSWER;
+        pollCommands();   // joined anyway: any IGNORE from the phone
     }
     // Off the network, but the station mode stays up: detection sniffs on it.
     WiFi.disconnect(false, false);

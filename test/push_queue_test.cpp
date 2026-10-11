@@ -132,6 +132,26 @@ int main() {
         ck("across millis() wrapping", c.allow(w, 0xFFFFF000u) && !c.allow(w, 0x00001000u));
     }
 
+    suite("at home");
+    ck("away, as set", atHome(What::ALL, 2, false) == What::ALL);
+    ck("home, AS SET leaves it", atHome(What::ALL, 0, true) == What::ALL);
+    ck("home, IMPORTANT trims ALL", atHome(What::ALL, 1, true) == What::IMPORTANT);
+    ck("home, WITH YOU trims IMPORTANT", atHome(What::IMPORTANT, 2, true) == What::WITH_YOU);
+    ck("never more than it was", atHome(What::WITH_YOU, 1, true) == What::WITH_YOU);
+
+    suite("a day's cap");
+    {
+        DailyCap c;
+        bool allSent = true;
+        for (uint16_t i = 0; i < DAILY_CAP; i++) allSent = allSent && c.take(7) == CapSay::SEND;
+        ck("the first DAILY_CAP go", allSent && c.sent(7) == DAILY_CAP);
+        ck("the next says so, once", c.take(7) == CapSay::TELL);
+        ck("then held quietly", c.take(7) == CapSay::HOLD && c.take(7) == CapSay::HOLD);
+        ck("and counted", c.over(7) == 3);
+        ck("a new day starts again", c.take(8) == CapSay::SEND && c.sent(8) == 1 && c.over(8) == 0);
+        ck("a past day reads zero", c.sent(7) == 0);
+    }
+
     suite("clear");
     {
         Queue q;

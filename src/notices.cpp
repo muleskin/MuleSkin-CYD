@@ -140,10 +140,15 @@ const char* calendarLine() {
 
 }  // namespace
 
+static bool s_smallStore = false;
+void setSmallStore(bool small) { s_smallStore = small; }
+
 const char* idleLine(const DetectionEngine& eng) {
     // The calendar first, since it only ever speaks on its day; then the
     // rest by dice.
     if (const char* c = calendarLine()) return c;
+    if (s_smallStore && random(0, 5) == 0)
+        return "My settings store is the old small one. Plug me into the web flasher once -- no erase.";
     switch (random(0, 6)) {
         case 0: case 1: return loreLine(eng);
         case 2:         return nudgeLine(eng);

@@ -169,6 +169,7 @@ static char    s_pushTok[48]  = "";
 static char    s_pushName[16] = "";
 static uint8_t s_pushWhat     = 1;
 static bool    s_pushNight    = true;
+static uint8_t s_pushHome     = 0;
 static bool    s_pushDaily    = true;
 static uint8_t s_timeZone     = 10;   // UTC in Clock's table
 static bool    s_tzChosen     = false;
@@ -516,6 +517,7 @@ void load() {
     s_pushWhat     = s_prefs.getUChar("pushWhat", 1);
     if (s_pushWhat > 2) s_pushWhat = 1;
     s_pushNight    = s_prefs.getBool("pushNight", true);
+    s_pushHome     = s_prefs.getUChar("pushHome", 0); if (s_pushHome > 2) s_pushHome = 0;
     s_pushDaily    = s_prefs.getBool("pushDaily", true);
     if (s_nightMode >= NightMode::PRESET_N) s_nightMode = 0;
     s_timeZone     = s_prefs.getUChar("tz", 10);
@@ -740,6 +742,8 @@ uint8_t pushWhat()                { return s_pushWhat; }
 void    cyclePushWhat()           { s_pushWhat = (uint8_t)((s_pushWhat + 1) % 3); s_prefs.putUChar("pushWhat", s_pushWhat); }
 bool    pushNightWithYou()        { return s_pushNight; }
 void    togglePushNightWithYou()  { s_pushNight = !s_pushNight; s_prefs.putBool("pushNight", s_pushNight); }
+uint8_t pushHome()                { return s_pushHome; }
+void    cyclePushHome()           { s_pushHome = (uint8_t)((s_pushHome + 1) % 3); s_prefs.putUChar("pushHome", s_pushHome); }
 bool    pushSummary()             { return s_pushDaily; }
 void    togglePushSummary()       { s_pushDaily = !s_pushDaily; s_prefs.putBool("pushDaily", s_pushDaily); }
 uint32_t pushSummaryDay()         { return s_prefs.getUInt("pushSumDay", 0); }
