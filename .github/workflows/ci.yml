@@ -40,7 +40,9 @@ jobs:
       # main.cpp itself -- which stopped linking in 4093d50 without CI
       # noticing, because only the first was built here.
       - name: Build the emulator
-        run: make -C sim -j"$(nproc)" muleskinsim muleskinsim-live
+        # FW_VERSION pinned: the boot splash prints it, and git describe
+        # would put this commit's hash in the picture.
+        run: make -C sim -j"$(nproc)" muleskinsim muleskinsim-live FW_VERSION=sim
       - name: Compare the screens
         run: |
           pip install -q pillow

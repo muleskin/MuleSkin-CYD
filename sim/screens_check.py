@@ -45,7 +45,8 @@ SCREENS = [
     ("alert-flock",   "alert",      ["--alert", "1"], {}),
     ("log",           "log",        [], {}),
     # The splash: the MuleSkin artwork, decoded from its Huffman coding a row
-    # at a time (src/muleskin_art.cpp) -- the one screen that draws it.
+    # at a time (src/muleskin_art.cpp) -- the one screen that draws it. It
+    # prints the version, so the emulator is built with FW_VERSION=sim (CI).
     ("boot",          "boot",       [], {}),
 ]
 
