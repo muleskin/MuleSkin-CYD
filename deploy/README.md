@@ -193,9 +193,43 @@ behind accounts. One-time setup:
 5. Flasher page, SET UP PUSH ALERTS: server `ntfy.oillie.cloud`, the same
    topic, and the token.
 
-`server.yml` sets `upstream-base-url: https://ntfy.sh`: that is how an iPhone
-gets instant notifications from a self-hosted server. ntfy.sh is told only a
-hash of the topic, never the message; the app fetches the message from here.
+`server.yml` sets `upstream-base-url: https://ntfy.sh`: that is how the ntfy
+iPhone APP gets instant notifications from a self-hosted server. ntfy.sh is
+told only a hash of the topic, never the message; the app fetches the message
+from here. But ntfy.sh only relays so many a day for a server without an
+account there -- in 2026-10 it began answering 429 (`ntfy` logs it as a WARN
+with "upstream") and iPhone notifications stopped while the server itself was
+fine. Web Push gets round it.
+
+### iPhone notifications without ntfy.sh: Web Push
+
+ntfy's web app, saved to the iPhone's home screen, gets Web Push straight
+from this server through Apple's push service: no relay, no daily limit.
+iOS 16.4 or later. One-time:
+
+1. Keys. On the server:
+   ```bash
+   cd /docker/muleskin-ntfy
+   sudo cp /root/MuleSkin-CYD/deploy/ntfy/{docker-compose.yml,server.yml,.env.example} .
+   sudo docker exec muleskin-ntfy ntfy webpush keys
+   sudo cp .env.example .env && sudo nano .env    # paste both keys and your email
+   sudo chmod 600 .env
+   sudo docker compose up -d
+   ```
+   `sudo docker logs muleskin-ntfy 2>&1 | grep -i "web push"` should show it
+   enabled. The private key stays in `.env` on the server only.
+2. iPhone, in **Safari**: open `https://ntfy.oillie.cloud`, Share > **Add to
+   Home Screen**, then open it FROM THE HOME SCREEN (a Safari tab cannot get
+   Web Push).
+3. Log in as `<you>`, subscribe to your `muleskin-...` topic, and allow
+   notifications when it asks (Settings in the web app has the switch if it
+   did not).
+4. Push a test from the board (console `PUSH TEST`, or the flasher's SET UP
+   PUSH ALERTS) and check it arrives with the phone locked.
+5. Then remove the topic from the ntfy iPhone app (or delete the app), or
+   every alert arrives twice once ntfy.sh lets the relay through again.
+
+Android's ntfy app talks to this server directly and needs none of this.
 
 Check it from anywhere (the board's own route, plain HTTP, with the token):
 

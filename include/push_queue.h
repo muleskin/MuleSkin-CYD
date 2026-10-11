@@ -15,6 +15,14 @@
 // WITH YOU goes at once. A batch that did not get through waits RETRY_MS. The
 // queue keeps the CAP newest, and drops any older than STALE_MS -- half an hour
 // on, an alert is history, not news.
+//
+// ONE PER DEVICE AN HOUR (Cooldown). A camera on a street you sit beside, or a
+// tracker that drops in and out of range, would otherwise push every time it
+// comes back -- dozens a day, and through ntfy.sh's relay to an iPhone that
+// ran into its daily limit (2026-10). An ordinary alert for a device pushed
+// in the last COOLDOWN_MS is not pushed again; a WITH YOU always goes (it
+// fires once a follow anyway). The table is small: when it is full, the
+// oldest entry goes, which at worst lets one device through a little early.
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
@@ -42,6 +50,20 @@ bool important(DetectionType t);
 // `night` is whether it is the night hours now, and `nightWithYouOnly`
 // whether PUSH AT NIGHT is set to WITH YOU.
 bool wanted(What what, bool nightWithYouOnly, bool night, DetectionType t, bool withYou);
+
+const uint32_t COOLDOWN_MS    = 60u * 60u * 1000u;
+const uint8_t  COOLDOWN_SLOTS = 24;
+
+class Cooldown {
+public:
+    // True if an alert for `mac` may be pushed at `now`, and if so notes it.
+    bool allow(const uint8_t mac[6], uint32_t now);
+    void clear() { _n = 0; }
+private:
+    uint8_t  _mac[COOLDOWN_SLOTS][6];
+    uint32_t _at[COOLDOWN_SLOTS];
+    uint8_t  _n = 0;
+};
 
 class Queue {
 public:

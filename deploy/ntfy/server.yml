@@ -12,8 +12,20 @@ cache-duration: "24h"
 auth-file: "/var/lib/ntfy/user.db"
 auth-default-access: "deny-all"
 
-# iPhones only get instant notifications from a self-hosted server through
-# ntfy.sh's push relay: the server tells ntfy.sh "something arrived" (a hash
+# The web app's login page: Web Push (below) is set up from the web app, which
+# has to be logged in to read a deny-all server. Sign-up stays off.
+enable-login: true
+
+# Web Push: notifications straight from this server to a browser, or to the
+# web app saved to an iPhone's home screen -- Apple's push service, not
+# ntfy.sh's relay, so no daily limit (ntfy.sh's anonymous relay quota ran out
+# in 2026-10 and iPhone notifications stopped). The keys and an email address
+# come from .env beside docker-compose.yml (see .env.example and
+# deploy/README.md); without them Web Push stays off and nothing else changes.
+web-push-file: "/var/cache/ntfy/webpush.db"
+
+# iPhones only get instant notifications in the ntfy APP from a self-hosted
+# server through ntfy.sh's push relay (Web Push above avoids it): the server tells ntfy.sh "something arrived" (a hash
 # of the topic, never the message), ntfy.sh wakes the app, and the app then
 # fetches the message from this server.
 upstream-base-url: "https://ntfy.sh"

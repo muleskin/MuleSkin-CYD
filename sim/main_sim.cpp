@@ -559,6 +559,7 @@ int main(int argc, char** argv) {
             info.freeHeap = 180000;
             info.largestBlock = 110000;
             info.nvsPercent = 41;
+            snprintf(info.push, sizeof info.push, "4 sent today, 2 held back, last OK 12 min ago");
             info.resetReason = "POWERON_RESET";
             info.boardName = "cyd";
             info.usingCapTouch = false;

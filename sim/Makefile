@@ -75,6 +75,7 @@ UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/remote_id.cpp \
             $(SRC)/clock.cpp \
             $(SRC)/nvs_backup.cpp \
+            $(SRC)/nvs_move.cpp \
             $(SRC)/radar_blip.cpp \
             $(SRC)/version_cmp.cpp \
             $(SRC)/blackbox.cpp \

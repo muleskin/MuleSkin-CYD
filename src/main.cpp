@@ -1871,10 +1871,19 @@ static void queuePush(const char* title, const char* body, uint8_t prio, const c
     s_pushQ.add(m, millis(), urgent);
 }
 
+static PushQueue::Cooldown s_pushCool;   // one push per device an hour (push_queue.h)
+static uint16_t s_pushCooled = 0;        // held back by it today: the self-test's count
+
 static void queuePushAlert(const Detection& d, uint16_t followMins) {
     if (!Settings::pushOn()) return;
     if (!PushQueue::wanted((PushQueue::What)Settings::pushWhat(), Settings::pushNightWithYou(),
                            pushNightNow(), d.type, followMins != 0)) return;
+    if (!followMins && !s_pushCool.allow(d.mac, millis())) {
+        s_pushCooled++;
+        Serial.printf("[push] %s %02x:%02x:%02x:%02x:%02x:%02x pushed within the hour; not again\n",
+                      detectionTypeName(d.type), d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
+        return;
+    }
     char title[40], body[100], seq[24];
     const char* vendor = vendorText(d);
     // One notification per device (where the phone's app supports replacing
@@ -1946,12 +1955,67 @@ static void servicePushSummary() {
     Serial.printf("[push] daily summary queued: %s\n", body);
 }
 
+// What PUSH ALERTS last did, for the self-test and DIAGNOSTICS: a push that
+// silently stops arriving should show on the board, not only on the phone.
+static struct {
+    uint32_t day = 0;          // Clock::localDay() the counts below belong to
+    uint16_t sent = 0;         // messages the server took today
+    uint8_t  result = 0;       // OtaWifi::PushResult of the last batch
+    int      code = 0;         // its last HTTP status
+    uint32_t atMs = 0;         // when it ended; 0: no batch since boot
+} s_pushStat;
+
+static void pushStatRollDay() {
+    const uint32_t day = Clock::isSet() ? Clock::localDay() : 0;
+    if (day != s_pushStat.day) { s_pushStat.day = day; s_pushStat.sent = 0; s_pushCooled = 0; }
+}
+
+// One line: "4 sent today, last OK 12 min ago" -- or why the last one failed.
+// Returns 0 fine, 1 worth a look, as the self-test grades.
+static uint8_t pushStatusText(char* out, size_t n) {
+    if (!Settings::pushOn()) { snprintf(out, n, "off"); return 0; }
+    if (!Settings::pushUrl()[0]) { snprintf(out, n, "on, but no server set"); return 1; }
+    pushStatRollDay();
+    char cooled[24] = "";
+    if (s_pushCooled) snprintf(cooled, sizeof cooled, ", %u held back", (unsigned)s_pushCooled);
+    if (!s_pushStat.atMs) { snprintf(out, n, "none sent since boot%s", cooled); return 0; }
+    const uint32_t ago = (millis() - s_pushStat.atMs) / 60000u;
+    using R = OtaWifi::PushResult;
+    const char* why = nullptr;
+    switch ((R)s_pushStat.result) {
+        case R::SENT:      break;
+        case R::NO_SAVED:  why = "no saved WiFi"; break;
+        case R::NO_JOIN:   why = "WiFi did not join"; break;
+        case R::NO_MEMORY: why = "out of memory"; break;
+        default:
+            why = s_pushStat.code == 401 || s_pushStat.code == 403 ? "server refused the token"
+                : s_pushStat.code == 429 ? "server rate limit (429)"
+                : s_pushStat.code == 0   ? "server did not answer" : "server error";
+            break;
+    }
+    if (!why) {
+        snprintf(out, n, "%u sent today%s, last OK %lu min ago", (unsigned)s_pushStat.sent, cooled, (unsigned long)ago);
+        return 0;
+    }
+    if (s_pushStat.code > 0)
+        snprintf(out, n, "last failed %lu min ago: %s (HTTP %d); %u sent today",
+                 (unsigned long)ago, why, s_pushStat.code, (unsigned)s_pushStat.sent);
+    else
+        snprintf(out, n, "last failed %lu min ago: %s; %u sent today", (unsigned long)ago, why, (unsigned)s_pushStat.sent);
+    return 1;
+}
+
 static void servicePush(uint32_t now) {
     // A join finished: the radio back to detection, the sent ones off the queue.
     if (s_pushRadio && !OtaWifi::pushBusy()) {
         engine.stopUpdateRadio();
         s_pushRadio = false;
         s_pushQ.finished(OtaWifi::pushSentCount(), OtaWifi::pushResult() == OtaWifi::PushResult::SENT, now);
+        pushStatRollDay();
+        s_pushStat.sent  += OtaWifi::pushSentCount();
+        s_pushStat.result = (uint8_t)OtaWifi::pushResult();
+        s_pushStat.code   = OtaWifi::pushLastCode();
+        s_pushStat.atMs   = now ? now : 1;
     }
     servicePushSummary();
     uiClearSetPushWaiting(Settings::pushOn() && s_pushQ.waiting() ? s_pushQ.count() : 0);
@@ -1966,6 +2030,9 @@ static void servicePush(uint32_t now) {
         engine.stopUpdateRadio();
         s_pushQ.sending(now);
         s_pushQ.finished(0, false, now);
+        s_pushStat.result = (uint8_t)OtaWifi::pushResult();
+        s_pushStat.code   = 0;
+        s_pushStat.atMs   = now ? now : 1;
         return;
     }
     s_pushRadio = true;
@@ -2107,17 +2174,23 @@ static void runSelfTest() {
         const bool ok = p.begin("settings", true);
         p.end();
         line(ok ? 0 : 2, "settings", ok ? "readable" : "NVS will not open");
+        char push[96];
+        const uint8_t pg = pushStatusText(push, sizeof push);
+        line(pg, "push alerts", "%s", push);
         // How full the store is. Full at boot, the Arduino core erases the
         // lot -- every setting, WiFi network and the touch calibration -- so
         // this warns well before: 75% WARN, 90% FAIL. A board still on the
         // old table (an update that came over the air) has the 20 KB store
         // at 0x9000; one USB install moves it to the 128 KB one.
         const uint8_t pct = nvsFullPercent();
+        unsigned nvsKb = 128;
+#if defined(ARDUINO_ARCH_ESP32)
         const esp_partition_t* nvsPart =
             esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, "nvs");
-        const bool oldTable = nvsPart && nvsPart->size < 0x10000;
-        line(pct >= 90 ? 2 : pct >= 75 ? 1 : 0, "settings store", "%u%% full of %u KB%s", (unsigned)pct,
-             nvsPart ? (unsigned)(nvsPart->size / 1024) : 0u,
+        nvsKb = nvsPart ? (unsigned)(nvsPart->size / 1024) : 0u;
+#endif
+        const bool oldTable = nvsKb && nvsKb < 64;
+        line(pct >= 90 ? 2 : pct >= 75 ? 1 : 0, "settings store", "%u%% full of %u KB%s", (unsigned)pct, nvsKb,
              pct >= 75 ? " -- back up settings in the web flasher"
                        : oldTable ? " (old layout: one USB install from the web flasher makes it 128 KB)" : "");
     }
@@ -6940,6 +7013,7 @@ void loop() {
             info.freeHeap = ESP.getFreeHeap();
             info.largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
             info.nvsPercent   = nvsFullPercent();
+            info.pushWarn     = pushStatusText(info.push, sizeof info.push) != 0;
             info.resetReason = resetReasonName();
             info.loopFree    = s_loopHeapFree;
             info.loopLargest = s_loopHeapLargest;

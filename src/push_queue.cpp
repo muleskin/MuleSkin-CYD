@@ -32,6 +32,26 @@ bool wanted(What what, bool nightWithYouOnly, bool night, DetectionType t, bool 
     }
 }
 
+bool Cooldown::allow(const uint8_t mac[6], uint32_t now) {
+    for (uint8_t i = 0; i < _n; i++) {
+        if (memcmp(_mac[i], mac, 6) != 0) continue;
+        if ((int32_t)(now - _at[i]) < (int32_t)COOLDOWN_MS) return false;
+        _at[i] = now;
+        return true;
+    }
+    uint8_t slot = _n;
+    if (_n < COOLDOWN_SLOTS) {
+        _n++;
+    } else {
+        slot = 0;   // full: the one pushed longest ago makes room
+        for (uint8_t i = 1; i < _n; i++)
+            if ((int32_t)(_at[i] - _at[slot]) < 0) slot = i;
+    }
+    memcpy(_mac[slot], mac, 6);
+    _at[slot] = now;
+    return true;
+}
+
 bool Queue::add(const Msg& m, uint32_t now, bool urgent) {
     if (!_q) {
         _q  = (Msg*)calloc(CAP, sizeof(Msg));

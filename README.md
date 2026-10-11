@@ -311,10 +311,20 @@ notification: on Android (and ntfy's web app) a camera that keeps alerting
 replaces its own notification rather than stacking up -- the iPhone app, as of
 ntfy 1.7, still shows each one.
 
+One push per device an hour: a camera you sit beside all afternoon, or a
+tracker drifting in and out of range, is one notification, not forty. WITH
+YOU always goes. The self-test's **push alerts** line and DIAGNOSTICS'
+**PUSH** row say how many went today, how many that held back, and how the
+last one went -- sent, or why not (WiFi did not join, the server refused the
+token, a rate limit) -- so a push that quietly stops arriving shows on the
+board too.
+
 It uses the public ntfy.sh unless told otherwise: nothing to install, and
 the topic is the password. For alerts that stay on your own server, behind
 an account, run ntfy there -- [deploy/README.md](deploy/README.md) has the
-setup. Either way the board posts in plain HTTP; TLS needs more memory than
+setup, including Web Push for an iPhone (the ntfy web app on the home screen),
+which avoids the daily limit ntfy.sh puts on relaying a self-hosted server's
+alerts to the iPhone app. Either way the board posts in plain HTTP; TLS needs more memory than
 it has.
 
 ## Updates

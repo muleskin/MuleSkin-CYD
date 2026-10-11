@@ -10,6 +10,12 @@ services:
     container_name: muleskin-ntfy
     command: serve
     restart: unless-stopped
+    # Web Push keys, from .env next to this file (copy .env.example; see
+    # deploy/README.md). Empty when there is no .env: Web Push stays off.
+    environment:
+      - NTFY_WEB_PUSH_PUBLIC_KEY=${NTFY_WEB_PUSH_PUBLIC_KEY:-}
+      - NTFY_WEB_PUSH_PRIVATE_KEY=${NTFY_WEB_PUSH_PRIVATE_KEY:-}
+      - NTFY_WEB_PUSH_EMAIL_ADDRESS=${NTFY_WEB_PUSH_EMAIL_ADDRESS:-}
     volumes:
       - ./server.yml:/etc/ntfy/server.yml:ro
       - ./data:/var/lib/ntfy

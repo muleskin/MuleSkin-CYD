@@ -1096,6 +1096,7 @@ TaskHandle_t        s_psTask   = nullptr;
 PushMsg*            s_psMsgs   = nullptr;   // the batch, on the heap only while it is out
 uint8_t             s_psN      = 0;
 volatile uint8_t    s_psSent   = 0;
+volatile int        s_psCode   = 0;
 
 void psRun(void*) {
     const uint32_t t0 = millis();
@@ -1126,6 +1127,7 @@ void psRun(void*) {
             if (Settings::pushToken()[0]) http.addHeader("Authorization", String("Bearer ") + Settings::pushToken());
             const int code = http.POST((uint8_t*)s_psMsgs[i].body, strlen(s_psMsgs[i].body));
             http.end();
+            s_psCode = code < 0 ? 0 : code;
             if (code < 200 || code >= 300) {
                 Serial.printf("[push] server said %d\n", code);
                 break;
@@ -1154,6 +1156,7 @@ bool pushStart(const PushMsg* msgs, uint8_t n) {
     memcpy(s_psMsgs, msgs, sizeof(PushMsg) * n);
     s_psN    = n;
     s_psSent = 0;
+    s_psCode = 0;
     s_push   = PushResult::NONE;
     if (xTaskCreatePinnedToCore(psRun, "push", 8192, nullptr, 1, &s_psTask, 1) != pdPASS) {
         free(s_psMsgs);
@@ -1167,6 +1170,7 @@ bool pushStart(const PushMsg* msgs, uint8_t n) {
 bool       pushBusy()      { return s_psTask != nullptr; }
 PushResult pushResult()    { return s_push; }
 uint8_t    pushSentCount() { return s_psSent; }
+int        pushLastCode()  { return s_psCode; }
 
 
 bool timeSyncStart() {

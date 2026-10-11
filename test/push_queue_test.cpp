@@ -108,6 +108,30 @@ int main() {
         ck("and goes once it has gathered", q.due(50005 + GATHER_MS));
     }
 
+    suite("one push per device an hour");
+    {
+        Cooldown c;
+        const uint8_t a[6] = { 1, 2, 3, 4, 5, 6 }, b[6] = { 1, 2, 3, 4, 5, 7 };
+        const uint32_t t = 1000;
+        ck("the first goes", c.allow(a, t));
+        ck("again a minute later, not", !c.allow(a, t + 60000));
+        ck("another device, yes", c.allow(b, t + 60000));
+        ck("59 minutes on, still not", !c.allow(a, t + COOLDOWN_MS - 1));
+        ck("an hour on, it goes", c.allow(a, t + COOLDOWN_MS));
+        ck("...and starts a new hour", !c.allow(a, t + COOLDOWN_MS + 1000));
+        Cooldown full;
+        uint8_t m[6] = { 9, 9, 9, 9, 9, 0 };
+        for (uint8_t i = 0; i < COOLDOWN_SLOTS; i++) { m[5] = i; full.allow(m, 5000 + i); }
+        m[5] = 200;
+        ck("full: a new device still goes", full.allow(m, 6000));
+        m[5] = 0;
+        ck("...pushing out the oldest, which may go again", full.allow(m, 6001));
+        m[5] = 5;
+        ck("...while the rest stay cooled", !full.allow(m, 6002));
+        const uint8_t w[6] = { 7, 7, 7, 7, 7, 7 };
+        ck("across millis() wrapping", c.allow(w, 0xFFFFF000u) && !c.allow(w, 0x00001000u));
+    }
+
     suite("clear");
     {
         Queue q;

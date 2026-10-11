@@ -132,6 +132,7 @@ bool        pushStart(const PushMsg* msgs, uint8_t n);   // copies them; false i
 bool        pushBusy();
 PushResult  pushResult();
 uint8_t     pushSentCount();    // how many of the last batch the server took
+int         pushLastCode();     // the last POST's HTTP status (0: none / no connection)
 
 const char* network();          // the one being joined or used
 const char* latestVersion();    // meaningful from READY on
