@@ -184,7 +184,8 @@ bool        pushBusy()        { return false; }
 PushResult  pushResult()      { return PushResult::NONE; }
 uint8_t     pushSentCount()   { return 0; }
 int         pushLastCode()    { return 0; }
-bool        takeCommand(uint8_t*, uint8_t&, uint8_t&) { return false; }
+bool        takeCommand(uint8_t*, uint8_t&, uint8_t&, bool&) { return false; }
+void        setBoardId(const char*) {}
 uint32_t    pushRetryAfterS() { return 0; }
 int         cmdLastCode() { return 0; }
 void        joinStats(uint16_t& stuck, uint16_t& saved) { stuck = saved = 0; }

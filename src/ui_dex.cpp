@@ -77,7 +77,7 @@ void drawIndex(TFT_eSPI& t, int w, int h, const DetectionEngine& eng) {
         }
 
         // The icon, the same one the alert and the LOG draw; a silhouette
-        // behind BINGO's scanline veil until it has been caught.
+        // behind a scanline veil until it has been caught.
         const int s = (cw < ch ? cw : ch) / 2 - 6;
         if (s >= 4) {
             Theme::drawTypeIcon(t, type, x + cw / 2, y + ch / 2 - 2, s);

@@ -42,7 +42,6 @@ enum class SettingsRow : uint8_t {
     STATUS_LIGHT,    // on the APPEARANCE page: opens the RGB LED's screen
     BANTER,          // on the APPEARANCE page: how much he talks when nothing is happening
     TIME_ZONE,       // on the SYSTEM page: which zone the real clock shows
-    BINGO,           // opens the bingo card
     DEX,             // opens the MULESKIN-DEX
     WATCH_BATTERY,   // the T-Watch only: charge and voltage, under WATCH
     WATCH_RADIO,     // the T-Watch only: the radio duty cycle, under WATCH

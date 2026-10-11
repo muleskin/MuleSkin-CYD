@@ -177,8 +177,7 @@ enum class AppState : uint8_t {
     SYS_PROPS        = 35, // SYSTEM PROPERTIES: the window that says an update
                             // is out, in front of the main screen on the first
                             // frame after the intro. See ui_sysprops.h.
-    BINGO            = 36, // the detection bingo card, from Settings' BINGO
-                            // row. See ui_bingo.h.
+    // 36 was BINGO, the weekly detection card; removed in v3.2.5, number kept free.
     DEX              = 37, // the MULESKIN-DEX, from Settings' row. See ui_dex.h.
     LORA_CHAT        = 38, // LORA CHATS, from WATCH SETTINGS (MULESKIN_LORA builds). See ui_lorachat.h.
     MEETING          = 39, // IN A MEETING: the red sign, from the main screen's bar. See ui_meeting.h.

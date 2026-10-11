@@ -516,6 +516,7 @@
       <button id="identifyBtn" class="identify-btn">[ IDENTIFY MY BOARD ]</button>
       <div class="identify-result" id="identifyResult"></div>
     </div>
+    <p class="browser-note" id="boardWho" style="display:none"></p>
     <div class="identify-row">
       <button id="clockBtn" class="identify-btn">[ SET TIME &amp; ZONE ]</button>
       <div class="identify-result" id="clockResult"></div>
@@ -1489,7 +1490,24 @@
       backupResult.textContent = msg + ' Letting the board boot... ' + sec;
       await new Promise(function (r) { setTimeout(r, 1000); });
     }
+    await sayWho(port);
     return port;
+  }
+
+  // Which board is on the cable -- its push name, its Bluetooth name and
+  // version -- shown above the buttons, so one board is never taken for
+  // another. WHO is v3.2.5 or later; an older board just stays unnamed.
+  async function sayWho(port) {
+    var el = document.getElementById('boardWho');
+    try {
+      var text = await talk(port, '\nWHO\n', /WHO [^\n]*\n/, 2500);
+      var m = text.match(/WHO (\S+) (\S+) (\S+) (\d+)/);
+      if (!m || !el) return;
+      var name = m[1].replace(/_/g, ' ');
+      el.textContent = 'Connected: ' + (name === m[2] ? m[2] : name + ' (' + m[2] + ')') + ', firmware ' + m[3] +
+                       (+m[4] && +m[4] < 64 ? ', the old 20 KB settings store' : '');
+      el.style.display = '';
+    } catch (e) {}
   }
 
   // Send one line, then read until `until` matches the text or `ms` passes.

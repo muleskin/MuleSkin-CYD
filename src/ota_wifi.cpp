@@ -1126,7 +1126,8 @@ void tsRun(void*) {
 // ---- IGNORE from a notification --------------------------------------------------
 namespace {
 const uint8_t     IGN_MAX = 8;
-uint8_t           s_ign[IGN_MAX][8];       // mac + type + snooze?, waiting for the main loop
+uint8_t           s_ign[IGN_MAX][9];       // mac, type, kind, mine -- waiting for the main loop
+char              s_boardId[8] = "";       // "5AF6": main.cpp's setBoardId()
 volatile int      s_cmdCode = 0;
 volatile uint8_t  s_ignHead = 0, s_ignTail = 0;
 
@@ -1139,28 +1140,40 @@ int hexNib(char c) {
 
 // "IGNORE aabbccddeeff 12" or "SNOOZE aabbccddeeff 12" -> queued for the main loop.
 void noteCommand(const char* msg) {
-    static const char* const KINDS[] = { "IGNORE ", "SNOOZE ", "UNIGNORE ", "UNSNOOZE " };
+    static const char* const KINDS[] = { "IGNORE ", "SNOOZE ", "UNIGNORE ", "UNSNOOZE ", "PAUSE ", "RESUME " };
     int kind = -1;
-    for (int k = 0; k < 4 && kind < 0; k++)
+    for (int k = 0; k < 6 && kind < 0; k++)
         if (strncasecmp(msg, KINDS[k], strlen(KINDS[k])) == 0) kind = k;
     if (kind < 0) return;
     const char* p = msg + strlen(KINDS[kind]);
-    uint8_t rec[8];
-    for (int i = 0; i < 6; i++) {
-        while (*p == ':' || *p == '-') p++;
-        const int a = hexNib(p[0]), b = a < 0 ? -1 : hexNib(p[1]);
-        if (a < 0 || b < 0) return;
-        rec[i] = (uint8_t)(a << 4 | b);
-        p += 2;
+    uint8_t rec[9] = { 0 };
+    if (kind <= 3) {                             // the device's MAC, then its type (IGNORE / SNOOZE)
+        for (int i = 0; i < 6; i++) {
+            while (*p == ':' || *p == '-') p++;
+            const int a = hexNib(p[0]), b = a < 0 ? -1 : hexNib(p[1]);
+            if (a < 0 || b < 0) return;
+            rec[i] = (uint8_t)(a << 4 | b);
+            p += 2;
+        }
+        while (*p == ' ') p++;
+        if (kind <= 1) {
+            rec[6] = (uint8_t)atoi(p);
+            while (*p && *p != ' ') p++;
+        }
     }
-    rec[6] = (uint8_t)atoi(p);
+    // The board it came from, last; none means a notification from before
+    // there was one, and counts as this board's.
+    while (*p == ' ') p++;
+    char id[8] = "";
+    for (int n = 0; *p && *p != ' ' && n < 7; ) id[n++] = *p++, id[n] = '\0';
     rec[7] = (uint8_t)kind;
+    rec[8] = (!id[0] || !s_boardId[0] || strcasecmp(id, s_boardId) == 0) ? 1 : 0;
     const uint8_t next = (uint8_t)((s_ignHead + 1) % IGN_MAX);
     if (next == s_ignTail) return;               // full: the rest wait for the next join
-    memcpy(s_ign[s_ignHead], rec, 8);
+    memcpy(s_ign[s_ignHead], rec, 9);
     s_ignHead = next;
-    Serial.printf("[push] phone says %s%02x:%02x:%02x:%02x:%02x:%02x\n", KINDS[kind],
-                  rec[0], rec[1], rec[2], rec[3], rec[4], rec[5]);
+    Serial.printf("[push] phone says %s%02x:%02x:%02x:%02x:%02x:%02x (%s)\n", KINDS[kind],
+                  rec[0], rec[1], rec[2], rec[3], rec[4], rec[5], rec[8] ? "this board" : id);
 }
 
 // What is new on the command topic since the last one read. ntfy's poll: one
@@ -1223,11 +1236,14 @@ void pollCommands() {
 
 int cmdLastCode() { return s_cmdCode; }
 
-bool takeCommand(uint8_t mac[6], uint8_t& type, uint8_t& kind) {
+void setBoardId(const char* id) { strncpy(s_boardId, id ? id : "", sizeof s_boardId - 1); }
+
+bool takeCommand(uint8_t mac[6], uint8_t& type, uint8_t& kind, bool& mine) {
     if (s_ignTail == s_ignHead) return false;
     memcpy(mac, s_ign[s_ignTail], 6);
     type = s_ign[s_ignTail][6];
     kind = s_ign[s_ignTail][7];
+    mine = s_ign[s_ignTail][8] != 0;
     s_ignTail = (uint8_t)((s_ignTail + 1) % IGN_MAX);
     return true;
 }
@@ -1295,11 +1311,15 @@ void psRun(void*) {
                     ? String(", headers.Authorization=Bearer ") + Settings::pushToken() : String();
                 String act;
                 if (strncmp(s_psMsgs[i].act, "IGNORE ", 7) == 0) {
+                    // "IGNORE <mac> <type> <board>": Ignore and Snooze carry
+                    // it all; Pause only needs the board.
                     const String rest = String(s_psMsgs[i].act).substring(6);
+                    const String board = rest.substring(rest.lastIndexOf(' ') + 1);
                     act = "http, Ignore, " + cmd + ", method=POST, body=IGNORE" + rest + ", clear=true" + auth +
-                          "; http, Snooze 1 day, " + cmd + ", method=POST, body=SNOOZE" + rest + ", clear=true" + auth;
+                          "; http, Snooze 1 day, " + cmd + ", method=POST, body=SNOOZE" + rest + ", clear=true" + auth +
+                          "; http, Pause 2 h, " + cmd + ", method=POST, body=PAUSE " + board + ", clear=true" + auth;
                 } else {
-                    // The confirmation's one button: UNIGNORE / UNSNOOZE.
+                    // The confirmation's one button: UNIGNORE / UNSNOOZE / RESUME.
                     act = "http, Undo, " + cmd + ", method=POST, body=" + String(s_psMsgs[i].act) + ", clear=true" + auth;
                 }
                 http.addHeader("Actions", act);

@@ -17,8 +17,26 @@ class Board:
     def __init__(self, port=DEFAULT_PORT, boot_s=15):
         self.s = serial.Serial(port, 2000000, timeout=0.2)
         self.buf = b""
+        self.who = None
         if boot_s:
             self.read(boot_s)
+            self.whoami()
+
+    def whoami(self):
+        """WHO -> {"name", "bt", "id", "version", "store_kb"}, printed: which
+        board this is, before anything is compared or changed (v3.2.5+; None
+        on an older board). Two boards on one cable look alike otherwise."""
+        text = self.cmd("WHO", 3, b"\nWHO ")
+        for l in text.splitlines():
+            p = l.strip().split(" ")
+            if len(p) == 5 and p[0] == "WHO":
+                self.who = {"name": p[1].replace("_", " "), "bt": p[2], "id": p[2].split("-")[-1],
+                            "version": p[3], "store_kb": int(p[4])}
+                print("board: %s (%s), %s, %d KB settings store" %
+                      (self.who["name"], self.who["bt"], self.who["version"], self.who["store_kb"]))
+                return self.who
+        print("board: did not say WHO (firmware before v3.2.5?)")
+        return None
 
     def read(self, sec, until=None):
         """Read for `sec` seconds, or until `until` (bytes) shows up -- then a

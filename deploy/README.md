@@ -260,6 +260,12 @@ then `sudo crontab -e` and add
 Run it once by hand first (`sudo python3 /root/MuleSkin-CYD/deploy/ntfy/quiet-check.py`):
 silence means every board was heard.
 
+Add `STATUS_FILE=/root/muleskin-status.html` to the same file and each run
+also writes a page of every board: when it was last heard and with what, its
+last 8 PM summary, and the firmware and settings store that summary names
+(v3.2.5 and later). It names your boards, so keep it off the public flasher
+site: read it over ssh, or serve it only behind a login.
+
 ### iPhone notifications without ntfy.sh: Web Push
 
 ntfy's web app, saved to the iPhone's home screen, gets Web Push straight

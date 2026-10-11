@@ -81,8 +81,6 @@ UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/version_cmp.cpp \
             $(SRC)/blackbox.cpp \
             $(SRC)/log_index.cpp \
-            $(SRC)/bingo.cpp \
-            $(SRC)/ui_bingo.cpp \
             $(SRC)/dex.cpp \
             $(SRC)/regulars.cpp \
             $(SRC)/notices.cpp \

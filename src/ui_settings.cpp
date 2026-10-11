@@ -14,7 +14,6 @@
 #include "security.h"
 #include "ignore_list.h"
 #include "muleskin.h"
-#include "bingo.h"
 #include "dex.h"
 #include "ui_dex.h"
 #include <Arduino.h>
@@ -93,7 +92,7 @@ static const SettingsRow ALL_ROWS[] = {
     // -- see APPEARANCE_ROWS. Everything about how he LOOKS is on one page;
     // what stays here is what he DOES.
     SettingsRow::REPLAY_INTRO, SettingsRow::SHOW_OFF, SettingsRow::VIEW_DIARY,
-    SettingsRow::BINGO, SettingsRow::DEX,
+    SettingsRow::DEX,
     SettingsRow::POWER_SAVER,
 #if defined(ESP32) && !defined(TWATCH_S3)
     SettingsRow::CHARGE_MODE,
@@ -248,7 +247,6 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::APPEARANCE:
         case SettingsRow::REPLAY_INTRO:
         case SettingsRow::VIEW_DIARY:
-        case SettingsRow::BINGO:
         case SettingsRow::DEX:
         case SettingsRow::SHOW_OFF:
             return RowGroupId::MULESKIN;
@@ -995,13 +993,6 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
         case SettingsRow::VIEW_DIARY:
             label = "MULESKIN'S DIARY";
             break;
-        case SettingsRow::BINGO: {
-            label = "BINGO";
-            static char bingoVal[12];
-            snprintf(bingoVal, sizeof bingoVal, "%u/16 >", (unsigned)Bingo::markedCount());
-            value = bingoVal;
-            break;
-        }
         case SettingsRow::DEX: {
             label = "MULESKIN-DEX";
             static char dexVal[12];

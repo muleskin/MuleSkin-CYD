@@ -65,6 +65,7 @@ extern volatile bool g_consoleLegend;
 extern volatile bool g_consoleSelfTest;
 extern volatile bool g_consoleBtUpdate; // UPDATE BT (main.cpp)
 extern volatile int8_t g_consolePush;    // PUSH OFF / ON / TEST (main.cpp)
+extern volatile bool g_consoleWho;       // WHO (main.cpp)
 extern volatile bool g_liveOn;   // LIVE ON / OFF (detection.cpp printLive)
 extern volatile bool g_consoleOutfitSet;
 extern volatile bool g_consoleAura;
@@ -612,6 +613,7 @@ void pollSerial() {
         if (strcasecmp(line, "UPDATE BT") == 0) { g_consoleBtUpdate = true; continue; }
         // PUSH OPTIONS, from the web flasher: which types CHOSEN pushes, and
         // PUSH AT NIGHT's own hours.
+        if (strcasecmp(line, "WHO") == 0) { g_consoleWho = true; continue; }
         if (strcasecmp(line, "PUSH TYPES LIST") == 0) {
             const uint32_t m = Settings::pushTypes();
             for (uint8_t t = 1; t < (uint8_t)DetectionType::COUNT && t < 32; t++)

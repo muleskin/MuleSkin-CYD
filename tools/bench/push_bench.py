@@ -6,20 +6,24 @@
 Runs an HTTP server here that takes the board's pushes and answers its
 command-topic polls, points the board at it, then:
 
+  - says which board it is on (WHO) before anything else;
   - the ignore list over the console (IGNORE LIST / ADD / DEL, a bad MAC);
-  - PUSH TEST -> one push, and the poll -> an IGNORE lands on the list;
+  - PUSH TEST -> one push, and the poll -> an IGNORE lands on the list, and
+    another board's IGNORE in the same poll is applied without a
+    confirmation of its own;
   - with --limit, that first push is answered 429 with Retry-After: 60, and
     the board has to wait the minute out and send it again;
   - with --alerts (needs a BENCH_TOOLS build: PLATFORMIO_BUILD_FLAGS=
-    -DBENCH_TOOLS=1), two made-up Flock alerts (ALERTPUSH): the first pushed
-    with its Ignore / Snooze buttons, the second held by the hour's cooldown;
-    the later polls bring a SNOOZE and then an UNIGNORE (the confirmation's
-    Undo), each answered by a confirmation push. PUSH WHAT and PUSH AT NIGHT
-    are set so a Flock goes, and put back.
+    -DBENCH_TOOLS=1), made-up Flock alerts (ALERTPUSH): the first pushed
+    with its Ignore / Snooze / Pause buttons, the second held by the hour's
+    cooldown; the later polls bring a SNOOZE, an UNIGNORE (the
+    confirmation's Undo) and a PAUSE, each answered by a confirmation; and
+    an alert while paused is held. PUSH WHAT and PUSH AT NIGHT are set so a
+    Flock goes, and put back (the restart at the end also ends the pause).
 
-Everything the board had is put back at the end: its push URL, PUSH WHAT,
-PUSH AT NIGHT, and the ignore list. Nothing goes to the real server, and the
-token the board sends is redacted in everything printed.
+Everything the board had is put back at the end: its push URL, push on or
+off, PUSH WHAT, PUSH AT NIGHT, and the ignore list. Nothing goes to the real
+server, and the token the board sends is redacted in everything printed.
 """
 import argparse
 import http.server
@@ -32,7 +36,9 @@ import threading
 from board import Board, DEFAULT_PORT, lan_ip, nvs_str
 
 CMD_MAC = "a1b2c3d4e5f6"     # the stand-in's IGNORE (the MAC ALERTPUSH makes up), then its UNIGNORE
-SNZ_MAC = "a1b2c3d4e5f7"     # ...and its SNOOZE, on the poll between
+SNZ_MAC = "a1b2c3d4e5f7"     # ...its SNOOZE
+OTHER_MAC = "a1b2c3d4e5f8"   # ...and an IGNORE pressed on another board's alert
+OTHER_ID = "0000"
 
 
 def colons(m):
@@ -49,11 +55,10 @@ def main():
 
     posts, gets = [], []
     run = "%06d" % random.randrange(10 ** 6)
-    ids = ["Bn%sa00%d" % (run, i) for i in (1, 2, 3)]
-    # Like ntfy: only what came after `since`. Fresh ids each run, so an id
-    # the board kept from an earlier one reads as unknown and starts the list.
-    script = [(ids[0], "IGNORE %s 3" % CMD_MAC), (ids[1], "SNOOZE %s 3" % SNZ_MAC),
-              (ids[2], "UNIGNORE %s" % CMD_MAC)]
+    # Like ntfy: only what came after `since`, several to a poll. Fresh ids
+    # each run, so an id the board kept from an earlier one reads as unknown
+    # and starts the list again. Filled in once the board says its id.
+    polls = []
     limited = [a.limit]
 
     class H(http.server.BaseHTTPRequestHandler):
@@ -71,11 +76,12 @@ def main():
         def do_GET(self):
             gets.append(self.path)
             body = b""
-            if "-cmd/json" in self.path:
-                at = next((i + 1 for i, (mid, _) in enumerate(script) if "since=" + mid in self.path), 0)
-                if at < len(script):
-                    body = (json.dumps({"id": script[at][0], "time": 1, "event": "message",
-                                        "message": script[at][1]}, separators=(",", ":")) + "\n").encode()
+            if "-cmd/json" in self.path and polls:
+                # The poll after the one whose last id the board sent.
+                at = next((i + 1 for i, batch in enumerate(polls) if "since=" + batch[-1][0] in self.path), 0)
+                if at < len(polls):
+                    body = "".join(json.dumps({"id": mid, "time": 1, "event": "message", "message": msg},
+                                              separators=(",", ":")) + "\n" for mid, msg in polls[at]).encode()
             self.send_response(200); self.end_headers(); self.wfile.write(body)
 
         def log_message(self, *_):
@@ -86,6 +92,14 @@ def main():
     here = "http://%s:%d/muleskin-bench" % (lan_ip(), a.listen)
 
     b = Board(a.port)
+    bid = b.who["id"] if b.who else "0000"
+    mid = lambda n: "Bn%sa%03d" % (run, n)
+    polls[:] = [
+        [(mid(1), "IGNORE %s 3 %s" % (CMD_MAC, bid)), (mid(2), "IGNORE %s 3 %s" % (OTHER_MAC, OTHER_ID))],
+        [(mid(3), "SNOOZE %s 3 %s" % (SNZ_MAC, bid))],
+        [(mid(4), "UNIGNORE %s %s" % (CMD_MAC, bid))],
+        [(mid(5), "PAUSE %s" % bid)],
+    ]
     # What the board has now, read in full before anything changes -- and
     # nothing goes ahead if it cannot be (board.nvs() raises), since the
     # clean-up below puts back exactly this.
@@ -120,8 +134,9 @@ def main():
             b.cmd("ALERTPUSH", 150, b"sent in")
             b.cmd("ALERTPUSH", 4)
             # The confirmations make joins of their own; each join polls.
-            b.read(180, b"undone from the phone")
-            b.read(60, b"sent in")               # ...and the "un-ignored" goes out
+            b.read(240, b"paused for two hours")
+            b.cmd("ALERTPUSH", 4)               # held: paused
+            b.read(60, b"sent in")               # ...and the "paused" goes out
         b.cmd("IGNORE LIST")
         b.cmd("SELFTEST", 8)
     finally:
@@ -146,19 +161,30 @@ def main():
     for g in gets:
         print("GET ", g)
     seen = b.lines("[ignore]")
-    checks = {"the polled IGNORE landed":
-              any(colons(CMD_MAC) in l and "from the phone:" in l and "snoozed" not in l for l in seen)}
+    titles = [t or "" for t, _ in posts]
+    checks = {
+        "the board said WHO": b.who is not None,
+        "the polled IGNORE landed":
+            any(colons(CMD_MAC) in l and "from the phone:" in l and "snoozed" not in l for l in seen),
+        "another board's IGNORE: applied, not confirmed":
+            any("another board's IGNORE" in l for l in seen) and
+            sum(1 for t in titles if t.endswith(": ignored")) <= 1,   # this board's one only
+    }
     if a.limit:
         checks["a 429 waited out its minute"] = bool(b.lines("rate limited: next try in 1 min")) and \
-            sum(1 for t, _ in posts if t and t.endswith("MuleSkin test")) >= 2
+            sum(1 for t in titles if t.endswith("MuleSkin test")) >= 2
     if a.alerts:
         checks["the polled SNOOZE landed"] = any(colons(SNZ_MAC) in l and "snoozed a day" in l for l in seen)
         checks["the Undo (UNIGNORE) landed"] = any(colons(CMD_MAC) in l and "undone" in l for l in seen)
-        checks["alerts carry Ignore + Snooze"] = any("Snooze 1 day" in act for _, act in posts)
-        checks["confirmations carry Undo"] = any(t and t.endswith(": ignored") and "Undo" in act and "UNIGNORE" in act
+        checks["alerts carry Ignore + Snooze + Pause"] = any("Snooze 1 day" in act and "Pause 2 h" in act and
+                                                             ("PAUSE " + bid) in act for _, act in posts)
+        checks["confirmations carry Undo"] = any(t.endswith(": ignored") and "Undo" in act and "UNIGNORE" in act
                                                  for t, act in posts)
+        checks["PAUSE landed, said so, holds alerts"] = bool(b.lines("paused for two hours")) and \
+            any(t.endswith(": paused") and "RESUME " + bid in act for t, act in posts) and \
+            bool(b.lines("paused: not pushing"))
     for k, v in checks.items():
-        print("%-32s %s" % (k, "ok" if v else "FAILED"))
+        print("%-44s %s" % (k, "ok" if v else "FAILED"))
     return 0 if all(checks.values()) else 1
 
 

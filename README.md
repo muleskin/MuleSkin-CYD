@@ -114,7 +114,8 @@ RockBase NM-CYD-C5), plug in,
 click Connect & Install, done. A T-Watch has its clock set for it once the install
 finishes.
 
-The same page talks to a plugged-in board over the cable:
+The same page talks to a plugged-in board over the cable, and says which
+one it is as it connects -- its name, its Bluetooth name and its firmware:
 
 - **Set Time & Zone** sends this computer's clock and time zone.
 - **Back up / Restore settings** keeps your settings across an install that
@@ -304,7 +305,9 @@ rows tune it:
   or quiet hours of its own set in PUSH OPTIONS: WITH YOU only (the
   default), or as set.
 - **DAILY SUMMARY** -- one quiet push at 8 PM: the day's count, its top three
-  types, and the first and last sighting.
+  types, the first and last sighting, how many were pushed and held back, and
+  the board's firmware version and settings store -- a board left behind
+  shows without being plugged in.
 
 Alerts go as they happen: a WITH YOU at once and loud, the rest a few
 seconds after the first, so a burst is one join rather than ten; joins are at
@@ -331,8 +334,15 @@ evening summary counts them. WITH YOU always goes, either way.
   doorbell; **Snooze 1 day** quiets it for a day (or until a restart) -- for
   a neighbour's camera. Either way the board answers with a quiet "ignored"
   or "snoozed" push once it has done it, with an **Undo** button of its own.
+  **Pause 2 h** holds that board's ordinary pushes for two hours -- a
+  meeting, a drive -- with WITH YOU still coming through, and an Undo too.
   On your own ntfy server it needs a one-time step,
   [deploy/README.md](deploy/README.md).
+- **Several boards on one topic**: an Ignore or Snooze pressed on any board's
+  alert is applied by all of them -- your own AirTag is yours everywhere --
+  but only the board that sent the alert says so back. Give each a **board
+  name** in SET UP PUSH ALERTS ("Car", "Desk") so you can tell their pushes
+  apart.
 
 A server that says "too many" (HTTP 429) is not asked again two minutes
 later: the board waits as long as it says, or 15 minutes, then 30, 60 and

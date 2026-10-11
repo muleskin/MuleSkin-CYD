@@ -32,11 +32,9 @@
 #include "ui_diary.h"
 #include "ui_hunt.h"
 #include "ui_phone.h"
-#include "ui_bingo.h"
 #include "ui_dex.h"
 #include "dex.h"
 #include "regulars.h"
-#include "bingo.h"
 #include "blackbox.h"
 #include "ui_watchalert.h"
 #include "ignore_list.h"
@@ -264,7 +262,7 @@ static int renderTouchCal(TFT_eSPI& tft, int W, int H, int skip, int want,
 static void usage() {
     fprintf(stderr,
         "usage: muleskinsim <screen> [out.png] [options]\n"
-        "  screens: clear log alert settings detfilter power diary hunt watchalert colorcheck boot pin bingo dex touchcal icons\n"
+        "  screens: clear log alert settings detfilter power diary hunt watchalert colorcheck boot pin dex touchcal icons\n"
         "  dex               --pose N opens entry N\'s card (1-17); 0 is the index\n"
         "  touchcal          the touch calibration, played by a scripted finger:\n"
         "                    --frames skips that many 66 ms frames, --sequence films\n"
@@ -501,7 +499,6 @@ int main(int argc, char** argv) {
         else if (screen == "zonecard") { uiClearTick(frame, t, engine, true); uiZoneCardDraw(frame, t); }
         else if (screen == "hunt")     uiHuntTick(frame, t, engine);
         else if (screen == "pin")      uiPhoneTick(frame, t, engine);
-        else if (screen == "bingo")    uiBingoTick(frame, t, engine);
         else if (screen == "dex")      uiDexTick(frame, t, engine);
         else if (screen == "watchalert") uiWatchAlertTick(frame, t, engine, true);
         else if (screen == "colorcheck") uiColorCheckTick(frame, t);
@@ -756,20 +753,6 @@ int main(int argc, char** argv) {
         }
         uiDexInit(frame);
         if (poseIdx > 0) uiDexOpenCard((uint8_t)(poseIdx - 1));
-    }
-    else if (screen == "bingo") {
-        // A card part-way through, so the marked, the lined and the
-        // still-missing all show at once.
-        Bingo::begin(engine);
-        for (int k = 0; k < 6; k++) Bingo::note(Bingo::typeAt((uint8_t)k));
-        Bingo::tick(1000);
-        uiBingoInit(frame);
-        // --pose 1: the panel NEW asks first. Tapped through the real hit
-        // test, at the middle of the middle button.
-        if (poseIdx == 1) {
-            const Theme::ButtonBarGeom bar = Theme::computeButtonBar(frame.width(), frame.height());
-            uiBingoHitTest(frame, bar.x[1] + bar.w[1] / 2, bar.y + bar.h / 2, frame.width(), frame.height());
-        }
     }
     else if (screen == "pin")        {
         // The lock screen's pad. --type N... presses digit keys, at the key

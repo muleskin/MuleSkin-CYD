@@ -3,6 +3,7 @@
 #include "ota_core.h"
 #include "serial_flush.h"
 #include "ota_pubkey.h"
+#include "ota_sig.h"
 #include "version_cmp.h"
 #include <Arduino.h>
 #include <Preferences.h>
@@ -10,8 +11,7 @@
 #include <esp_partition.h>
 #include <string.h>
 #include "mbedtls/sha256.h"
-#include "mbedtls/ecdsa.h"
-#include "mbedtls_compat.h"
+#include "mbedtls_compat.h"   // sqw_sha256_*: mbedtls 2 and 3 alike
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
@@ -124,37 +124,12 @@ char        s_noteSubBuf[40];
 void lock()   { if (!s_lock) s_lock = xSemaphoreCreateMutex(); xSemaphoreTake(s_lock, portMAX_DELAY); }
 void unlock() { xSemaphoreGive(s_lock); }
 
-// Is this signature ours? 0 if it is, an mbedtls error if it is not.
-//
-// One curve, one hash, one key that was compiled in -- so this talks to the
-// ECDSA code directly instead of going through mbedtls's general key layer.
-// That layer would read the key from its PEM text every time, and reading a
-// PEM pulls base64, the ASN.1 key structures and RSA into the image: 15 KB of
-// flash to arrive at the same 65 bytes that sit in ota_pubkey.h already.
-//
-// mbedtls_ecdsa_read_signature() takes the DER signature openssl writes
-// (tools/sign_firmware.py), rejects a signature with trailing bytes after it,
-// and checks r and s are in range before doing any curve arithmetic.
-static int checkSignatureWith(const unsigned char point[65], const uint8_t hash[32],
-                              const uint8_t* sig, size_t sigLen) {
-    mbedtls_ecdsa_context ctx;
-    mbedtls_ecdsa_init(&ctx);
-    int rc = mbedtls_ecp_group_load(&SQW_ECDSA_GRP(ctx), MBEDTLS_ECP_DP_SECP256R1);
-    if (rc == 0) rc = mbedtls_ecp_point_read_binary(&SQW_ECDSA_GRP(ctx), &SQW_ECDSA_Q(ctx), point, 65);
-    if (rc == 0) rc = mbedtls_ecp_check_pubkey(&SQW_ECDSA_GRP(ctx), &SQW_ECDSA_Q(ctx));
-    if (rc == 0) rc = mbedtls_ecdsa_read_signature(&ctx, hash, 32, sig, sigLen);
-    mbedtls_ecdsa_free(&ctx);
-    return rc;
-}
-// Any of the trusted keys (more than one only while a key is being rotated --
-// see ota_pubkey.h). The last key's error comes back when none match.
+// Is this signature ours? 0 if it is, an mbedtls error if it is not -- against
+// any of the trusted keys (more than one only while a key is being rotated;
+// see ota_pubkey.h). The check itself is OtaSig (src/ota_sig.cpp), apart so
+// CI can test it against real mbedtls on a computer.
 int checkSignature(const uint8_t hash[32], const uint8_t* sig, size_t sigLen) {
-    int rc = -1;
-    for (unsigned i = 0; i < OTA_PUBKEY_N; i++) {
-        rc = checkSignatureWith(OTA_PUBKEYS[i], hash, sig, sigLen);
-        if (rc == 0) return 0;
-    }
-    return rc;
+    return OtaSig::check(OTA_PUBKEYS, OTA_PUBKEY_N, hash, sig, sigLen);
 }
 
 // Caller holds the lock.

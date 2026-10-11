@@ -138,8 +138,16 @@ int         pushLastCode();     // the last POST's HTTP status (0: none / no con
 // "-cmd"; every push join and AUTO TIME join reads what is new there. The
 // main loop takes them one at a time (IgnoreList is not the WiFi task's).
 // SNOOZE 1 DAY rides the same path: `snooze` says which button it was.
-// kind: 0 IGNORE, 1 SNOOZE, 2 UNIGNORE, 3 UNSNOOZE (the confirmation's Undo).
-bool        takeCommand(uint8_t mac[6], uint8_t& type, uint8_t& kind);
+// kind: 0 IGNORE, 1 SNOOZE, 2 UNIGNORE, 3 UNSNOOZE (the confirmation's Undo),
+// 4 PAUSE, 5 RESUME (pushes from one board, two hours; no MAC).
+// Each carries the id of the board that pushed the alert -- the last two
+// bytes of its Bluetooth address, "5AF6" -- and `mine` says whether that is
+// this board. Boards sharing a topic all read every command: an IGNORE is
+// applied by all of them, but only the one it came from says so back, and a
+// PAUSE is only for that one. A command with no id (a notification from
+// before v3.2.5) counts as mine.
+bool        takeCommand(uint8_t mac[6], uint8_t& type, uint8_t& kind, bool& mine);
+void        setBoardId(const char* id);
 // A 429's Retry-After, in seconds (0 when it gave none, or no 429).
 uint32_t    pushRetryAfterS();
 // The last read of the command topic: its HTTP status, 0 before the first.

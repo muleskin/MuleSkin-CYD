@@ -18,8 +18,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # mbedtls for test/ota_sig_test.cpp: the firmware update's signature
+      # check against real mbedtls (the Makefile skips it where there is none).
+      - name: mbedtls
+        run: sudo apt-get update -q && sudo apt-get install -y -q libmbedtls-dev
       - name: Host tests
         run: make -C test -k -j"$(nproc)"
+      # The bench scripts (tools/bench/) run on a plugged-in board, so nothing
+      # here exercises them: at least they must import and print their help,
+      # and the server-side quiet check must compile.
+      - name: Bench scripts load
+        run: |
+          pip install -q pyserial
+          cd tools/bench
+          for s in nvs_snapshot push_bench ota_e2e; do python $s.py --help >/dev/null; done
+          python -m py_compile ../../deploy/ntfy/quiet-check.py
       # The web flasher's pages: every inline script has to parse (nothing
       # else builds them, and a broken one is a dead page after a deploy).
       - name: Flasher pages parse

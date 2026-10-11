@@ -62,8 +62,6 @@
 #include "privacy.h"
 #include "lora_sniffer.h"   // the watch's SX1262; inline no-ops elsewhere
 #include "wardrive.h"
-#include "ui_bingo.h"
-#include "bingo.h"
 #include "dex.h"
 #include "ui_dex.h"
 #include "ui_meeting.h"
@@ -1571,12 +1569,6 @@ static void enterAutoUpdate() {
     uiAutoUpdateInit(*canvas, s_autoVer, AUTO_COUNT_S, transitionStart);
 }
 
-static void enterBingo() {
-    state = AppState::BINGO;
-    transitionStart = millis();
-    uiBingoInit(*canvas);
-}
-
 static void enterDex() {
     state = AppState::DEX;
     transitionStart = millis();
@@ -1589,6 +1581,7 @@ volatile bool g_consoleAdc = false;     // ADC: the spare analog inputs, for fin
 volatile bool g_consoleXyzzy = false;   // XYZZY: the TERMINAL background types the magic word now
 volatile bool g_consoleBtUpdate = false;  // UPDATE BT: the UPDATE screen's Bluetooth button, from the console
 volatile int8_t g_consolePush = -1;       // PUSH OFF / ON / TEST: the PUSH ALERTS row, and a test message
+volatile bool g_consoleWho      = false;   // WHO: which board this is (the web flasher, the bench scripts)
 volatile bool g_consoleSelfTest = false;  // SELFTEST: check every part, one line each (runSelfTest)
 volatile bool g_consoleLegend = false;  // LEGEND: wear the Legend look (and its aura) until the next boot, or take it off
 volatile bool g_consoleOutfitSet = false;  // OUTFIT n: wear costume n until the next boot, for timing it; -1 takes it off
@@ -1879,19 +1872,31 @@ static bool pushNightNow() {
 // The name at the front of every push: the one set (PUSH NAME), or this
 // board's Bluetooth name -- MuleSkin- and the last two bytes of its address,
 // the same name a Bluetooth update's picker shows.
-static const char* pushBoardName() {
-    if (Settings::pushName()[0]) return Settings::pushName();
-    static char def[16] = "";
-    if (!def[0]) {
+// This board's short id: the last two bytes of its Bluetooth address, "5AF6"
+// -- what tells two boards on one topic apart in a command (ota_wifi.h).
+static const char* boardId() {
+    static char id[8] = "";
+    if (!id[0]) {
 #if defined(ARDUINO_ARCH_ESP32)
         uint8_t mac[6] = { 0 };
         esp_read_mac(mac, ESP_MAC_BT);
-        snprintf(def, sizeof def, "MuleSkin-%02X%02X", mac[4], mac[5]);
+        snprintf(id, sizeof id, "%02X%02X", mac[4], mac[5]);
 #else
-        snprintf(def, sizeof def, "MuleSkin");
+        snprintf(id, sizeof id, "0000");
 #endif
     }
-    return def;
+    return id;
+}
+
+// Its Bluetooth name, "MuleSkin-5AF6".
+static const char* btBoardName() {
+    static char name[16] = "";
+    if (!name[0]) snprintf(name, sizeof name, "MuleSkin-%s", boardId());
+    return name;
+}
+
+static const char* pushBoardName() {
+    return Settings::pushName()[0] ? Settings::pushName() : btBoardName();
 }
 
 static void queuePush(const char* title, const char* body, uint8_t prio, const char* tags, bool urgent,
@@ -1919,6 +1924,16 @@ static PushQueue::DailyCap s_pushCap;    // DAILY_CAP ordinary alerts a day (pus
 
 static uint32_t pushDay() { return Clock::isSet() ? Clock::localDay() : 0; }
 
+// PAUSE 2 H from a notification: ordinary pushes from this board held until
+// then (WITH YOU still goes). RAM only -- a restart ends it.
+static uint32_t s_pushPausedUntil = 0;
+static uint32_t pushPausedMin() {
+    if (!s_pushPausedUntil) return 0;
+    const int32_t left = (int32_t)(s_pushPausedUntil - millis());
+    if (left <= 0) { s_pushPausedUntil = 0; return 0; }
+    return (uint32_t)left / 60000u + 1;
+}
+
 static void queuePushAlert(const Detection& d, uint16_t followMins) {
     if (!Settings::pushOn()) return;
     PushQueue::Rules rules;
@@ -1929,6 +1944,11 @@ static void queuePushAlert(const Detection& d, uint16_t followMins) {
     rules.homeMode         = Settings::pushHome();
     rules.home             = engine.homeInView(millis());
     if (!PushQueue::wanted(rules, d.type, followMins != 0)) return;
+    if (!followMins && pushPausedMin()) {
+        s_pushCooled++;
+        Serial.printf("[push] paused: not pushing %s (%lu min more)\n", detectionTypeName(d.type), (unsigned long)pushPausedMin());
+        return;
+    }
     if (!followMins && !s_pushCool.allow(d.mac, millis())) {
         s_pushCooled++;
         Serial.printf("[push] %s %02x:%02x:%02x:%02x:%02x:%02x pushed within the hour; not again\n",
@@ -1947,10 +1967,10 @@ static void queuePushAlert(const Detection& d, uint16_t followMins) {
             return;
         }
     }
-    char title[40], body[100], seq[24], act[24];
+    char title[40], body[100], seq[24], act[32];
     // The notification's IGNORE button posts this back (see ota_wifi.h).
-    snprintf(act, sizeof act, "IGNORE %02x%02x%02x%02x%02x%02x %u",
-             d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5], (unsigned)d.type);
+    snprintf(act, sizeof act, "IGNORE %02x%02x%02x%02x%02x%02x %u %s",
+             d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5], (unsigned)d.type, boardId());
     const char* vendor = vendorText(d);
     // One notification per device (where the phone's app supports replacing
     // one), and a WITH YOU its own, so it never overwrites an ordinary alert.
@@ -2035,6 +2055,11 @@ static void servicePushSummary() {
     if (bl < sizeof body - 8)
         snprintf(body + bl, sizeof body - bl, ". Pushed %u; held %u (hourly), %u (daily cap)",
                  (unsigned)s_pushStat.sent, (unsigned)s_pushCooled, (unsigned)over);
+    // Which firmware, and which settings store: a board left on an old
+    // version or the 20 KB store shows in the evening, unplugged.
+    const size_t vl = strlen(body);
+    if (vl < sizeof body - 24)
+        snprintf(body + vl, sizeof body - vl, ". %s, %u KB store", FIRMWARE_VERSION, nvsStoreKb());
     PushQueue::Msg m{};
     snprintf(m.title, sizeof m.title, "%s today", pushBoardName());
     snprintf(m.body, sizeof m.body, "%s", body);
@@ -2050,6 +2075,7 @@ static void servicePushSummary() {
 static uint8_t pushStatusText(char* out, size_t n) {
     if (!Settings::pushOn()) { snprintf(out, n, "off"); return 0; }
     if (!Settings::pushUrl()[0]) { snprintf(out, n, "on, but no server set"); return 1; }
+    if (const uint32_t pm = pushPausedMin()) { snprintf(out, n, "paused from the phone, %lu min more", (unsigned long)pm); return 0; }
     pushStatRollDay();
     char cooled[40] = "";
     const uint16_t capped = s_pushCap.over(pushDay());
@@ -2119,15 +2145,41 @@ static void servicePush(uint32_t now) {
     servicePushSummary();
     // IGNORE pressed on a notification, read at the last join.
     {
+        OtaWifi::setBoardId(boardId());
         uint8_t mac[6], type = 0, kind = 0;
-        while (OtaWifi::takeCommand(mac, type, kind)) {
+        bool mine = true;
+        while (OtaWifi::takeCommand(mac, type, kind, mine)) {
             const DetectionType t = type < (uint8_t)DetectionType::COUNT ? (DetectionType)type : DetectionType::UNKNOWN;
-            char body[100], seq[24], undo[24];
+            char body[100], seq[24], undo[32];
             snprintf(seq, sizeof seq, "done-%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
             // The confirmation's Undo button posts this back (see ota_wifi.h).
-            snprintf(undo, sizeof undo, "%s %02x%02x%02x%02x%02x%02x", kind == 1 ? "UNSNOOZE" : "UNIGNORE",
-                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-            if (kind == 2) {
+            snprintf(undo, sizeof undo, "%s %02x%02x%02x%02x%02x%02x %s", kind == 1 ? "UNSNOOZE" : "UNIGNORE",
+                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], boardId());
+            // Another board's button: do it here too, but let that board be
+            // the one that says so -- one confirmation, not one per board.
+            // PAUSE and RESUME are only ever that board's.
+            if (!mine && kind >= 4) continue;
+            if (!mine) {
+                if (kind == 0)      IgnoreList::add(mac, t);
+                else if (kind == 1) IgnoreList::snoozeFor(mac, 24u * 60u * 60u * 1000u);
+                else if (kind == 2) IgnoreList::remove(mac);
+                else if (kind == 3) IgnoreList::unsnooze(mac);
+                Serial.printf("[ignore] another board's %s, applied here too\n",
+                              kind == 0 ? "IGNORE" : kind == 1 ? "SNOOZE" : kind == 2 ? "UNIGNORE" : "UNSNOOZE");
+                continue;
+            }
+            if (kind == 4) {
+                s_pushPausedUntil = millis() + 2u * 60u * 60u * 1000u;
+                if (!s_pushPausedUntil) s_pushPausedUntil = 1;
+                Serial.println("[push] paused for two hours from the phone");
+                if (state == AppState::CLEAR) Theme::showToast("PUSHES PAUSED", "Two hours, from the phone", Theme::CYAN, 3000);
+                snprintf(undo, sizeof undo, "RESUME %s", boardId());
+                queuePush("paused", "Pushes paused for 2 hours. WITH YOU still comes.", 2, "pause_button", false, "pause", undo);
+            } else if (kind == 5) {
+                s_pushPausedUntil = 0;
+                Serial.println("[push] resumed from the phone");
+                queuePush("resumed", "Pushes are back on.", 2, "arrow_forward", false, "pause");
+            } else if (kind == 2) {
                 if (IgnoreList::remove(mac)) {
                     Serial.printf("[ignore] undone from the phone: %02x:%02x:%02x:%02x:%02x:%02x\n",
                                   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -3591,17 +3643,18 @@ void setup() {
     twatchApplyCharge();
 #endif
     Security::begin();
-    // MuleSkinMesh is gone, but a board upgraded from a build that had it
-    // still holds that squad's phrase and key in NVS. Erased here, once: the
-    // check is a read, so a board with nothing left to erase writes nothing.
+    // Retired features' NVS, erased once on a board upgraded from a build
+    // that had them: MuleSkinMesh's squad phrase and key ("meshtalk"), and
+    // BINGO's card ("bingo", removed in v3.2.5). The check is a read, so a
+    // board with nothing left to erase writes nothing.
 #if HAVE_NVS_ERASE
-    {
-        nvs_iterator_t it = sqwNvsEntryFind(NVS_DEFAULT_PART_NAME, "meshtalk", NVS_TYPE_ANY);
+    for (const char* ns : { "meshtalk", "bingo" }) {
+        nvs_iterator_t it = sqwNvsEntryFind(NVS_DEFAULT_PART_NAME, ns, NVS_TYPE_ANY);
         if (it) {
             nvs_release_iterator(it);
             Preferences old;
-            if (old.begin("meshtalk", false)) { old.clear(); old.end(); }
-            Serial.println("[boot] erased the retired squad phrase and key");
+            if (old.begin(ns, false)) { old.clear(); old.end(); }
+            Serial.printf("[boot] erased the retired \"%s\" settings\n", ns);
         }
     }
 #endif
@@ -4080,7 +4133,6 @@ void setup() {
 #endif
     // After the engine: the card leans on the lifetime counts to pick which
     // type sits out, and those are read in init().
-    Bingo::begin(engine);
     Dex::begin();
     Regulars::begin();
     MuleSkin::setIdleProvider([]() { return Notices::idleLine(engine); });
@@ -4827,37 +4879,11 @@ void loop() {
         }
     }
 #endif
-    // The bingo card: marks the radio task handed over, the week turning
-    // over, and the one flash write that follows a batch of marks.
 #if defined(ARDUINO_ARCH_ESP32)
     if (g_benchPrimNow) { g_benchPrimNow = false; runPrimBench(); }
 #endif
-    Bingo::tick(now);
     Dex::tick(now);
     Regulars::tick(now);
-    {
-        DetectionType bt = DetectionType::UNKNOWN;
-        char sub[40];
-        switch (Bingo::takeEvent(bt)) {
-            case Bingo::Event::MARKED:
-                snprintf(sub, sizeof sub, "%s  (%u of 16)", detectionTypeName(bt),
-                         (unsigned)Bingo::markedCount());
-                Theme::showToast("SQUARE MARKED", sub, Theme::GREEN, 2200);
-                break;
-            case Bingo::Event::LINE:
-                snprintf(sub, sizeof sub, "%u line%s called", (unsigned)Bingo::linesCalled(),
-                         Bingo::linesCalled() == 1 ? "" : "s");
-                Theme::showToast("BINGO!", sub, Theme::AMBER, 3000);
-                break;
-            case Bingo::Event::FULL:
-                Theme::showToast("FULL CARD", "Sixteen for sixteen", Theme::AMBER, 4000);
-                break;
-            case Bingo::Event::NEW_CARD:
-                Theme::showToast("NEW BINGO CARD", "A fresh sixteen", Theme::CYAN, 2500);
-                break;
-            default: break;
-        }
-    }
 
     TouchPoint tp = pollTouch();
     // True only on the exact frame a touch begins/ends -- unlike
@@ -5036,6 +5062,16 @@ void loop() {
             engine.startUpdateRadio();
             if (!OtaBle::begin()) { engine.stopUpdateRadio(); Serial.println("[ota] bluetooth update mode refused"); }
         }
+    }
+    if (g_consoleWho) {
+        // "WHO <push name> <Bluetooth name> <version> <store KB>": what the
+        // web flasher and tools/bench show as soon as they connect, so a
+        // board on the cable is never taken for another.
+        g_consoleWho = false;
+        char pn[24];
+        snprintf(pn, sizeof pn, "%s", pushBoardName());
+        for (char* c = pn; *c; c++) if (*c == ' ') *c = '_';
+        Serial.printf("WHO %s %s %s %u\n", pn, btBoardName(), FIRMWARE_VERSION, nvsStoreKb());
     }
     if (g_consolePush >= 0) {
         // PUSH OFF / ON / TEST, for the flasher page and the bench. URL and
@@ -5317,18 +5353,6 @@ void loop() {
                 // walkthrough, which has a screen of its own to finish.
                 else if (OtaCore::availableVersion()[0] && !Security::locked()) enterSysProps();
                 else                              enterClear();
-            }
-            break;
-        }
-        case AppState::BINGO: {
-            drawTwoBand([&](TFT_eSPI& t, bool advance) { uiBingoTick(t, now, engine, advance); });
-            if (touchJustDown) {
-                lastTouch = now;
-                // OK leaves for the main screen, not back into
-                // the settings menu: somebody who opened the card to look at
-                // it wants the board back, not another list.
-                if (uiBingoHitTest(*canvas, tp.x, tp.y, tft.width(), tft.height()) == BingoTap::BACK)
-                    enterClear();
             }
             break;
         }
@@ -6465,7 +6489,6 @@ void loop() {
                         case SettingsRow::PET:          MuleSkin::cyclePet(); break;
                         case SettingsRow::BANTER:       Settings::cycleBanter(); break;
                         case SettingsRow::VIEW_DIARY:   enterDiary(); break;
-                        case SettingsRow::BINGO:        enterBingo(); break;
                         case SettingsRow::DEX:          enterDex(); break;
                         case SettingsRow::APPEARANCE:  uiSettingsOpenAppearance(true); break;
                         case SettingsRow::AURA:        Settings::toggleAura(); break;

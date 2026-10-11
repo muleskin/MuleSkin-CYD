@@ -27,7 +27,7 @@ ifneq ($(findstring mingw,$(shell $(CXX) -dumpmachine)),)
 CXXFLAGS += -include $(SIM)/win_compat.h
 endif
 
-TESTS := remote_id_test ibeacon_test signatures_test emitter_roundtrip_test ignore_list_test hacker_test pwnagotchi_test shim_fidelity_test qwerty_test device_info_test security_test blackbox_test bingo_test hunt_test bgretire_test autoquiet_test framepush_test touchfit_test logindex_test dex_test regulars_test spam_test gnss_test wigle_test wardrive_test lora_survey_test lora_msgs_test lora_json_test lora_feed_test lora_airtime_test lora_ident_test lora_enrich_test lora_channels_test lora_nodes_test lora_crypto_test lora_meshtastic_test lora_meshcore_test lora_lorawan_test lora_ham_test version_test auto_time_test radar_blip_test night_mode_test tracker_follow_test today_test sig_extra_test push_queue_test muleskin_art_test
+TESTS := remote_id_test ibeacon_test signatures_test emitter_roundtrip_test ignore_list_test hacker_test pwnagotchi_test shim_fidelity_test qwerty_test device_info_test security_test blackbox_test hunt_test bgretire_test autoquiet_test framepush_test touchfit_test logindex_test dex_test regulars_test spam_test gnss_test wigle_test wardrive_test lora_survey_test lora_msgs_test lora_json_test lora_feed_test lora_airtime_test lora_ident_test lora_enrich_test lora_channels_test lora_nodes_test lora_crypto_test lora_meshtastic_test lora_meshcore_test lora_lorawan_test lora_ham_test version_test auto_time_test radar_blip_test night_mode_test tracker_follow_test today_test sig_extra_test push_queue_test muleskin_art_test
 
 # Only the units under test get linked in. Pulling the whole firmware
 # would drag in TFT_eSPI, NimBLE and the UI, and a test that needs a
@@ -60,7 +60,6 @@ dex_test_SRCS                := $(SRC)/dex.cpp $(SIM)/detection_sim.cpp $(SRC)/r
 regulars_test_SRCS           := $(SRC)/regulars.cpp
 # The card: winnable, and it keeps what it earned. The clock is stubbed in
 # the test; the engine comes along for its lifetime counts.
-bingo_test_SRCS              := $(SRC)/bingo.cpp $(SIM)/detection_sim.cpp $(SRC)/remote_id.cpp
 # An unfinished egg hunt, through the settings store. Theme and Clock are
 # stubbed in the test; settings.cpp only calls a handful of each.
 autoquiet_test_SRCS       := $(SIM)/detection_sim.cpp $(SRC)/remote_id.cpp
@@ -143,6 +142,18 @@ sig_extra_test_SRCS          := $(SRC)/signatures.cpp
 # Where a detection sits on the radar scope (src/radar_blip.cpp).
 radar_blip_test_SRCS         := $(SRC)/radar_blip.cpp
 
+# The firmware update's signature check (src/ota_sig.cpp), against real
+# mbedtls -- only where mbedtls is installed (CI: libmbedtls-dev). Probed by
+# preprocessing mbedtls_compat.h, which includes <mbedtls/version.h>.
+HAVE_MBEDTLS := $(shell $(CXX) -x c++ -E $(INC)/mbedtls_compat.h >/dev/null 2>&1 && echo 1)
+ifeq ($(HAVE_MBEDTLS),1)
+TESTS += ota_sig_test
+else
+$(info ota_sig_test skipped: no mbedtls on this computer (libmbedtls-dev))
+endif
+ota_sig_test_SRCS            := $(SRC)/ota_sig.cpp
+ota_sig_test_LIBS            := -lmbedcrypto
+
 .PHONY: all clean
 all: $(addprefix run-,$(TESTS))
 
@@ -151,7 +162,7 @@ $(OUT):
 
 define TEST_rule
 $(OUT)/$(1): $(1).cpp $$($(1)_SRCS) | $(OUT)
-	@$$(CXX) $$(CXXFLAGS) $$($(1)_FLAGS) -o $$@ $$< $$($(1)_SRCS)
+	@$$(CXX) $$(CXXFLAGS) $$($(1)_FLAGS) -o $$@ $$< $$($(1)_SRCS) $$($(1)_LIBS)
 
 .PHONY: run-$(1)
 run-$(1): $(OUT)/$(1)

@@ -6,7 +6,6 @@
 #include "signatures.h"
 #include "settings.h"
 #include "blackbox.h"
-#include "bingo.h"
 #include "dex.h"
 #include "regulars.h"
 #include "clock.h"
@@ -1212,7 +1211,6 @@ void DetectionEngine::processDeauthQ() {
                     row.active = true;
                     _typeCounts[(uint8_t)DetectionType::DEAUTH]++;
                 }
-                Bingo::note(DetectionType::DEAUTH);
                 Dex::note(DetectionType::DEAUTH, e.rssi);
                 Regulars::note(e.mac, DetectionType::DEAUTH);
                 _latest = &row;
@@ -1289,7 +1287,6 @@ void DetectionEngine::postBle(Detection d) {
             }
             _log[slot].rssi = d.rssi;
             _log[slot].lastSeen = millis();
-            Bingo::note(d.type);
             Dex::note(d.type, d.rssi);
     Regulars::note(d.mac, d.type);
             Regulars::note(d.mac, d.type);
@@ -1725,7 +1722,6 @@ void DetectionEngine::processWiFiQ() {
             if (memcmp(_log[slot].mac, e.mac, 6) == 0 &&
                 _log[slot].type == t) {
                 bool reactivating = !_log[slot].active;
-                Bingo::note(t);
                 Dex::note(t, e.rssi);
                 Regulars::note(e.mac, t);
                 _log[slot].hits++;
@@ -1807,7 +1803,6 @@ void DetectionEngine::pushLog(const Detection& d) {
     // per new detection on the task that receives the adverts was what let
     // a bench flood of new trackers back the radio up until the heap went.
     _lifetimeDirty = true;
-    Bingo::note(d.type);
     Dex::note(d.type, d.rssi);
     const uint8_t next = (uint8_t)((_sdQHead + 1) % SD_Q_CAP);
     if (next != _sdQTail) { _sdQ[_sdQHead] = d; _sdQHead = next; }
