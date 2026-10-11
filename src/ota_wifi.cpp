@@ -1166,12 +1166,24 @@ void pollCommands() {
     Preferences p;
     char since[24] = "";
     if (p.begin(NVS_NS, true)) { strncpy(since, p.getString("cmdSince", "").c_str(), sizeof since - 1); p.end(); }
-    String url = String(Settings::pushUrl()) + "-cmd/json?poll=1&since=" + (since[0] ? since : "12h");
     HTTPClient http;
-    if (!http.begin(*client(), url)) return;
-    http.setTimeout(4000);
-    if (Settings::pushToken()[0]) http.addHeader("Authorization", String("Bearer ") + Settings::pushToken());
-    const int code = http.GET();
+    int code = 0;
+    // Twice at most: a server that does not know the id kept -- another
+    // server's, after PUSH URL changed, or one that has since forgotten it --
+    // answers 400 "invalid since parameter". Forget it and ask for the last
+    // 12 hours instead, or that board would never read a command again.
+    for (int attempt = 0; attempt < 2; attempt++) {
+        String url = String(Settings::pushUrl()) + "-cmd/json?poll=1&since=" + (since[0] ? since : "12h");
+        if (!http.begin(*client(), url)) return;
+        http.setTimeout(4000);
+        if (Settings::pushToken()[0]) http.addHeader("Authorization", String("Bearer ") + Settings::pushToken());
+        code = http.GET();
+        if (code != 400 || !since[0]) break;
+        http.end();
+        Serial.printf("[push] command topic forgot id %s; reading the last 12 hours\n", since);
+        since[0] = '\0';
+        if (p.begin(NVS_NS, false)) { p.remove("cmdSince"); p.end(); }
+    }
     if (code != 200) {
         if (code != 404) Serial.printf("[push] command topic: HTTP %d\n", code);
         http.end();
