@@ -875,7 +875,7 @@ bool bootCheck(uint32_t budgetMs) {
     // before the router had answered, and a network three access points
     // strong went unjoined boot after boot. A board with one saved network
     // skips the scan, which is why it never showed there.
-    const uint32_t tj = millis();
+    uint32_t tj = millis();
     WiFi.begin(ssid, pass[0] ? pass : nullptr);
     wl_status_t st = WiFi.status();
     // Two thirds of the budget for the join, the rest for the fetch.
@@ -883,6 +883,27 @@ bool bootCheck(uint32_t budgetMs) {
         if (st == WL_CONNECT_FAILED || st == WL_NO_SSID_AVAIL) break;
         delay(50);
         st = WiFi.status();
+    }
+    // One more go when the join simply never got anywhere: still idle or
+    // disconnected, and the access point never said why (no drop reason).
+    // Seen 2026-10-10 -- status 0 after the whole 6 s, then 0.9 s on the
+    // very next boot -- and a missed boot check skips the update notice, the
+    // clock and the rule set until AUTO TIME's daily join. A wrong password
+    // or a missing network says so and is not retried. The retry gets half
+    // the first try's window, and the fetch's clock starts again with it.
+    if (st != WL_CONNECTED && st != WL_CONNECT_FAILED && st != WL_NO_SSID_AVAIL && !s_dropReason) {
+        Serial.printf("[ota] boot check: join stuck (status %d) after %lu ms; once more\n",
+                      (int)st, (unsigned long)(millis() - tj));
+        WiFi.disconnect(false, false);
+        delay(100);
+        tj = millis();
+        WiFi.begin(ssid, pass[0] ? pass : nullptr);
+        st = WiFi.status();
+        while (st != WL_CONNECTED && millis() - tj < budgetMs / 3) {
+            if (st == WL_CONNECT_FAILED || st == WL_NO_SSID_AVAIL) break;
+            delay(50);
+            st = WiFi.status();
+        }
     }
     WiFi.removeEvent(dropEv);
     if (st != WL_CONNECTED)

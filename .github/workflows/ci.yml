@@ -32,8 +32,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # Both: the screenshot renderer, and the live emulator that compiles
+      # main.cpp itself -- which stopped linking in 4093d50 without CI
+      # noticing, because only the first was built here.
       - name: Build the emulator
-        run: make -C sim -j"$(nproc)" muleskinsim
+        run: make -C sim -j"$(nproc)" muleskinsim muleskinsim-live
       - name: Compare the screens
         run: |
           pip install -q pillow
