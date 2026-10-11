@@ -1,1 +1,3 @@
 .pio/
+# Written by the pioarduino (nm-cyd-c5) build on every run.
+src/idf_component.yml
