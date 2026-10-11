@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Elecrow CrowPanel Advance 7.0\")",
-  "version": "3.2.4",
-  "release_name": "Push options",
-  "whats_new": ["Undo on ignored/snoozed pushes", "Waits out a server rate limit", "Choose push types, quiet hours", "Quiet-board alert for servers"],
+  "version": "3.2.5",
+  "release_name": "Pause and WHO",
+  "whats_new": ["Pause 2 h button on alerts", "One confirmation per press", "Flasher names the board it sees", "Bingo removed"],
   "new_install_prompt_erase": true,
   "builds": [
     {
