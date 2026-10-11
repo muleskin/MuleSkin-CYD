@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (3.5\" BETA)",
-  "version": "3.2.1",
-  "release_name": "Calmer pushes",
-  "whats_new": ["One push per device an hour", "Push status in the self-test", "iPhone Web Push via own ntfy"],
+  "version": "3.2.2",
+  "release_name": "Ignore from phone",
+  "whats_new": ["Ignore button on push alerts", "Push cap 30/day, PUSH AT HOME", "Ignore list in the web flasher", "Join retry; 66 KB freed"],
   "new_install_prompt_erase": true,
   "builds": [
     {
