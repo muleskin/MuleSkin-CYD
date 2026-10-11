@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (AWOK 2.4\")",
-  "version": "3.2.3",
-  "release_name": "Snooze from phone",
-  "whats_new": ["Snooze 1 day button on alerts", "Phone gets told when it's done", "Push stats in the 8 PM summary", "HOME and IGNORE status shown"],
+  "version": "3.2.4",
+  "release_name": "Push options",
+  "whats_new": ["Undo on ignored/snoozed pushes", "Waits out a server rate limit", "Choose push types, quiet hours", "Quiet-board alert for servers"],
   "new_install_prompt_erase": true,
   "builds": [
     {
