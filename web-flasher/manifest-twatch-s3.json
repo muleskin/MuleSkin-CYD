@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (LilyGo T-Watch S3)",
-  "version": "3.2.0",
-  "release_name": "Bigger settings",
-  "whats_new": ["Settings store 20 KB to 128 KB", "USB install once, no erase", "Settings move over by themselves", "Push titles name the board"],
+  "version": "3.2.1",
+  "release_name": "Calmer pushes",
+  "whats_new": ["One push per device an hour", "Push status in the self-test", "iPhone Web Push via own ntfy"],
   "new_install_prompt_erase": true,
   "builds": [
     {
