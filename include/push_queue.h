@@ -6,7 +6,8 @@
 //
 // WHICH ALERTS (PUSH WHAT, Settings): WITH YOU only; IMPORTANT -- WITH YOU plus
 // the surveillance and attack types (Flock, Axon, plate readers, Raven,
-// cameras, camera glasses, skimmers, deauth floods, evil twins); or ALL, every
+// cameras, camera glasses, skimmers, deauth floods, evil twins, attack tools
+// and karma APs); or ALL, every
 // alert the screen raises. And PUSH AT NIGHT: through the night hours (NIGHT
 // DIM's, or 11 PM-5 AM), everything as usual, or WITH YOU only.
 //

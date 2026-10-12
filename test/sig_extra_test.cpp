@@ -10,6 +10,9 @@
 #include <cstdio>
 #include <string>
 #include <strings.h>
+#include <vector>
+#include <cctype>
+#include <cstdlib>
 
 int main() {
     suite("parsing");
@@ -164,6 +167,47 @@ int main() {
         ck("a DJI address is a drone", lookupOui(dji) == DetectionType::DRONE);
         ck("TELLO- is a drone", lookupSsid("TELLO-C48BF0") == DetectionType::DRONE);
         setExtraRules("");
+
+        // Nothing in the set repeats the firmware's built-in tables, or
+        // itself: an added rule that is already there is a slot (and some of
+        // 2000 bytes) spent on nothing -- and a sign the set was written
+        // without looking. DROP and GRADE are left out: built-in rows are
+        // exactly what they are for.
+        suite("the shipped set repeats nothing");
+        std::vector<std::string> seen, dupes;
+        size_t at = 0;
+        while (at <= body.size()) {
+            size_t end = body.find(';', at);
+            if (end == std::string::npos) end = body.size();
+            const std::string r = body.substr(at, end - at);
+            at = end + 1;
+            char kind[8] = "", key[40] = "";
+            if (sscanf(r.c_str(), "%7s %39s", kind, key) != 2) continue;
+            if (!strcasecmp(kind, "DROP") || !strcasecmp(kind, "GRADE")) continue;
+            std::string id = std::string(kind) + " " + key;
+            for (auto& c : id) c = (char)toupper((unsigned char)c);
+            bool built = false;
+            if (!strcasecmp(kind, "OUI")) {
+                unsigned b[3];
+                if (sscanf(key, "%x:%x:%x", &b[0], &b[1], &b[2]) == 3) {
+                    const uint8_t mac[6] = { (uint8_t)b[0], (uint8_t)b[1], (uint8_t)b[2], 0, 0, 1 };
+                    built = lookupOui(mac) != DetectionType::UNKNOWN;
+                }
+            } else if (!strcasecmp(kind, "SSID")) {
+                built = lookupSsid(key) != DetectionType::UNKNOWN;
+            } else if (!strcasecmp(kind, "NAME")) {
+                built = lookupBtName(key) != DetectionType::UNKNOWN;
+            } else if (!strcasecmp(kind, "UUID")) {
+                built = lookupUuid((uint16_t)strtoul(key, nullptr, 16)) != DetectionType::UNKNOWN;
+            } else if (!strcasecmp(kind, "CID")) {
+                built = lookupMfgId((uint16_t)strtoul(key, nullptr, 16)) != DetectionType::UNKNOWN;
+            }
+            if (built) dupes.push_back(id + " (built in)");
+            for (auto& s : seen) if (s == id) dupes.push_back(id + " (twice)");
+            seen.push_back(id);
+        }
+        for (auto& d : dupes) printf("    repeated: %s\n", d.c_str());
+        ck("no rule repeats a built-in one or another rule", dupes.empty() && !seen.empty());
     }
     return report();
 }

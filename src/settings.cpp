@@ -166,6 +166,7 @@ static uint8_t s_autoUpdate   = 0;     // 0 OFF, 1 AFTER 3 DAYS, 2 EARLY
 static bool    s_pushOn       = false;
 static char    s_pushUrl[100] = "";
 static char    s_pushTok[48]  = "";
+static char    s_pushBtnTok[48] = "";
 static char    s_pushName[16] = "";
 static uint8_t s_pushWhat     = 1;
 static uint32_t s_pushTypes   = 0;
@@ -515,6 +516,7 @@ void load() {
     s_pushOn       = s_prefs.getBool("pushOn", false);
     s_prefs.getString("pushUrl", s_pushUrl, sizeof s_pushUrl);
     s_prefs.getString("pushTok", s_pushTok, sizeof s_pushTok);
+    s_prefs.getString("pushBtnTok", s_pushBtnTok, sizeof s_pushBtnTok);
     s_prefs.getString("pushName", s_pushName, sizeof s_pushName);
     s_pushWhat     = s_prefs.getUChar("pushWhat", 1);
     s_pushTypes    = s_prefs.getUInt("pushTypes", 0);
@@ -728,6 +730,8 @@ static void setText(const char* key, char* dst, size_t cap, const char* v) {
 }
 void setPushUrl(const char* url)     { setText("pushUrl", s_pushUrl, sizeof s_pushUrl, url); if (!s_pushUrl[0] && s_pushOn) togglePush(); }
 void setPushToken(const char* token) { setText("pushTok", s_pushTok, sizeof s_pushTok, token); }
+const char* pushBtnToken()  { return s_pushBtnTok; }
+void setPushBtnToken(const char* token) { setText("pushBtnTok", s_pushBtnTok, sizeof s_pushBtnTok, token); }
 const char* pushName()        { return s_pushName; }
 // It goes into an HTTP header, so only characters that are safe there -- and
 // that read well at the front of a notification -- are kept.

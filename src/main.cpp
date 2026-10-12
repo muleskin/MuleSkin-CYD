@@ -1174,6 +1174,11 @@ static bool alertMayInterrupt(const Detection& d) {
         }
     }
 #endif
+    // An AirTag-shaped advert that is NOT the away-from-owner beacon --
+    // AirPods pairing, mostly, graded LOW (signatures.h) -- is logged and
+    // never takes the screen, whatever ALERT FILTER says. A tag away from its
+    // owner is HIGH and alerts as always.
+    if (!exempt && d.type == DetectionType::AIRTAG && d.conf == Confidence::LOW_CONF) return false;
     // A flood of fake tags of this type: one alert says so, and the rest are
     // logged without interrupting until it has been quiet five minutes. See
     // spam_watch.h. A device you asked to WATCH still always gets through.
@@ -1983,7 +1988,8 @@ static void queuePushAlert(const Detection& d, uint16_t followMins) {
                  d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
         queuePush(title, body, 5, "rotating_light", true, seq, act);
     } else {
-        snprintf(title, sizeof title, "%s nearby", detectionTypeName(d.type));
+        const bool away = d.type == DetectionType::AIRTAG && strcmp(vendorText(d), "Away-Owner") == 0;
+        snprintf(title, sizeof title, away ? "%s away from its owner" : "%s nearby", detectionTypeName(d.type));
         snprintf(body, sizeof body, "%s%s%d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
                  vendor, vendor[0] ? ", " : "", (int)d.rssi,
                  d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
@@ -2055,6 +2061,24 @@ static void servicePushSummary() {
     if (bl < sizeof body - 8)
         snprintf(body + bl, sizeof body - bl, ". Pushed %u; held %u (hourly), %u (daily cap)",
                  (unsigned)s_pushStat.sent, (unsigned)s_pushCooled, (unsigned)over);
+    // A signed rules set that arrived since the last summary (without a
+    // firmware update -- web-flasher/signatures.txt): said once.
+    {
+        Preferences rp;
+        uint32_t serial = 0;
+        if (rp.begin("sigx", true)) { serial = rp.getUInt("serial", 0); rp.end(); }
+        Preferences sp;
+        if (serial && sp.begin("settings", false)) {
+            if (sp.getUInt("rulesTold", 0) < serial) {
+                const size_t rl = strlen(body);
+                if (rl < sizeof body - 24)
+                    snprintf(body + rl, sizeof body - rl, ". New rules: set %lu, %u rules",
+                             (unsigned long)serial, (unsigned)extraRuleCount());
+                sp.putUInt("rulesTold", serial);
+            }
+            sp.end();
+        }
+    }
     // Which firmware, and which settings store: a board left on an old
     // version or the 20 KB store shows in the evening, unplugged.
     const size_t vl = strlen(body);
@@ -2301,7 +2325,12 @@ static void serviceFollowing(uint32_t now) {
         const Detection* d = engine.logAt(i);
         if (!d || d->restored || !d->lastSeen) continue;
         switch (d->type) {
-            case DetectionType::AIRTAG: case DetectionType::TILE:
+            // An Apple advert counts only as the Find My beacon a tag sends
+            // away from its owner (HIGH, "Away-Owner"): your own AirPods case
+            // or AirTag beside your own phone sends none, and was the most
+            // common WITH YOU that was not one.
+            case DetectionType::AIRTAG: if (d->conf != Confidence::HIGH_CONF) continue; break;
+            case DetectionType::TILE:
             case DetectionType::SAMSUNG_TAG: case DetectionType::GOOGLE_TAG: break;
             default: continue;
         }

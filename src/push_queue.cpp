@@ -16,6 +16,9 @@ bool important(DetectionType t) {
         case DetectionType::SKIMMER:
         case DetectionType::DEAUTH:
         case DetectionType::EVILTWIN:
+        // Attack tools: a karma AP answering to every network name, a
+        // Flipper, a Pineapple -- an attack in the room, like a deauth flood.
+        case DetectionType::HACKER:
             return true;
         default:
             return false;

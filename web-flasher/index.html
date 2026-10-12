@@ -166,6 +166,11 @@
   }
   .version-row{margin:0 0 18px}
   .version-hint{margin:7px 0 0;font-size:13px;opacity:.72}
+  .release-history{margin:10px 0 0;font-size:13px}
+  .release-history summary{cursor:pointer;opacity:.85}
+  .release-history ul{margin:6px 0 0;padding-left:18px}
+  .release-history li{margin:4px 0}
+  .release-history .rel-name{color:var(--vapor-cyan,#0ff)}
   .board-select{
     display:block;
     width:100%;
@@ -449,6 +454,10 @@
         On the latest build and stuck in a boot loop? Flash the one before it.
       </p>
     </div>
+    <details class="release-history" id="releaseHistory" hidden>
+      <summary>What changed in each release</summary>
+      <ul id="releaseList"></ul>
+    </details>
 
     <div class="board-finder">
       <label class="board-picker-label" for="boardCode">Code on the back of your board (optional):</label>
@@ -582,6 +591,8 @@
         <input id="pushName" type="text" maxlength="15" placeholder="e.g. Car" style="width:100%;font-family:inherit" spellcheck="false" autocomplete="off"></label>
       <label>Server <input id="pushServer" type="text" value="ntfy.sh" style="width:100%;font-family:inherit" spellcheck="false"></label>
       <label>Access token (only for a server that needs one) <input id="pushToken" type="text" style="width:100%;font-family:inherit" spellcheck="false" autocomplete="off"></label>
+      <label>Button token (optional, your own server: one that can only post to the -cmd topics, for the Ignore / Snooze / Pause buttons; blank: they carry the access token)
+        <input id="pushBtnToken" type="text" style="width:100%;font-family:inherit" spellcheck="false" autocomplete="off"></label>
       <button id="pushSend" class="identify-btn">[ SEND TO BOARD ]</button>
     </div>
     <p class="browser-note"><strong>Push alerts</strong> send every alert to your phone as a real notification, lock screen and all, through the free <strong>ntfy</strong> app (iPhone or Android). The board joins one of its saved WiFi networks for a couple of seconds to send each one -- home, work, or your phone's hotspot -- so save those in WIFI NETWORKS first. Then install ntfy on the phone, subscribe to the topic below, and send it to the board over the cable. It sends a test message straight away.</p>
@@ -785,6 +796,7 @@
     fetch('./versions.json', { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (v) {
+        if (v && v.versions) showHistory(v.versions);
         if (!v || !v.versions || v.versions.length < 2) return;   // nothing to roll back to
         v.versions.forEach(function (e, i) {
           var o = document.createElement('option');
@@ -795,6 +807,39 @@
         if (verRow) verRow.hidden = false;
       })
       .catch(function () { /* no picker; latest still works */ });
+
+    // What changed in each release the site keeps: its name and notes, read
+    // from that release's own manifest (release.sh writes them there; any
+    // board's manifest carries the same). Newest first; a release without
+    // notes just shows its version.
+    function showHistory(versions) {
+      var box = document.getElementById('releaseHistory'), list = document.getElementById('releaseList');
+      if (!box || !list || !versions.length) return;
+      Promise.all(versions.map(function (e) {
+        return fetch('./' + e.dir + 'manifest-cyd-ili9341.json', { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; })
+          .then(function (m) { return { tag: e.tag, m: m }; });
+      })).then(function (rows) {
+        list.textContent = '';
+        rows.forEach(function (row) {
+          var li = document.createElement('li');
+          var b = document.createElement('strong');
+          b.textContent = row.tag;
+          li.appendChild(b);
+          if (row.m && row.m.release_name) {
+            var n = document.createElement('span');
+            n.className = 'rel-name';
+            n.textContent = ' ' + row.m.release_name;
+            li.appendChild(n);
+          }
+          if (row.m && row.m.whats_new && row.m.whats_new.length)
+            li.appendChild(document.createTextNode(' -- ' + row.m.whats_new.join('; ')));
+          list.appendChild(li);
+        });
+        box.hidden = false;
+      });
+    }
 
     if (verSel) {
       verSel.addEventListener('change', function () {
@@ -1202,6 +1247,7 @@
   async function sendPushSetup() {
     var topic = document.getElementById('pushTopic').value.trim();
     var token = document.getElementById('pushToken').value.trim();
+    var btnToken = document.getElementById('pushBtnToken').value.trim();
     var bname = document.getElementById('pushName').value.trim().replace(/[^A-Za-z0-9 _.'-]/g, '').slice(0, 15);
     if (!/^[A-Za-z0-9_-]{10,64}$/.test(topic)) {
       pushResult.className = 'identify-result err';
@@ -1231,6 +1277,7 @@
       if (text.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
       if (text.indexOf('[push] url') < 0) throw new Error('no answer. This needs firmware v3.1.6 or later');
       await talk(port, 'PUSH TOKEN ' + (token || '-') + '\n', /\[push\] token/, 4000);
+      await talk(port, 'PUSH BTNTOKEN ' + (btnToken || '-') + '\n', /\[push\] button token/, 4000);
       await talk(port, 'PUSH NAME ' + (bname || '-') + '\n', /\[push\] name/, 4000);
       await talk(port, 'PUSH ON\n', /\[push\] (on|off)/, 4000);
       pushResult.textContent = 'Sending a test message (the board joins its WiFi for a moment)...';

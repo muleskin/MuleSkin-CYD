@@ -605,6 +605,11 @@ void pollSerial() {
             Serial.printf("[push] name %s\n", Settings::pushName()[0] ? Settings::pushName() : "(the Bluetooth name)");
             continue;
         }
+        if (strncasecmp(line, "PUSH BTNTOKEN ", 14) == 0) {
+            Settings::setPushBtnToken(line + 14);
+            Serial.printf("[push] button token %s\n", Settings::pushBtnToken()[0] ? "set" : "cleared (the buttons carry the board's)");
+            continue;
+        }
         if (strncasecmp(line, "PUSH TOKEN ", 11) == 0) {
             Settings::setPushToken(line + 11);
             Serial.printf("[push] token %s\n", Settings::pushToken()[0] ? "set" : "cleared");

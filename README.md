@@ -31,7 +31,7 @@ headlines in Orbitron.
 | `META` | Camera glasses — Ray-Ban Meta, Snap Spectacles | BLE service UUID `0xFD5F` + Meta / Luxottica / Snap company IDs |
 | `SKIMMER` | Bluetooth card skimmers (HC-05/06/03, RN42, BT04-A; HC-08 and FCD_1608 by rules set 4) | BT Classic name match + SPP UUID `0x1101` + 3 OUI |
 | `RAVEN` | Raven gunshot detector | Service UUIDs `0x3100`–`0x3500` |
-| `AIRTAG` | Apple AirTag / Find My trackers | Company ID `0x004C` + Find My payload check. The Find My beacon itself (`4C 00 12 19`) is what a tag sends only when it is **away from its owner** -- HIGH, labelled `Away-Owner`; any other 30-byte Apple advert (AirPods pairing too) is LOW |
+| `AIRTAG` | Apple AirTag / Find My trackers | Company ID `0x004C` + Find My payload check. The Find My beacon itself (`4C 00 12 19`) is what a tag sends only when it is **away from its owner** -- HIGH, "AWAY FROM OWNER" on the alert and in the push, and the only AirTag that counts toward WITH YOU; any other 30-byte Apple advert (AirPods pairing too) is LOW, logged and never alerted |
 | `DRONE` | Remote ID drones, and DJI / Tello drones that send none over WiFi | Service UUID `0xFFFA`, then the ASTM F3411 message **decoded** — aircraft position, altitude, serial, and the operator's location; DJI's 10 registered OUI and the Tello's `TELLO-`/`RMTT-` network (rules set 4) |
 | `ALPR` | Motorola Solutions / Genetec plate readers | 6 WiFi OUI |
 | `CAMERA` | Generic / covert IP cameras | 17 WiFi OUI (Wyze, Amazon, Tuya, Verkada, Avigilon, Axis, …) |
@@ -298,8 +298,9 @@ the board over the cable and has it post a test. Once it is on, three more
 rows tune it:
 
 - **PUSH WHAT** -- WITH YOU only; **IMPORTANT** (the default: WITH YOU plus
-  Flock, Axon, plate readers, Raven, cameras, camera glasses, skimmers and
-  WiFi attacks -- not every passing AirTag); ALL; or **CHOSEN**, the types
+  Flock, Axon, plate readers, Raven, cameras, camera glasses, skimmers, WiFi
+  attacks and attack tools -- Flipper, Pineapple, karma APs -- not every
+  passing AirTag); ALL; or **CHOSEN**, the types
   ticked in the web flasher's PUSH OPTIONS.
 - **PUSH AT NIGHT** -- through NIGHT DIM's hours (11 PM-5 AM without them),
   or quiet hours of its own set in PUSH OPTIONS: WITH YOU only (the
@@ -307,7 +308,8 @@ rows tune it:
 - **DAILY SUMMARY** -- one quiet push at 8 PM: the day's count, its top three
   types, the first and last sighting, how many were pushed and held back, and
   the board's firmware version and settings store -- a board left behind
-  shows without being plugged in.
+  shows without being plugged in -- and, the day a new signed rules set
+  arrives, which one.
 
 Alerts go as they happen: a WITH YOU at once and loud, the rest a few
 seconds after the first, so a burst is one join rather than ten; joins are at

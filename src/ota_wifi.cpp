@@ -1307,8 +1307,10 @@ void psRun(void*) {
                 if (cmd.startsWith("http://") && named) cmd = "https://" + cmd.substring(7);
                 // Two buttons, one command topic: Ignore for good, or Snooze
                 // for a day ("SNOOZE" in place of "IGNORE", the rest alike).
-                const String auth = Settings::pushToken()[0]
-                    ? String(", headers.Authorization=Bearer ") + Settings::pushToken() : String();
+                // The button token when one is set (Settings::pushBtnToken:
+                // command topics only), else the board's own.
+                const char* btnTok = Settings::pushBtnToken()[0] ? Settings::pushBtnToken() : Settings::pushToken();
+                const String auth = btnTok[0] ? String(", headers.Authorization=Bearer ") + btnTok : String();
                 String act;
                 if (strncmp(s_psMsgs[i].act, "IGNORE ", 7) == 0) {
                     // "IGNORE <mac> <type> <board>": Ignore and Snooze carry

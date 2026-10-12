@@ -384,6 +384,12 @@ namespace Settings {
     const char* pushToken();     // "" when none
     void        setPushUrl(const char* url);
     void        setPushToken(const char* token);
+    // The token a notification's buttons carry (Ignore / Snooze / Pause /
+    // Undo), when set: one that can only post to the command topics, so a
+    // notification seen by the wrong eyes gives away less than the board's
+    // own. "" (the default): the buttons carry pushToken().
+    const char* pushBtnToken();
+    void        setPushBtnToken(const char* token);
     // The board's name at the front of every push ("Car: FLOCK nearby"), so
     // several boards can share one topic. Up to 15 characters -- letters,
     // digits, space, - _ ' . -- anything else is dropped. "" (the default)

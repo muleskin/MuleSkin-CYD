@@ -226,6 +226,20 @@ The token travels inside the notification (the button's request needs it);
 only accounts that can read the topic ever see it. On the public ntfy.sh
 there is no token and nothing to set up.
 
+Better still (v3.2.7+), give the buttons a token of their own that can do
+nothing but post to the command topics, so a notification seen by the wrong
+eyes gives away less than the board's own token:
+
+```bash
+sudo docker exec -it muleskin-ntfy ntfy user add muleskin-buttons
+sudo docker exec muleskin-ntfy ntfy access muleskin-buttons 'muleskin-*-cmd' write-only
+sudo docker exec muleskin-ntfy ntfy token add muleskin-buttons      # prints tk_...
+```
+
+and put that token in the flasher's SET UP PUSH ALERTS, **Button token**
+(console: `PUSH BTNTOKEN tk_...`). The board's own token stays as it is: it
+still posts the alerts and reads the command topic.
+
 ### When a board goes quiet
 
 A detector that has died, lost power or lost its WiFi sends nothing -- which

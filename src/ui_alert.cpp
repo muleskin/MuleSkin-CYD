@@ -444,7 +444,12 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
     // come out "DID" -- upper-casing is what makes the vendor strings in
     // signatures.cpp renderable at all.
     {
-        const char* src = s_redacted ? "LOCKED" : vendorText(s_last);
+        // "Away-Owner" (signatures.h isFindMySeparated) said in words: the
+        // AirTag case that matters is a tag away from its owner.
+        const char* vend = vendorText(s_last);
+        const char* src = s_redacted ? "LOCKED"
+                        : (s_last.type == DetectionType::AIRTAG && strcmp(vend, "Away-Owner") == 0) ? "AWAY FROM OWNER"
+                        : vend;
         char up[16];
         size_t i = 0;
         for (; src[i] && i + 1 < sizeof(up); i++) {
