@@ -77,6 +77,12 @@ const char* btNameVendor(const char* name);
 // that costs; the short version is that this deliberately trades some
 // precision for actually catching a tag that has just been powered on.
 bool isAirTagPayload(const uint8_t* payload, uint8_t len);
+// The Find My beacon itself (4C 00 12 19): what an AirTag sends only once it
+// is DISCONNECTED from its owner's iPhone -- connected, it sends none (Adam
+// Catley's AirTag teardown; AirGuard filters on the same two bytes). So a tag
+// heard sending it is away from its owner: the one worth an alert. The rest
+// of isAirTagPayload() (any 30-byte Apple advert) is also AirPods pairing.
+bool isFindMySeparated(const uint8_t* payload, uint8_t len);
 
 // iBeacon check, run against the PARSED manufacturer-data field (company
 // ID included, i.e. what NimBLE's getManufacturerData() returns).

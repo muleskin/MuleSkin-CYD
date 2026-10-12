@@ -111,5 +111,22 @@ int main() {
     ck("nine digits is not", !isBareSerialName("402201903"));
     ck("digits with a letter is not", !isBareSerialName("40220A9033"));
 
+    suite("an AirTag away from its owner");
+    {
+        // Adam Catley's capture of a separated AirTag: 1E FF 4C 00 12 19 10 ...
+        uint8_t away[31] = { 0x1E, 0xFF, 0x4C, 0x00, 0x12, 0x19, 0x10 };
+        // AirPods pairing (Proximity Pairing, type 0x07), the same 30-byte shape.
+        uint8_t pods[31] = { 0x1E, 0xFF, 0x4C, 0x00, 0x07, 0x19, 0x01 };
+        ck("the Find My beacon is an AirTag", isAirTagPayload(away, sizeof away));
+        ck("...and away from its owner", isFindMySeparated(away, sizeof away));
+        ck("AirPods pairing still reads as AirTag-shaped", isAirTagPayload(pods, sizeof pods));
+        ck("...but is not a tag away from its owner", !isFindMySeparated(pods, sizeof pods));
+        ck("found behind another AD structure", [] {
+            uint8_t b[31] = { 0x02, 0x01, 0x06, 0x1A, 0xFF, 0x4C, 0x00, 0x12, 0x19, 0x00 };
+            return isFindMySeparated(b, sizeof b);
+        }());
+        ck("too short is nothing", !isFindMySeparated(away, 3));
+    }
+
     return report();
 }

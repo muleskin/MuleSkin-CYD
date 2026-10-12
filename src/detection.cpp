@@ -7,6 +7,7 @@
 #include "settings.h"
 #include "blackbox.h"
 #include "dex.h"
+#include "karma_watch.h"
 #include "regulars.h"
 #include "clock.h"
 #include <Arduino.h>
@@ -443,6 +444,15 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         // none of those tables has a per-row grade, so the type's own
         // grade stands. Only the OUI table needed splitting.
         det.conf = confidenceFor(det.type);
+        // An AirTag-shaped advert is one of two things: the Find My beacon a
+        // tag sends only when it is away from its owner (HIGH -- a tag you
+        // carry for someone else's phone), or any other 30-byte Apple advert,
+        // AirPods pairing included (LOW). See isFindMySeparated().
+        bool tagAway = false;
+        if (det.type == DetectionType::AIRTAG) {
+            tagAway  = isFindMySeparated(adv->getPayload().data(), (uint8_t)adv->getPayload().size());
+            det.conf = tagAway ? Confidence::HIGH_CONF : Confidence::LOW_CONF;
+        }
         // ...except HACKER, which is the one type deliberately holding
         // signatures of very different strength. Reaching here on anything
         // but the name means one of the exact ones matched: a service UUID
@@ -480,7 +490,7 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         }
         // Set vendor label based on the matched table entry.
         if (det.type == DetectionType::AIRTAG) {
-            det.vendor = "Apple";
+            det.vendor = tagAway ? "Away-Owner" : "Apple";
         } else if (det.type == DetectionType::DRONE) {
             det.vendor = "DroneID";
         } else if (det.type == DetectionType::META) {
@@ -662,7 +672,13 @@ bool DetectionEngine::init() {
             // Data frame: addr1 (DA) and addr2 (SA) both interesting
             g_engine->postWiFi(frame + 4,  pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
             g_engine->postWiFi(frame + 10, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
-        } else if (type == 0 && subtype == 8) {
+        } else if (type == 0 && (subtype == 8 || subtype == 5)) {
+            // A beacon (8) or a probe response (5): the same layout -- the
+            // 24-byte header, 12 bytes of fixed fields, then the elements.
+            // Probe responses go only to the karma check: an AP answering a
+            // phone's "is Starbucks WiFi here?" with "yes" is exactly what a
+            // karma AP does, under a different name for every phone.
+            const bool probeResp = subtype == 5;
             // Beacon: fixed params (timestamp+interval+capability) run
             // 12 bytes after the 24-byte header, then the SSID is the
             // first information element — tag 0x00, 1-byte length,
@@ -707,7 +723,9 @@ bool DetectionEngine::init() {
             // when the pack carried its Basic ID. The last four bytes of
             // sig_len are the frame check sequence, not elements.
             RemoteId::Info rid;
-            if (sigLen > 40 && RemoteId::mergeBeacon(frame + 36, (uint16_t)(sigLen - 40), rid, 0)) {
+            if (probeResp) {
+                g_engine->postWiFi(frame + 16, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel, ssid, enc, false, false, true);
+            } else if (sigLen > 40 && RemoteId::mergeBeacon(frame + 36, (uint16_t)(sigLen - 40), rid, 0)) {
                 g_engine->postWiFi(frame + 10, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel,
                                    rid.haveBasic ? rid.serial : "", false, false, true);
             } else if (pwnagotchiName(frame, sigLen, pwnName, sizeof(pwnName))) {
@@ -1102,7 +1120,7 @@ void DetectionEngine::clearLog() {
 
 void IRAM_ATTR DetectionEngine::postWiFi(const uint8_t* mac, int8_t rssi, uint8_t channel,
                                          const char* ssid, bool encrypted,
-                                         bool pwnagotchi, bool drone) {
+                                         bool pwnagotchi, bool drone, bool probeResp) {
     if (!mac) return;
     // Group-addressed (broadcast/multicast) destinations can never be a
     // real device: bit 0 of byte 0 is the I/G bit, and every OUI in
@@ -1134,6 +1152,7 @@ void IRAM_ATTR DetectionEngine::postWiFi(const uint8_t* mac, int8_t rssi, uint8_
     e.encrypted = encrypted;
     e.pwnagotchi = pwnagotchi;
     e.drone      = drone;
+    e.probeResp  = probeResp;
     _wifiQHead = next;
 }
 
@@ -1682,8 +1701,16 @@ void DetectionEngine::processWiFiQ() {
         // handshakes it has taken. No inference beats that, and its
         // throwaway SSID must not be fed to the AP tracker as if it were a
         // network somebody might be impersonating.
-        bool evilTwin = false;
-        if (e.pwnagotchi) {
+        bool evilTwin = false, karma = false;
+        // One BSSID answering to five names in five minutes: a karma AP
+        // (KarmaWatch). Every beacon and probe response with a name is fed
+        // in; a probe response is fed in and nothing else.
+        if (e.ssid[0] && !e.pwnagotchi && !e.drone) karma = KarmaWatch::note(e.mac, e.ssid, millis());
+        if (e.probeResp && !karma) continue;
+        if (karma) {
+            t = DetectionType::HACKER;
+            conf = Confidence::HIGH_CONF;
+        } else if (e.pwnagotchi) {
             t = DetectionType::HACKER;
             conf = Confidence::HIGH_CONF;
         } else if (e.drone) {
@@ -1763,6 +1790,11 @@ void DetectionEngine::processWiFiQ() {
         // impersonated, so the SSID goes in as the name.
         if (t == DetectionType::EVILTWIN) {
             d.vendor = "EvilTwin";
+            strncpy(d.name, e.ssid, sizeof(d.name) - 1);
+        } else if (karma) {
+            // Named after the network it was answering to when it crossed
+            // the line -- one of the many it claims to be.
+            d.vendor = "Karma-AP";
             strncpy(d.name, e.ssid, sizeof(d.name) - 1);
         } else if (e.pwnagotchi) {
             d.vendor = "Pwnagotchi";

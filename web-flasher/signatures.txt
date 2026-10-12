@@ -31,7 +31,7 @@
 #   SSID Spycam- CAMERA SpyCamInc
 #   DROP OUI 00:0e:58
 
-SERIAL 3
+SERIAL 4
 
 # ---- Set 2 (2026-10-09) ----------------------------------------------------
 # Every prefix below was read out of the IEEE registry itself
@@ -128,3 +128,37 @@ UUID 0xFD84 TILE Tile
 # them, but so do buses, shops and ambulances -- a router is not a camera);
 # Elsag Datamat (an old block, not known on current plate readers); "Ring-"
 # as an SSID (one third-party source, and too short a prefix).
+
+# ---- Set 4 (2026-10-11) ----------------------------------------------------
+# Drones that do not send Remote ID over WiFi. Every prefix read out of the
+# IEEE registry (standards-oui.ieee.org/oui/oui.txt) on 2026-10-11: the ten
+# registered to "SZ DJI TECHNOLOGY CO.,LTD". MED, not HIGH: DJI's own block
+# also covers its handheld cameras and gimbals now and then. Left out: the
+# blocks of DJI Osmo Technology and SZ DJI Ronin (cameras and gimbals, not
+# aircraft) and DJI Baiwang (not shown to be drones).
+OUI 04:a8:5a DRONE MED DJI
+OUI 0c:9a:e6 DRONE MED DJI
+OUI 34:d2:62 DRONE MED DJI
+OUI 48:1c:b9 DRONE MED DJI
+OUI 4c:43:f6 DRONE MED DJI
+OUI 58:b8:58 DRONE MED DJI
+OUI 60:60:1f DRONE MED DJI
+OUI 88:29:85 DRONE MED DJI
+OUI 8c:58:23 DRONE MED DJI
+OUI e4:7a:2c DRONE MED DJI
+# The Ryze/DJI Tello's own open network: always TELLO- (the firmware puts
+# it in front of any name set), or RMTT- under the RoboMaster TT controller.
+SSID TELLO- DRONE Tello
+SSID RMTT- DRONE Tello
+
+# Skimmer radios beside the built-in HC-03/05/06: HC-08 (a Bluetooth Low
+# Energy module, so one this board can actually hear) and FCD_1608, both
+# named among pump-skimmer modules by Bhaskar et al., USENIX Security 2019.
+# Considered and left out: "RNBT-" and "linvor" (not confirmed by a source).
+NAME HC-08 SKIMMER HC-08
+NAME FCD_1608 SKIMMER FCD_1608
+
+# Also considered on 2026-10-11 and left out: Even Realities (registered, but
+# their G1 glasses carry no camera); spy-camera setup-network names (no
+# source lists them -- the Hikvision and Dahua ones above are documented);
+# Cradlepoint and Sierra Wireless still, for the reason given in set 3.

@@ -744,6 +744,14 @@ bool isAirTagPayload(const uint8_t* payload, uint8_t len) {
     return false;
 }
 
+bool isFindMySeparated(const uint8_t* payload, uint8_t len) {
+    if (!payload || len < 4) return false;
+    for (uint8_t i = 0; i + 3 < len; i++)
+        if (payload[i] == 0x4C && payload[i + 1] == 0x00 &&
+            payload[i + 2] == 0x12 && payload[i + 3] == 0x19) return true;
+    return false;
+}
+
 Confidence confidenceFor(DetectionType t) {
     // Per docs/DETECTIONS.md. FLOCK/AXON/META/SKIMMER/CAMERA are graded
     // High there for the signature path actually active in v1.0 (the

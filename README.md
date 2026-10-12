@@ -29,10 +29,10 @@ headlines in Orbitron.
 | `FLOCK` | Flock Safety ALPR cameras | 29 WiFi OUI prefixes + BLE name + company ID `0x09C8` (the Penguin battery packs' radio; Medium unless the name agrees) |
 | `AXON` | Axon body cameras, TASERs, LE equipment | 3 WiFi OUI + SSID prefixes `AB2-`/`AB3-`/`AB4-`/`AXON-` |
 | `META` | Camera glasses — Ray-Ban Meta, Snap Spectacles | BLE service UUID `0xFD5F` + Meta / Luxottica / Snap company IDs |
-| `SKIMMER` | Bluetooth card skimmers (HC-05/06/03, RN42, BT04-A) | BT Classic name match + SPP UUID `0x1101` + 3 OUI |
+| `SKIMMER` | Bluetooth card skimmers (HC-05/06/03, RN42, BT04-A; HC-08 and FCD_1608 by rules set 4) | BT Classic name match + SPP UUID `0x1101` + 3 OUI |
 | `RAVEN` | Raven gunshot detector | Service UUIDs `0x3100`–`0x3500` |
-| `AIRTAG` | Apple AirTag / Find My trackers | Company ID `0x004C` + Find My payload check |
-| `DRONE` | Remote ID drones | Service UUID `0xFFFA`, then the ASTM F3411 message **decoded** — aircraft position, altitude, serial, and the operator's location |
+| `AIRTAG` | Apple AirTag / Find My trackers | Company ID `0x004C` + Find My payload check. The Find My beacon itself (`4C 00 12 19`) is what a tag sends only when it is **away from its owner** -- HIGH, labelled `Away-Owner`; any other 30-byte Apple advert (AirPods pairing too) is LOW |
+| `DRONE` | Remote ID drones, and DJI / Tello drones that send none over WiFi | Service UUID `0xFFFA`, then the ASTM F3411 message **decoded** — aircraft position, altitude, serial, and the operator's location; DJI's 10 registered OUI and the Tello's `TELLO-`/`RMTT-` network (rules set 4) |
 | `ALPR` | Motorola Solutions / Genetec plate readers | 6 WiFi OUI |
 | `CAMERA` | Generic / covert IP cameras | 17 WiFi OUI (Wyze, Amazon, Tuya, Verkada, Avigilon, Axis, …) |
 | `SAMSUNG_TAG` | Samsung Galaxy SmartTag / SmartTag+ | BLE service UUID `0xFD5A` |
@@ -42,7 +42,7 @@ headlines in Orbitron.
 | `DEAUTH` | WiFi deauthentication floods | Rate-detected burst, not a signature |
 | `EVILTWIN` | Rogue / spoofed access points | One SSID beaconing from two BSSIDs that disagree about encryption |
 | `IBEACON` | Retail proximity beacons | Exact Apple header `4C 00 02 15` — **off by default**, see below |
-| `HACKER` | Flipper Zero, Pwnagotchi, WiFi Pineapple, ESP deauthers | Flipper's service UUIDs `0x3080`–`0x3083`, company ID `0x0E29` and OUI `0C:FA:22`; the Pwnagotchi's own beacon payload; `Pineapple_` and `pwned` SSIDs |
+| `HACKER` | Flipper Zero, Pwnagotchi, WiFi Pineapple, ESP deauthers, karma APs | Flipper's service UUIDs `0x3080`–`0x3083`, company ID `0x0E29` and OUI `0C:FA:22`; the Pwnagotchi's own beacon payload; `Pineapple_` and `pwned` SSIDs; and any access point answering to five network names in five minutes from one address (beacons and probe responses) -- a karma AP, `Karma-AP` |
 
 ### Confidence is per signature, not per type
 

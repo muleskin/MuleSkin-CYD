@@ -8,6 +8,8 @@
 #include "signatures.h"
 #include <cstring>
 #include <cstdio>
+#include <string>
+#include <strings.h>
 
 int main() {
     suite("parsing");
@@ -132,5 +134,36 @@ int main() {
     ck("an empty set clears the old one", extraRuleCount() == 0 && lookupOui(a) == DetectionType::UNKNOWN);
     setExtraRules(nullptr);
     ck("nullptr is an empty set", extraRuleCount() == 0);
+
+    // The set that actually ships: web-flasher/signatures.txt, made into a
+    // body the way tools/build_flasher_bins.sh does (comments and SERIAL out,
+    // one space between words, ";" between rules). Every line has to parse
+    // on the board -- one that does not is silently skipped there.
+    suite("the shipped set, web-flasher/signatures.txt");
+    {
+        FILE* f = fopen("../web-flasher/signatures.txt", "r");
+        ck("it is there", f != nullptr);
+        std::string body;
+        unsigned rules = 0;
+        char line[256];
+        while (f && fgets(line, sizeof line, f)) {
+            std::string w, l;
+            for (const char* p = line; ; p++) {
+                if (*p && *p != ' ' && *p != '\t' && *p != '\r' && *p != '\n') { w += *p; continue; }
+                if (!w.empty()) { l += (l.empty() ? "" : " ") + w; w.clear(); }
+                if (!*p) break;
+            }
+            if (l.empty() || l[0] == '#' || strncasecmp(l.c_str(), "SERIAL ", 7) == 0) continue;
+            body += (body.empty() ? "" : ";") + l;
+            rules++;
+        }
+        if (f) fclose(f);
+        ck("under the boards' 2000 bytes", body.size() <= 2000);
+        ck("every rule parses", setExtraRules(body.c_str()) == rules && rules > 0);
+        const uint8_t dji[6] = { 0x60, 0x60, 0x1F, 1, 2, 3 };
+        ck("a DJI address is a drone", lookupOui(dji) == DetectionType::DRONE);
+        ck("TELLO- is a drone", lookupSsid("TELLO-C48BF0") == DetectionType::DRONE);
+        setExtraRules("");
+    }
     return report();
 }
