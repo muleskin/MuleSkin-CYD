@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Freenove 3.2\")",
-  "version": "3.2.5",
-  "release_name": "Pause and WHO",
-  "whats_new": ["Pause 2 h button on alerts", "One confirmation per press", "Flasher names the board it sees", "Bingo removed"],
+  "version": "3.2.6",
+  "release_name": "Karma and away tags",
+  "whats_new": ["Karma Wi-Fi attack APs detected", "AirTags away from their owner", "DJI and Tello drones on WiFi", "More skimmer radios"],
   "new_install_prompt_erase": true,
   "builds": [
     {
