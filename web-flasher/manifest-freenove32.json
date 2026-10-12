@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Freenove 3.2\")",
-  "version": "3.2.6",
-  "release_name": "Karma and away tags",
-  "whats_new": ["Karma Wi-Fi attack APs detected", "AirTags away from their owner", "DJI and Tello drones on WiFi", "More skimmer radios"],
+  "version": "3.2.7",
+  "release_name": "Away from owner",
+  "whats_new": ["Attack tools push as IMPORTANT", "AWAY FROM OWNER on tag alerts", "Separate token for push buttons", "Release history in the flasher"],
   "new_install_prompt_erase": true,
   "builds": [
     {
