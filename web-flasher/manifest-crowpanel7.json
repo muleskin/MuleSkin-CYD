@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Elecrow CrowPanel Advance 7.0\")",
-  "version": "3.2.8",
-  "release_name": "Every tracker away",
-  "whats_new": ["Google/Samsung/DULT tags away", "Ignore list synced across boards", "Log charts in the web flasher", "Smoother radar, 24-26 fps"],
+  "version": "3.2.9",
+  "release_name": "Near you for days",
+  "whats_new": ["Alert: tracker near you N days", "Confidence and away in the log", "Tracker checks on real adverts", "Safer server builds"],
   "new_install_prompt_erase": true,
   "builds": [
     {
