@@ -484,6 +484,7 @@
       <option value="./manifest-freenove32.json">3.2&quot; &middot; resistive &mdash; Freenove FNK0103</option>
       <option value="./manifest-cyd32c.json" data-ocnote="The 3.2&quot; capacitive already ships at 80MHz.">3.2&quot; &middot; capacitive &mdash; ESP32-2432S032C (NEW)</option>
       <option value="./manifest-cyd35-fast.json" data-ocnote="The 3.5&quot; only ships at 80MHz, so there is no slower build to fall back to.">3.5&quot; &middot; ST7796 &mdash; ESP32-3248S035 (BETA)</option>
+      <option value="./manifest-cyd35c-fast.json" data-ocnote="The 3.5&quot; capacitive only ships at 80MHz.">3.5&quot; &middot; capacitive &mdash; ESP32-3248S035C (BETA)</option>
       </optgroup>
       <optgroup label="OTHER ESP32 BOARDS">
       <option value="./manifest-awok.json">AWOK 2.4&quot; &mdash; ESP32 Marauder v6.1</option>
@@ -491,6 +492,7 @@
       </optgroup>
       <optgroup label="ESP32-S3 BOARDS">
       <option value="./manifest-freenove-s3.json">Freenove ESP32-S3 2.8&quot; &mdash; FNK0104 (BETA)</option>
+      <option value="./manifest-freenove-s3-40.json">Freenove ESP32-S3 4.0&quot; &mdash; FNK0104S (BETA)</option>
       <option value="./manifest-crowpanel7.json">Elecrow CrowPanel 7&quot; &mdash; CrowPanel Advance 7.0 (BETA)</option>
       </optgroup>
       <optgroup label="ESP32-C5 BOARDS">
@@ -778,7 +780,8 @@
          './manifest-lab-twatch-s3.json', './manifest-lab-freenove-s3.json',
          './manifest-lab-crowpanel7.json', './manifest-lab-cyd32c.json',
          './manifest-lab-cyd35-fast.json', './manifest-lab-awok.json',
-         './manifest-lab-nm-cyd-c5.json'].forEach(function (path) {
+         './manifest-lab-nm-cyd-c5.json', './manifest-lab-cyd35c-fast.json',
+         './manifest-lab-freenove-s3-40.json'].forEach(function (path) {
           fetch(path, { cache: 'no-store' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (m) {
@@ -915,11 +918,12 @@
       { re: /2432S028/,             v: './manifest-cyd.json',         say: 'That’s the 2.8" CYD. If the screen goes white, pick the ILI9341 one instead.' },
       { re: /2432S032C/,            v: './manifest-cyd32c.json',      say: 'That’s the 3.2" capacitive. Selected below.' },
       { re: /FNK0?103|2432S032R?$/, v: './manifest-freenove32.json',  say: 'That’s the 3.2" resistive. Selected below.' },
-      { re: /3248S035C/,            v: null,                          say: 'The capacitive 3.5" isn’t supported yet (issue #8).' },
+      { re: /3248S035C/,            v: './manifest-cyd35c-fast.json', say: 'That’s the 3.5" capacitive (BETA). Selected below.' },
       { re: /3248S035/,             v: './manifest-cyd35-fast.json',  say: 'That’s the 3.5" (BETA). Selected below.' },
       { re: /2432S024R/,            v: './manifest-rlphantom-r.json', say: 'That’s the RL Phantom 2.4". Selected below.' },
       { re: /2432S024C/,            v: null,                          say: 'The capacitive 2.4" isn’t on the flasher yet.' },
       { re: /AWOK|MARAUDER/,        v: './manifest-awok.json',        say: 'That’s the AWOK 2.4". Selected below.' },
+      { re: /FNK0?104S/,            v: './manifest-freenove-s3-40.json', say: 'That’s the Freenove ESP32-S3 4.0" (BETA). Selected below.' },
       { re: /FNK0?104/,             v: './manifest-freenove-s3.json', say: 'That’s the Freenove ESP32-S3 2.8" (BETA). Selected below.' },
       { re: /CROWPANEL|CROW/,       v: './manifest-crowpanel7.json',  say: 'That’s the CrowPanel 7" (BETA). Selected below.' },
       { re: /T-?WATCH/,             v: './manifest-twatch-s3.json',   say: 'That’s a T-Watch S3 (BETA). Selected below.' }

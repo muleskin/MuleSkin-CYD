@@ -1,0 +1,30 @@
+{
+  "name": "MuleSkin-CYD (3.5\" capacitive BETA)",
+  "version": "3.5.0",
+  "release_name": "Upstream fixes",
+  "whats_new": ["Update errors say why; retries", "70 KB flash back; Raven fix", "C5: 5 GHz and its black box", "SD log by date; POCKET MODE"],
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        {
+          "path": "esp32-bootloader.bin",
+          "offset": 4096
+        },
+        {
+          "path": "esp32-partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "esp32-otadata.bin",
+          "offset": 57344
+        },
+        {
+          "path": "cyd35c-fast-firmware.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}

@@ -100,6 +100,19 @@ Display 2.8"** (FNK0104B, `[env:freenove-s3]`): an S3 with capacitive touch, an
 SDMMC card slot, a WS2812 status light and a battery connector. Pins in
 [docs/PINOUT.md](docs/PINOUT.md).
 
+Two more came over from upstream SquachWatch in v3.6.0, both BETA on the
+flasher until they have run here:
+
+- **Sunton ESP32-3248S035C** (`[env:cyd35c-fast]`): the 3.5" CYD with
+  capacitive touch -- the resistive 3.5"'s ST7796 panel, and a GT911 on I2C
+  (SDA 33, SCL 32, reset 25, INT 21), the 3.2" capacitive's touch chip.
+  Contributed upstream by VV-B0Y (PR #24).
+- **Freenove ESP32-S3 Display 4.0"** (FNK0104S, `[env:freenove-s3-40]`): the
+  Freenove 2.8"'s board with a 320×480 ST7796; touch, card, light and
+  battery on the same pins. Its 480×320 frame lives in PSRAM. Contributed
+  upstream by T0x0pl4sm4 (PR #51). If the picture tears or speckles, build
+  with `-DSPI_FREQUENCY=40000000`.
+
 ## Web Flash
 
 No build tools, no IDE, no cloning anything — flash a board straight
@@ -586,8 +599,9 @@ MuleSkin-CYD/
   Gemini (Google), expanded against public sources.
 - AirTag manufacturer-data format: public Apple FindMy spec.
 - Ported from SquachWatch after the fork: **quietradio** (5 GHz on the
-  NM-CYD-C5, PR #27) and **jotra7** (GPS, wardriving and the dated SD log,
-  PR #46).
+  NM-CYD-C5, PR #27), **jotra7** (GPS, wardriving and the dated SD log,
+  PR #46), **VV-B0Y** (the 3.5" capacitive, PR #24) and **T0x0pl4sm4** (the
+  Freenove S3 4.0", PR #51).
 - AWOK 2.4" board port (ESP32-Marauder V6.1 hardware): **bkbroiler**,
   who did the actual pin-mapping and shared-bus touch-calibration work
   that made this board possible.

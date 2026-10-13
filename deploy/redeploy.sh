@@ -69,7 +69,7 @@ git -c advice.detachedHead=false checkout -q "$TAG"
 grep -q "\"version\": *\"$VER\"" web-flasher/manifest-cyd-ili9341.json \
   || die "$TAG's manifests don't say $VER -- was it cut with tools/release.sh?"
 
-stage build "building the bins (all 13 boards, a few minutes)"
+stage build "building the bins (all 15 boards, a few minutes)"
 BUILD_LOG="$REPO/.pio/redeploy-build.log"
 if [ $UNSIGNED = 1 ]; then OTA_SIGNING_KEY= tools/build_flasher_bins.sh 2>&1 | tee "$BUILD_LOG"
 else tools/build_flasher_bins.sh 2>&1 | tee "$BUILD_LOG"; fi

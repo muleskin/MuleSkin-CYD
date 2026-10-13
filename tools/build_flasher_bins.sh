@@ -67,7 +67,7 @@ if [ -n "$LAB" ]; then
   PFX="lab-"
   echo "LAB build: v$LAB-lab, publishing lab-* files only"
 fi
-ENVS="cyd cyd-fast cyd-ili9341 cyd-ili9341-fast cyd32c cyd35-fast freenove32 rlphantom-r awok twatch-s3 freenove-s3 crowpanel7 nm-cyd-c5"
+ENVS="cyd cyd-fast cyd-ili9341 cyd-ili9341-fast cyd32c cyd35-fast cyd35c-fast freenove32 rlphantom-r awok twatch-s3 freenove-s3 freenove-s3-40 crowpanel7 nm-cyd-c5"
 failed=""
 # Every platform and framework the boards need, installed BEFORE the first
 # build: on 2026-10-13 a framework went missing and was re-installed in the
@@ -102,7 +102,7 @@ for e in $ENVS; do
     # A lab build shares the stable bootloader and partition table.
     if [ -n "$LAB" ]; then echo "    ok"; continue; fi
     case $e in
-      twatch-s3|freenove-s3|crowpanel7)
+      twatch-s3|freenove-s3|freenove-s3-40|crowpanel7)
         cp "$B/bootloader.bin" "$OUT/esp32s3-bootloader.bin"
         cp "$B/partitions.bin" "$OUT/twatch-s3-partitions.bin" ;;
       nm-cyd-c5)
