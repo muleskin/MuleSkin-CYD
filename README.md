@@ -136,7 +136,13 @@ one it is as it connects -- its name, its Bluetooth name and its firmware:
 - **Self-test** checks the board's parts -- memory, touch, both radios, the
   black box, SD card, settings, clock, WiFi, update keys, rules -- and lists
   anything that needs a look.
-- **Live view** shows what the board is detecting right now, live.
+- **Live view** shows what the board is detecting right now, live -- trackers
+  away from their owner first, in red.
+- **What the alerts mean** (`/alerts/`, linked under the legend): WITH YOU,
+  NEAR YOU ON N DAYS, AWAY FROM OWNER, fake-tag spam, karma/evil-twin WiFi,
+  confidence -- and what to do about each.
+- The page's footer shows the site's last redeploy: the release, and where
+  it stopped if it failed.
 
 Every release is also on [GitHub Releases](https://github.com/muleskin/MuleSkin-CYD/releases)
 with the bins for every board attached, and the page keeps the previous
@@ -348,10 +354,12 @@ evening summary counts them. WITH YOU always goes, either way.
   On your own ntfy server it needs a one-time step,
   [deploy/README.md](deploy/README.md).
 - **Near you on several days**: a tracker away from its owner seen on three
-  or more different days (the board's regulars count the days) gets the alert
-  -- "NEAR YOU ON N DAYS" -- and a push, once a day each. On a board that
-  sits still at home, a neighbour's tag kept in range will do this too: one
-  Ignore settles it, on every board.
+  or more different days gets the alert -- "NEAR YOU ON N DAYS" -- and a
+  push, once a day each. Only days heard **away from home** count (home: the
+  WiFi network marked USE, heard in the last few minutes), so a neighbour's
+  tag beside a board that never leaves the house never raises it; a tag
+  following you is heard in different places. With no home network set,
+  every day counts, and one Ignore settles a tag you know, on every board.
 - **Several boards on one topic**: an Ignore or Snooze pressed on any board's
   alert is applied by all of them -- your own AirTag is yours everywhere --
   but only the board that sent the alert says so back. A device ignored (or

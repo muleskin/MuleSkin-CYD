@@ -10,9 +10,9 @@
 #endif
 #include "flood_bench.h" // FLOOD N, for the bench (a no-op outside FLOOD_BENCH builds)
 #include "settings.h"
-#include "ignore_list.h"
-#include "regulars.h"       // DAYSFAKE, on bench builds
-#include "muleskin_art_row.h"   // ARTBENCH, on bench builds  // IGNORE LIST / ADD / DEL: the web flasher's ignore list
+#include "ignore_list.h"  // IGNORE LIST / ADD / DEL: the web flasher's ignore list
+#include "muleskin_art_row.h"   // ARTBENCH, on bench builds
+void benchAwayDays(const uint8_t mac[6]);   // main.cpp: DAYSFAKE, on bench builds
 #include "blackbox.h"    // BLACKBOX dumps it
 #include "ota_core.h"    // VERTEST, on bench builds
 #include "frame_push.h"  // PUSH, the frame-push switch
@@ -871,14 +871,14 @@ void pollSerial() {
             if (!g_advDumpUntil) g_advDumpUntil = 1;
             Serial.printf("[bench] dumping tracker adverts for %d s\n", s > 0 ? s : 60);
         } else if (strncasecmp(line, "DAYSFAKE ", 9) == 0) {
-            // The regulars, told a device was seen on the three days before
-            // today: the "near you on N days" alert without the three days.
+            // The away-days table, told a tracker was heard away from home on
+            // the three days before today: the "near you on N days" alert
+            // without the three days (it fires once the tag is heard again).
             uint8_t mac[6];
             unsigned v[6];
             if (sscanf(line + 9, "%x:%x:%x:%x:%x:%x", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 6 && Clock::isSet()) {
                 for (int i = 0; i < 6; i++) mac[i] = (uint8_t)v[i];
-                for (uint32_t back = 1; back <= 3; back++)
-                    Regulars::noteOnDay(mac, DetectionType::AIRTAG, Clock::localDay() - back);
+                benchAwayDays(mac);
                 Serial.printf("[bench] %s: seen on the 3 days before today\n", line + 9);
             } else {
                 Serial.println("[bench] DAYSFAKE aa:bb:cc:dd:ee:ff (and the clock set)");

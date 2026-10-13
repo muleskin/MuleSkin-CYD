@@ -78,7 +78,12 @@ sudo OTA_SIGNING_KEY=/path/to/ota-key.pem /root/MuleSkin-CYD/deploy/redeploy.sh
 one you name, e.g. `redeploy.sh v3.1.2` to roll back), builds and signs all
 13 boards, rebuilds the flasher container, and then checks that the live site
 serves that version, its signatures and `versions.json` -- it fails loudly
-otherwise. The clone is left on the tag (detached HEAD); the next run just
+otherwise. Each step is also written to `deploy-status.json` beside the bins,
+which the site serves (`https://flasher.oillie.cloud/deploy-status.json`, and
+the flasher page's footer): the tag, the stage it reached, `running`, `ok` or
+`failed` with the reason, and any board that did not build -- so a redeploy
+that did not take is visible without the server's terminal. The build's own
+output is kept in `.pio/redeploy-build.log`. The clone is left on the tag (detached HEAD); the next run just
 fetches and moves it. The same steps by hand, if you need them:
 
 ```bash

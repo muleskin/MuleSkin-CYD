@@ -69,6 +69,7 @@
 #include "ui_today.h"
 #include "push_queue.h"
 #include "nvs_move.h"
+#include "away_days.h"
 #include "version_cmp.h"
 #if defined(ARDUINO_ARCH_ESP32)
 #if __has_include(<esp_mac.h>)
@@ -2348,35 +2349,69 @@ static void serviceNightDim(uint32_t now) {
 // 192 bytes moved the heap's layout enough to cost the largest free block
 // 4 KB, measured.
 // A tracker away from its owner that turns up near this board on several
-// different days -- the regulars count the days (regulars.h) -- is the other
-// shape of being followed: not one long walk (WITH YOU) but every day. Once a
-// minute, from the main screen or the LOG: such a tracker, today, on
-// DAYS_ALERT days or more, gets the alert and a push, once a day each.
-static const uint8_t DAYS_ALERT = 3;
+// different days is the other shape of being followed: not one long walk
+// (WITH YOU) but every day. The days are counted AWAY FROM HOME only
+// (away_days.h): a board at home would otherwise flag a neighbour's tag next
+// door. Once a minute, from the main screen or the LOG: such a tracker on
+// DAYS_ALERT away-days gets the alert and a push, once a day each. The table
+// lives in NVS ("awaydays"), saved at most every ten minutes.
+static AwayDays::Table s_awayDays;
+// DAYSFAKE (bench): a tracker counted on the three days before today, away
+// from home -- the alert without the three days. Applied on the next pass.
+static uint8_t s_awayFake[6];
+static bool    s_awayFakePending = false;
+void benchAwayDays(const uint8_t mac[6]) { memcpy(s_awayFake, mac, 6); s_awayFakePending = true; }
 static void serviceTrackerDays(uint32_t now) {
-    static uint32_t last = 0;
-    static uint8_t  told[8][6];
-    static uint32_t toldDay[8];
-    static uint8_t  toldNext = 0;
+    static uint32_t last = 0, savedAt = 0;
+    static bool     loaded = false;
     if (now - last < 60000) return;
     last = now;
+    if (!loaded) {
+        loaded = true;
+        Preferences p;
+        if (p.begin("awaydays", true)) {
+            uint8_t blob[1 + AwayDays::SLOTS * sizeof(AwayDays::Slot)];
+            const size_t n = p.getBytes("t", blob, sizeof blob);
+            s_awayDays.load(blob, n);
+            p.end();
+        }
+    }
+    // A change is saved now, or ten minutes after the last save: a handful
+    // of writes a day to the settings store, not one a minute.
+    static bool pending = false;
+    if (s_awayDays.takeDirty()) pending = true;
+    if (pending && (!savedAt || now - savedAt > 10u * 60u * 1000u)) {
+        uint8_t blob[1 + AwayDays::SLOTS * sizeof(AwayDays::Slot)];
+        const size_t n = s_awayDays.save(blob, sizeof blob);
+        Preferences p;
+        if (n && p.begin("awaydays", false)) { p.putBytes("t", blob, n); p.end(); }
+        savedAt = now ? now : 1;
+        pending = false;
+    }
     if (!Clock::isSet() || (state != AppState::CLEAR && state != AppState::LOG)) return;
     const uint32_t today = Clock::localDay();
+    if (s_awayFakePending) {
+        s_awayFakePending = false;
+        for (uint32_t back = 3; back >= 1; back--) s_awayDays.note(s_awayFake, today - back, true);
+        Serial.printf("[bench] away days now %u\n", (unsigned)s_awayDays.days(s_awayFake));
+    }
+    // Away from home: no home set (every day counts, as before), or home not
+    // heard in the last few minutes.
+    const bool away = !engine.homeSsid()[0] || !engine.homeInView(now);
+    const Detection* due = nullptr;
+    uint8_t dueDays = 0;
     for (uint8_t i = 0; i < engine.logCount(); i++) {
         const Detection* d = engine.logAt(i);
         if (!d || d->restored || !d->active) continue;
         if (d->type != DetectionType::AIRTAG && d->type != DetectionType::GOOGLE_TAG &&
             d->type != DetectionType::SAMSUNG_TAG) continue;
         if (d->conf != Confidence::HIGH_CONF || IgnoreList::silenced(d->mac)) continue;   // away from its owner only
-        const uint8_t days = Regulars::daysFor(d->mac);
-        if (days < DAYS_ALERT) continue;
-        bool already = false;
-        for (uint8_t k = 0; k < 8 && !already; k++)
-            already = toldDay[k] == today && memcmp(told[k], d->mac, 6) == 0;
-        if (already) continue;
-        memcpy(told[toldNext], d->mac, 6);
-        toldDay[toldNext] = today;
-        toldNext = (uint8_t)((toldNext + 1) % 8);
+        s_awayDays.note(d->mac, today, away);
+        if (!due && s_awayDays.due(d->mac, today)) { due = d; dueDays = s_awayDays.days(d->mac); }
+    }
+    if (due) {
+        const Detection* d = due;
+        const uint8_t days = dueDays;
         Serial.printf("[days] %s %02x:%02x:%02x:%02x:%02x:%02x away from its owner, near you on %u days\n",
                       detectionTypeName(d->type), d->mac[0], d->mac[1], d->mac[2], d->mac[3], d->mac[4], d->mac[5],
                       (unsigned)days);
@@ -2391,8 +2426,7 @@ static void serviceTrackerDays(uint32_t now) {
         s_alertSpam = false;
         s_alertLastFree = false;
         enterAlert(*d);
-        uiAlertSetDays(days);
-        break;                      // one a minute is plenty
+        uiAlertSetDays(days);       // one a minute at most: the next waits its turn
     }
 }
 

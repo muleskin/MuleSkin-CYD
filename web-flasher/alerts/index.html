@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MuleSkin Alerts Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a000f;
+    --panel:rgba(13,0,26,0.85);
+    --cyan:#00fff5;
+    --pink:#ff2d78;
+    --red:#ff1744;
+    --vapor-pink:#ff71ce;
+    --vapor-purple:#b967ff;
+    --vapor-yellow:#fffb96;
+    --green:#00ff88;
+    --text:#e8e8ff;
+    --faint:#9a8fb5;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; background:var(--bg); color:var(--text);
+    font-family:'Share Tech Mono', ui-monospace, Menlo, Consolas, monospace; font-size:16px; line-height:1.55;
+    background-image:linear-gradient(180deg, rgba(185,103,255,.10), transparent 40%);
+  }
+  .wrap{max-width:720px; margin:0 auto; padding:36px 16px 60px}
+  a{color:var(--cyan)}
+  h1{
+    font-family:'Orbitron', 'Share Tech Mono', sans-serif; font-weight:900; letter-spacing:.06em;
+    font-size:clamp(26px, 6vw, 40px); margin:0; line-height:1.1;
+    background:linear-gradient(90deg, var(--cyan), var(--vapor-pink), var(--vapor-purple));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .sub{color:var(--vapor-yellow); letter-spacing:.2em; font-size:13px; margin:6px 0 26px}
+  .card{background:var(--panel); border:1px solid rgba(185,103,255,.45); padding:18px; margin-bottom:14px}
+  .card.hot{border-color:var(--red)}
+  .card h2{font-size:14px; letter-spacing:.18em; color:var(--vapor-pink); margin:0 0 10px; font-weight:400}
+  .card.hot h2{color:var(--red)}
+  .card p{margin:0 0 8px}
+  .card ul{margin:0 0 8px; padding-left:1.2em}
+  .banner{display:inline-block; font-weight:bold; color:var(--vapor-yellow); border:1px solid var(--vapor-yellow); padding:0 6px; margin:0 0 8px}
+  .do{color:var(--green)}
+  .small{font-size:13px; color:var(--faint)}
+  dl{display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin:0}
+  dt{color:var(--cyan)}
+  dd{margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MuleSkin</h1>
+  <p class="sub">WHAT THE ALERTS MEAN</p>
+
+  <div class="card">
+    <h2>FIRST: MOST ALERTS ARE NOTHING</h2>
+    <p>The board reports what it hears: cameras, plate readers, trackers, drones, strange WiFi. Nearly all of it is the world going about its business &mdash; a doorbell camera, a neighbour's AirTag, a delivery van's dashcam. An alert says <em>this is nearby</em>, not <em>this is about you</em>.</p>
+    <p>The alerts below are the ones that can be about you, and what to do about each.</p>
+  </div>
+
+  <div class="card hot" id="withyou">
+    <h2>WITH YOU</h2>
+    <span class="banner">* WITH YOU 20 MIN *</span>
+    <p>A tracker (AirTag, Tile, SmartTag or Find My Device tag) has stayed near you for twenty minutes or more <strong>while you moved</strong> &mdash; the devices around you kept changing and it did not. This is the strongest sign the board gives that something is travelling with you.</p>
+    <p class="do">What to do:</p>
+    <ul>
+      <li>Use your phone's own scan: iPhone &mdash; Find My &rarr; Items &rarr; <em>Identify Found Item</em>; Android &mdash; Settings &rarr; Safety &amp; emergency &rarr; <em>Unknown tracker alerts</em> &rarr; Scan now. Either can make the tag play a sound.</li>
+      <li>Walk around: the signal on the alert screen gets stronger as you get closer. Check bags, coat pockets, the car (wheel arches, under seats, the boot).</li>
+      <li>Your own things count too &mdash; a family member's AirPods case or a borrowed bag. If it is yours, add it to the <strong>ignore list</strong> (the IGNORE button on the push, or IGNORED DEVICES on the flasher page).</li>
+      <li>If you feel unsafe, don't confront anyone. Keep the tag as evidence and contact the police or a support service.</li>
+    </ul>
+  </div>
+
+  <div class="card hot" id="days">
+    <h2>NEAR YOU ON N DAYS</h2>
+    <span class="banner">* NEAR YOU ON 3 DAYS *</span>
+    <p>The same tracker, away from its owner, has turned up near the board on three or more different days &mdash; <strong>counted only while the board was away from home</strong>. A tag following you is heard in different places on different days; a neighbour's tag in the house next door is heard only at home, so it never counts.</p>
+    <p>For that, the board needs to know your home: on the board, mark your home WiFi network <strong>USE</strong>. With no home set, every day counts, and a tag that lives near your home can raise this alert.</p>
+    <p class="do">What to do: the same as WITH YOU &mdash; scan with your phone, search your things and car. If it is a tag you know, ignore it.</p>
+  </div>
+
+  <div class="card hot" id="away">
+    <h2>AWAY FROM OWNER</h2>
+    <span class="banner">AWAY FROM OWNER</span>
+    <p>Trackers say in their own broadcast whether their owner's phone is nearby. One that says its owner is <strong>not</strong> nearby is the kind that could be planted on someone; one with its owner is just someone's keys walking past. The board flags only the first kind as a high-confidence tracker, and the LIVE VIEW on the flasher page puts them on top, in red.</p>
+    <p>A single AWAY FROM OWNER is common &mdash; lost keys, a tag left in a car, a bike tracker. It matters when it repeats or stays: that is what WITH YOU and NEAR YOU ON N DAYS look for.</p>
+  </div>
+
+  <div class="card" id="spam">
+    <h2>SPAM: FAKE TAGS</h2>
+    <span class="banner">* SPAM: 40 FAKE TAGS *</span>
+    <p>Somebody nearby is broadcasting fake trackers, each from a new address (it happens at hacker events, and with Flipper-style gadgets). The board says so once and then stays quiet about that kind of tracker for five minutes after the flood stops. Real tags of that kind are held too for those five minutes; WITH YOU still works.</p>
+  </div>
+
+  <div class="card" id="wifi">
+    <h2>HACKER, EVIL TWIN, DEAUTH</h2>
+    <dl>
+      <dt>HACKER</dt><dd>A WiFi access point answering to many different network names from one address &mdash; a "karma" attack (a WiFi Pineapple and its copies). Phones that once joined "Cafe WiFi" can join it on their own. <span class="do">Turn off WiFi auto-join for open networks; don't use open WiFi nearby.</span></dd>
+      <dt>EVIL TWIN</dt><dd>A fake copy of a nearby network, made to catch people who join it. <span class="do">Use mobile data until you leave.</span></dd>
+      <dt>DEAUTH</dt><dd>Devices are being knocked off a WiFi network on purpose &mdash; often the first step of the two above, or jamming of a WiFi camera.</dd>
+    </dl>
+  </div>
+
+  <div class="card" id="conf">
+    <h2>CONFIDENCE</h2>
+    <p>Each detection carries how sure the board is. The LOG and the flasher's log export show it.</p>
+    <dl>
+      <dt>HIGH</dt><dd>A signature that exists on nothing else &mdash; a tracker saying it is away from its owner, a service ID only that product uses, a drone's Remote ID.</dd>
+      <dt>MED</dt><dd>A good sign but not a unique one &mdash; a matching device name, a maker's ID that also turns up on other products.</dd>
+      <dt>LOW</dt><dd>Only a hint, such as a name any gadget could have. Logged.</dd>
+    </dl>
+    <p class="small">By default every match interrupts with the alert screen; the board's settings menu has a confidence filter to hold back the lower ones.</p>
+  </div>
+
+  <div class="card" id="push">
+    <h2>PUSHES TO YOUR PHONE</h2>
+    <p>With pushes set up, each alert has buttons:</p>
+    <dl>
+      <dt>IGNORE</dt><dd>This device, for good &mdash; your own tags, your car's dashcam.</dd>
+      <dt>SNOOZE</dt><dd>This device, for a while.</dd>
+      <dt>PAUSE</dt><dd>All pushes for two hours. WITH YOU still comes through.</dd>
+      <dt>UNDO</dt><dd>Takes back the last of the above.</dd>
+    </dl>
+    <p class="small">The same list is on the flasher page under IGNORED DEVICES, with the board plugged in.</p>
+  </div>
+
+  <p class="small"><a href="../">&laquo; back to the flasher</a> &middot; MuleSkin-CYD is built on <a href="https://github.com/skizzophrenic/SquachWatch-CYD" target="_blank" rel="noopener">SquachWatch-CYD</a> by skizzophrenic. The board is a warning light, not proof: if you believe you are being tracked, contact the police or a support service.</p>
+</div>
+</body>
+</html>

@@ -682,6 +682,7 @@
         <div><span class="legend-name">TILE</span><span class="legend-desc">Tile Bluetooth tracker</span></div>
       </div>
     </div>
+    <p style="margin:14px 0 0;text-align:center"><a href="alerts/" style="color:var(--cyan)">&gt;&gt; What the alerts mean, and what to do &lt;&lt;</a></p>
   </div>
 
   <div class="about">
@@ -699,7 +700,28 @@
   </div>
 </main>
 
-<footer>Stay muleskin out there. &middot; Built on <a href="https://github.com/skizzophrenic/SquachWatch-CYD" target="_blank" rel="noopener">SquachWatch-CYD</a> by <a href="https://github.com/skizzophrenic" target="_blank" rel="noopener">skizzophrenic</a>.</footer>
+<footer>Stay muleskin out there. &middot; Built on <a href="https://github.com/skizzophrenic/SquachWatch-CYD" target="_blank" rel="noopener">SquachWatch-CYD</a> by <a href="https://github.com/skizzophrenic" target="_blank" rel="noopener">skizzophrenic</a>.
+  <div id="deployStatus" style="margin-top:6px;font-size:0.75rem;color:#5f7896"></div></footer>
+<script>
+  // The last redeploy of this site (deploy/redeploy.sh writes it): which
+  // release, and whether it finished -- or where it stopped. Nothing shown
+  // when there is no status file (a site that was never redeployed).
+  (function () {
+    var el = document.getElementById('deployStatus');
+    if (!el || !window.fetch) return;
+    fetch('deploy-status.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (st) {
+      if (!st || !st.tag) return;
+      var when = String(st.updated || '').replace('T', ' ').replace(/:\d\dZ$/, ' UTC');
+      var failed = (st.failed || []).length ? ' -- not built: ' + st.failed.join(', ') : '';
+      var t, col = '#5f7896';
+      if (st.state === 'ok') t = 'Site: ' + st.tag + ', deployed ' + when + failed;
+      else if (st.state === 'failed') { t = 'Redeploy of ' + st.tag + ' FAILED (' + st.stage + '): ' + st.message + ' -- ' + when; col = '#ff1744'; }
+      else { t = 'Redeploy of ' + st.tag + ' in progress: ' + st.message + ' (since ' + String(st.started || '').replace('T', ' ').replace(/:\d\dZ$/, ' UTC') + ')'; col = '#ffab40'; }
+      el.style.color = failed && st.state === 'ok' ? '#ffab40' : col;
+      el.textContent = t;
+    }).catch(function () {});
+  })();
+</script>
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 <script>
@@ -1133,17 +1155,24 @@
     if (!live) return;
     var now = Date.now();
     var rows = Object.keys(live.devices).map(function (k) { return live.devices[k]; })
-      .sort(function (a, b) { return b.seen - a.seen || b.rssi - a.rssi; });
+      .sort(function (a, b) { return (b.vendor === 'Away-Owner') - (a.vendor === 'Away-Owner') || b.seen - a.seen || b.rssi - a.rssi; });
+    var awayN = rows.filter(function (d) { return d.vendor === 'Away-Owner'; }).length;
     var html = '<div style="margin-bottom:6px">LIVE: ' + rows.length + ' device' + (rows.length === 1 ? '' : 's') +
-               ' since connecting' + (live.lines ? '' : ' -- waiting for the board...') + '</div>';
+               ' since connecting' + (live.lines ? '' : ' -- waiting for the board...') +
+               (awayN ? ' -- <span style="color:#ff1744;font-weight:bold">' + awayN + ' tracker' + (awayN === 1 ? '' : 's') +
+                        ' away from the owner</span> (<a href="alerts/#away" target="_blank" rel="noopener">what that means</a>)' : '') + '</div>';
     html += '<table style="width:100%;border-collapse:collapse;font-size:0.75rem;text-align:left">' +
             '<tr style="color:#5f7896"><th>type</th><th>who</th><th>signal</th><th>seen</th><th>ago</th></tr>';
     rows.forEach(function (d) {
       var ago = Math.round((now - d.seen) / 1000);
       var col = LIVE_COLOURS[d.type] || '#18ffff';
       var bar = Math.max(0, Math.min(10, Math.round((d.rssi + 100) / 6)));
-      html += '<tr style="' + (ago > 30 ? 'opacity:0.45' : '') + '">' +
-        '<td style="color:' + col + ';font-weight:bold">' + esc(d.type) + '</td>' +
+      // A tracker away from its owner (the firmware's vendor "Away-Owner")
+      // is the one that could be following someone: red, and on top.
+      var away = d.vendor === 'Away-Owner';
+      html += '<tr style="' + (ago > 30 ? 'opacity:0.45;' : '') + (away ? 'background:rgba(255,23,68,0.18);' : '') + '">' +
+        '<td style="color:' + col + ';font-weight:bold">' + esc(d.type) +
+          (away ? '<br><span style="color:#ff1744">AWAY FROM OWNER</span>' : '') + '</td>' +
         '<td>' + esc(d.name || d.vendor || '') + '<br><span style="color:#5f7896">' + esc(d.mac) + '</span></td>' +
         '<td>' + d.rssi + ' dBm<br><span style="color:' + col + '">' + '█'.repeat(bar) + '</span></td>' +
         '<td>x' + d.hits + '</td><td>' + (ago < 3 ? 'now' : ago + ' s') + '</td></tr>';

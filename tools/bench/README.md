@@ -32,7 +32,8 @@ hung an upload.
 
 Bench builds (`PLATFORMIO_BUILD_FLAGS=-DBENCH_TOOLS=1`) also take, on the
 console: `ALERTPUSH` (a made-up Flock alert through the push path),
-`DAYSFAKE aa:bb:cc:dd:ee:ff` (the regulars told that device was seen on the
-three days before today -- the "near you on N days" alert without waiting),
+`DAYSFAKE aa:bb:cc:dd:ee:ff` (the away-days table told that tracker was heard
+away from home on the three days before today -- the "near you on N days"
+alert within a minute, if it is in the LOG away from its owner),
 `ADVDUMP [seconds]` (prints `ADV <type> <mac> <hex>` for every tracker heard:
 the source of `test/tracker_adverts.txt`), `ARTBENCH`, `UPDATE NOW`.
