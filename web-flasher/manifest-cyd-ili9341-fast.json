@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (2.8\" CYD, ILI9341, 80MHz)",
-  "version": "3.2.9",
-  "release_name": "Near you for days",
-  "whats_new": ["Alert: tracker near you N days", "Confidence and away in the log", "Tracker checks on real adverts", "Safer server builds"],
+  "version": "3.3.0",
+  "release_name": "Away from home",
+  "whats_new": ["N-days alert counts away days only", "Deploy status in the site footer", "Alerts guide page on the flasher", "Live view: away trackers on top"],
   "new_install_prompt_erase": true,
   "builds": [
     {
