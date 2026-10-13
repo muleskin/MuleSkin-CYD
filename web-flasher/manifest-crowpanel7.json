@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Elecrow CrowPanel Advance 7.0\")",
-  "version": "3.3.0",
-  "release_name": "Away from home",
-  "whats_new": ["N-days alert counts away days only", "Deploy status in the site footer", "Alerts guide page on the flasher", "Live view: away trackers on top"],
+  "version": "3.4.0",
+  "release_name": "Home routers & QR",
+  "whats_new": ["Home known by its router, not its name", "AWAY DAYS panel; Nd away in the LOG", "Alert QR code to what to do", "Live view: ignore from a row"],
   "new_install_prompt_erase": true,
   "builds": [
     {
