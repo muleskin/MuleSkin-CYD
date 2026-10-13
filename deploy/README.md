@@ -291,6 +291,15 @@ last 8 PM summary, and the firmware and settings store that summary names
 (v3.2.5 and later). It names your boards, so keep it off the public flasher
 site: read it over ssh, or serve it only behind a login.
 
+It also watches the site's redeploys: `deploy-status.json`, which
+`redeploy.sh` writes beside the bins (default
+`/root/MuleSkin-CYD/.pio/flasher-bins/deploy-status.json`; `DEPLOY_STATUS=`
+takes another path or a URL, `off` skips it). A redeploy that failed, or
+has said "running" for over two hours, gets one "flasher: ..." push with the
+stage and the reason; a board that did not build gets a warning; and the
+next redeploy that works after a bad one gets "flasher: vX.Y.Z deployed".
+The Site check Action fails on the same things.
+
 ### iPhone notifications without ntfy.sh: Web Push
 
 ntfy's web app, saved to the iPhone's home screen, gets Web Push straight

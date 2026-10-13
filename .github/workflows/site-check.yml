@@ -14,9 +14,9 @@ on:
 
 jobs:
   live:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Compare the site with the newest tag
@@ -40,6 +40,29 @@ jobs:
             echo "$f: HTTP $c" | tee -a "$GITHUB_STEP_SUMMARY"
             case $c in 200|206) ;; *) echo "::error::$f isn't served on plain HTTP (HTTP $c)"; fail=1 ;; esac
           done
+          # The last redeploy's own account (deploy/redeploy.sh): failed, or
+          # stuck "running" for over two hours, or missing boards. None yet
+          # (404) is a warning only: the site predates it.
+          code=$(curl -s -o status.json -w '%{http_code}' "$site/deploy-status.json")
+          if [ "$code" = 200 ]; then
+            python3 - "$tag" <<'PY' | tee -a "$GITHUB_STEP_SUMMARY" || fail=1
+          import json, sys, time, calendar
+          st, want = json.load(open("status.json")), sys.argv[1]
+          print("last redeploy: %s %s at %s (%s)" % (st.get("tag"), st.get("state"), st.get("stage"), st.get("updated")))
+          bad = None
+          if st.get("state") == "failed":
+              bad = "the last redeploy (%s) FAILED at %s: %s" % (st.get("tag"), st.get("stage"), st.get("message"))
+          elif st.get("state") == "running" and time.time() - calendar.timegm(time.strptime(st.get("updated", ""), "%Y-%m-%dT%H:%M:%SZ")) > 7200:
+              bad = "the redeploy of %s has been running since %s" % (st.get("tag"), st.get("updated"))
+          elif st.get("failed"):
+              bad = "%s deployed without: %s" % (st.get("tag"), ", ".join(st["failed"]))
+          if bad:
+              print("::error::" + bad)
+              sys.exit(1)
+          PY
+          else
+            echo "::warning::no deploy-status.json on the site (HTTP $code) -- it appears after a redeploy with v3.3.0's redeploy.sh"
+          fi
           c=$(curl -s -o /dev/null -w '%{http_code}' "https://flasher.oillie.cloud/")
           echo "page over HTTPS: HTTP $c" | tee -a "$GITHUB_STEP_SUMMARY"
           [ "$c" = 200 ] || { echo "::error::the flasher page is down (HTTP $c)"; fail=1; }

@@ -77,6 +77,7 @@ UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/nvs_backup.cpp \
             $(SRC)/nvs_move.cpp \
             $(SRC)/away_days.cpp \
+            $(SRC)/home_aps.cpp \
             $(SRC)/muleskin_art.cpp \
             $(SRC)/radar_blip.cpp \
             $(SRC)/version_cmp.cpp \

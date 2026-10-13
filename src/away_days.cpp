@@ -45,6 +45,14 @@ bool Table::due(const uint8_t mac[6], uint32_t day) {
     return true;
 }
 
+bool Table::remove(const uint8_t mac[6]) {
+    const int i = find(mac);
+    if (i < 0) return false;
+    _s[i] = _s[--_n];
+    _dirty = true;
+    return true;
+}
+
 size_t Table::save(uint8_t* out, size_t cap) const {
     const size_t n = 1 + (size_t)_n * sizeof(Slot);
     if (!out || cap < n) return 0;

@@ -1672,7 +1672,10 @@ void DetectionEngine::setHomeSsid(const char* ssid) {
 }
 
 bool DetectionEngine::noteApBeacon(const uint8_t* bssid, const char* ssid, bool encrypted) {
-    if (_homeSsid[0] && strcmp(ssid, _homeSsid) == 0) { _homeSeenMs = millis(); if (!_homeSeenMs) _homeSeenMs = 1; }
+    if (_homeSsid[0] && strcmp(ssid, _homeSsid) == 0 && _homeAps.matches(bssid)) {
+        _homeSeenMs = millis();
+        if (!_homeSeenMs) _homeSeenMs = 1;
+    }
     for (uint8_t i = 0; i < _apCount; i++) {
         if (strncmp(_aps[i].ssid, ssid, sizeof(_aps[i].ssid) - 1) != 0) continue;
         // Same SSID, same BSSID -- just this AP beaconing again. Refresh

@@ -38,6 +38,10 @@ public:
     size_t  save(uint8_t* out, size_t cap) const;
     void    load(const uint8_t* in, size_t n);
     void    clear() { _n = 0; _dirty = true; }
+    // For AWAYDAYS LIST / DEL (the console and the web flasher).
+    uint8_t     count() const { return _n; }
+    const Slot* at(uint8_t i) const { return i < _n ? &_s[i] : nullptr; }
+    bool        remove(const uint8_t mac[6]);
 private:
     int  find(const uint8_t mac[6]) const;
     Slot _s[SLOTS];

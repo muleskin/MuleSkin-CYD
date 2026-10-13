@@ -15,9 +15,9 @@ concurrency:
 
 jobs:
   host-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # mbedtls for test/ota_sig_test.cpp: the firmware update's signature
       # check against real mbedtls (the Makefile skips it where there is none).
       - name: mbedtls
@@ -37,16 +37,20 @@ jobs:
       # else builds them, and a broken one is a dead page after a deploy).
       - name: Flasher pages parse
         run: node tools/check_flasher_js.js
+      # redeploy.sh's deploy-status.json (valid JSON whatever the message) and
+      # quiet-check.py's pushes about it.
+      - name: Deploy status
+        run: python3 tools/test_deploy_status.py
 
   # The emulator renders the main screens and sim/screens_check.py compares
   # them with sim/golden/: a moved row, a clipped label or a wrong colour fails
   # here instead of on a board. A change that meant to move pixels re-renders
   # the references (python sim/screens_check.py --update) and commits them.
   screens:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       # Both: the screenshot renderer, and the live emulator that compiles
@@ -62,13 +66,13 @@ jobs:
           python sim/screens_check.py
       - name: Keep the differences
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screen-diffs
           path: sim/out/diff/
 
   firmware:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -77,14 +81,14 @@ jobs:
               freenove32, rlphantom-r, awok, twatch-s3, freenove-s3, crowpanel7,
               nm-cyd-c5]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # tags, so FIRMWARE_VERSION is what a release build would say
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Cache PlatformIO
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.platformio
           # The C5 board uses a different platform from the rest; keep its

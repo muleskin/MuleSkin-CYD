@@ -485,6 +485,9 @@ void tick(uint32_t now) {
     s_prefs.putUInt("last", nowEpoch());
 }
 
+static bool (*s_consoleHook)(const char* line) = nullptr;
+void setConsoleHook(bool (*hook)(const char* line)) { s_consoleHook = hook; }
+
 void pollSerial() {
     // A line buffer rather than a parser. Anything that is not the one
     // command is answered and dropped -- this is a debug port, and silence
@@ -511,6 +514,7 @@ void pollSerial() {
             continue;
         }
         if (NvsBackup::handle(line)) continue;
+        if (s_consoleHook && s_consoleHook(line)) continue;
         // The ignore list, for the web flasher: IGNORE LIST prints one
         // "IGN <mac> <type> <name>" line each and "IGN END <n>"; IGNORE ADD
         // <mac> [type] and IGNORE DEL <mac> change it. A MAC is twelve hex

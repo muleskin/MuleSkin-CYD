@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -34,14 +34,14 @@ jobs:
               freenove32, rlphantom-r, awok, twatch-s3, freenove-s3, crowpanel7,
               nm-cyd-c5]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0   # the tag, so the build reports vX.Y.Z
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.platformio
           key: pio-${{ matrix.env == 'nm-cyd-c5' && 'c5' || 'esp32' }}-${{ hashFiles('platformio.ini') }}
@@ -63,19 +63,19 @@ jobs:
           if [ -n "$a" ]; then
             if [ "$e" = nm-cyd-c5 ]; then cp "$a" out/esp32c5-boot_app0.bin; else cp "$a" out/esp32-otadata.bin; fi
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bins-${{ matrix.env }}
           path: out/
 
   release:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: art
           pattern: bins-*

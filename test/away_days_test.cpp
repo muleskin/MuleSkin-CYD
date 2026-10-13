@@ -73,5 +73,17 @@ int main() {
         ck("a new tag gets in", t.days(tag) == 1);
         ck("...the stalest made room", t.days(first) == 0 && t.days(last) == 1);
     }
+    suite("listed and removed (AWAYDAYS LIST / DEL)");
+    {
+        Table t;
+        t.note(tag, 100, true); t.note(other, 100, true); t.note(other, 101, true);
+        ck("two listed", t.count() == 2 && t.at(0) && t.at(1) && !t.at(2));
+        t.takeDirty();
+        ck("one removed", t.remove(tag) && t.count() == 1 && t.days(tag) == 0 && t.days(other) == 2);
+        ck("...and saved", t.takeDirty());
+        ck("not there twice", !t.remove(tag));
+        t.clear();
+        ck("cleared", t.count() == 0 && t.takeDirty());
+    }
     return report();
 }

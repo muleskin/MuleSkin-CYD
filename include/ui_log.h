@@ -5,6 +5,10 @@
 #include "detection.h"
 
 void uiLogInit(TFT_eSPI& t);
+// How many days a tracker has been heard away from home (main.cpp's
+// away-days table): shown on its LOG row ("2d away") before it gets to the
+// NEAR YOU ON N DAYS alert. Unset: nothing shown.
+void uiLogSetAwayDays(uint8_t (*fn)(const uint8_t mac[6]));
 // confirmPending/confirmLabel: draws a modal "TRACK THIS TARGET?"
 // panel with WATCH/HUNT/MORE INFO/CANCEL over everything else instead
 // of the normal list -- see uiLogHitConfirm() below. confirmLabel is

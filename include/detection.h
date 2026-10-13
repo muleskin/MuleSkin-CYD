@@ -4,6 +4,7 @@
 #include "sd_log.h"
 #include "remote_id.h"
 #include "spam_watch.h"
+#include "home_aps.h"
 #include <Preferences.h>
 #include <cstring>   // memcmp, for the inline isWatched()/isHunted() below
 
@@ -186,6 +187,10 @@ public:
     void     setHomeSsid(const char* ssid);
     bool     homeInView(uint32_t now) const { return _homeSeenMs && now - _homeSeenMs < HOME_MS; }
     const char* homeSsid() const   { return _homeSsid; }
+    // The home network's own access points (home_aps.h): once one is
+    // learned, a beacon of the home name from anywhere else is not home.
+    HomeAps::Set&       homeAps()       { return _homeAps; }
+    const HomeAps::Set& homeAps() const { return _homeAps; }
     uint32_t    homeSeenMs() const { return _homeSeenMs; }   // 0: not heard since it was set
 
     // ---- Watched target ("stalker tracker") --------------------------
@@ -442,6 +447,7 @@ private:
     uint8_t  _apNext  = 0;          // round-robin eviction cursor
     char     _homeSsid[33] = "";
     uint32_t _homeSeenMs = 0;
+    HomeAps::Set _homeAps;
     // Returns true if this beacon looks like an evil twin of an SSID
     // already on file. Records the SSID on first sighting.
     bool noteApBeacon(const uint8_t* bssid, const char* ssid, bool encrypted);

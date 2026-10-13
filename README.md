@@ -122,22 +122,25 @@ one it is as it connects -- its name, its Bluetooth name and its firmware:
   erases the board.
 - **Ignored devices** lists the devices the board never alerts for, and
   removes or adds one.
+- **Away days** lists the trackers the board has heard on days away from
+  home (three makes NEAR YOU ON N DAYS), the home network it goes by and how
+  many of its routers it has learned -- and removes one, or all.
 - **Push options** picks exactly which types PUSH ALERTS sends, and quiet
   hours for PUSH AT NIGHT of their own.
 - **Download log** saves every detection the board has kept as a
   spreadsheet, and charts it on the page: by type, by hour of the day, and
   the devices seen on more than one day. **Crash report** reads what it kept
   about its last crash.
-- The log's CSV has each sighting's confidence and an **away** column (a
-  tracker that said it was away from its owner), and the charts can show
-  only those.
+- The log's CSV has each sighting's confidence, an **away** column (a
+  tracker that said it was away from its owner) and **away_days** (the days
+  the board has heard it away from home), and the charts can show only those.
 - As it connects, the page says which board it is and when this browser last
   backed it up -- and nudges when that was never, or over a month ago.
 - **Self-test** checks the board's parts -- memory, touch, both radios, the
   black box, SD card, settings, clock, WiFi, update keys, rules -- and lists
   anything that needs a look.
 - **Live view** shows what the board is detecting right now, live -- trackers
-  away from their owner first, in red.
+  away from their owner first, in red -- and ignores a device from its row.
 - **What the alerts mean** (`/alerts/`, linked under the legend): WITH YOU,
   NEAR YOU ON N DAYS, AWAY FROM OWNER, fake-tag spam, karma/evil-twin WiFi,
   confidence -- and what to do about each.
@@ -360,6 +363,16 @@ evening summary counts them. WITH YOU always goes, either way.
   tag beside a board that never leaves the house never raises it; a tag
   following you is heard in different places. With no home network set,
   every day counts, and one Ignore settles a tag you know, on every board.
+  Home is recognised by its routers, not just its name: each time the board
+  joins the USE network it learns the access point it went through (up to
+  four; a router's other band counts as the same box), so a hotspot of the
+  same name elsewhere -- "xfinitywifi" -- is not home. The LOG shows a
+  tracker's away days beside it ("2d away", in yellow) before it gets to
+  three, and the first minutes after a restart, before home has been heard,
+  count as neither.
+- **What to do, one scan away**: a WITH YOU, NEAR YOU ON N DAYS or AWAY FROM
+  OWNER alert shows a QR code (in place of the gauge) to that alert's part of
+  [flasher.oillie.cloud/alerts](https://flasher.oillie.cloud/alerts/).
 - **Several boards on one topic**: an Ignore or Snooze pressed on any board's
   alert is applied by all of them -- your own AirTag is yours everywhere --
   but only the board that sent the alert says so back. A device ignored (or

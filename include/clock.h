@@ -127,5 +127,8 @@ void begin();   // once in setup(), after Settings -- loads the NVS bits
 // monitor or piped from `date +%s`, both of which somebody debugging this
 // board already has open.
 void pollSerial();
+// Another console command's handler (main.cpp's AWAYDAYS): asked each line
+// after the built-in ones are not it; true = handled.
+void setConsoleHook(bool (*hook)(const char* line));
 
 }  // namespace Clock

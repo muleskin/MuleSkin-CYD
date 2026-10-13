@@ -6,6 +6,13 @@
 #include "detection.h"
 #include "ignore_list.h"
 #include <Arduino.h>
+#include <string.h>
+// The QR code to the alerts guide (below) uses ESP-IDF's encoder; the
+// desktop simulator has none and keeps the gauge.
+#if defined(ARDUINO_ARCH_ESP32) && __has_include(<qrcode.h>)
+#include <qrcode.h>
+#define ALERT_QR 1
+#endif
 
 static const char* targetLabel(DetectionType t) {
     switch (t) {
@@ -30,6 +37,83 @@ static const char* targetLabel(DetectionType t) {
 }
 
 static Detection s_last;
+
+// ---- the alerts guide, one scan away ------------------------------------
+// The three tracker alerts that can be about YOU -- WITH YOU, NEAR YOU ON N
+// DAYS, AWAY FROM OWNER -- draw a QR code to their own section of
+// flasher.oillie.cloud/alerts/ in place of the gauge: what it means and what
+// to do, on the phone in your hand. Encoded once per section and kept as a
+// bitmap (version 3, 29x29: ~110 bytes).
+#ifdef ALERT_QR
+namespace {
+const uint8_t QR_MAX = 33;                 // version 4 at most
+uint8_t     s_qrBits[(QR_MAX * QR_MAX + 7) / 8];
+uint8_t     s_qrSize = 0;
+const char* s_qrFor = nullptr;             // the anchor it encodes
+void qrTake(esp_qrcode_handle_t q) {
+    const int n = esp_qrcode_get_size(q);
+    if (n <= 0 || n > QR_MAX) { s_qrSize = 0; return; }
+    memset(s_qrBits, 0, sizeof s_qrBits);
+    for (int y = 0; y < n; y++)
+        for (int x = 0; x < n; x++)
+            if (esp_qrcode_get_module(q, x, y)) s_qrBits[(y * n + x) >> 3] |= (uint8_t)(1u << ((y * n + x) & 7));
+    s_qrSize = (uint8_t)n;
+}
+bool qrFor(const char* anchor) {
+    if (s_qrFor == anchor) return s_qrSize != 0;
+    s_qrFor = anchor;
+    s_qrSize = 0;
+    char url[64];
+    snprintf(url, sizeof url, "https://flasher.oillie.cloud/alerts/#%s", anchor);
+    esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG_DEFAULT();
+    cfg.display_func = qrTake;
+    cfg.max_qrcode_version = 4;
+    cfg.qrcode_ecc_level = ESP_QRCODE_ECC_LOW;
+    if (esp_qrcode_generate(&cfg, url) != ESP_OK) s_qrSize = 0;
+#ifdef BENCH_TOOLS
+    // The bitmap as hex, for the bench to decode (it can't see the screen).
+    Serial.printf("[qr] %s %u ", anchor, (unsigned)s_qrSize);
+    for (size_t i = 0; i < ((size_t)s_qrSize * s_qrSize + 7) / 8; i++) Serial.printf("%02x", s_qrBits[i]);
+    Serial.println();
+#endif
+    return s_qrSize != 0;
+}
+// The code, black on white with its quiet zone, centred in a box of side
+// `side`, and "SCAN: WHAT TO DO" under it when there is room. False when it
+// does not fit (the caller draws the gauge instead).
+bool drawQr(TFT_eSPI& t, int cx, int cy, int side) {
+    const int n = s_qrSize;
+    if (!n) return false;
+    const int capH = 10;
+    int px = (side - capH) / (n + 4);
+    bool cap = true;
+    if (px < 2) { px = side / (n + 4); cap = false; }
+    if (px < 2) return false;
+    const int qs = (n + 4) * px;
+    const int x0 = cx - qs / 2, y0 = cy - (qs + (cap ? capH : 0)) / 2;
+    t.fillRect(x0, y0, qs, qs, TFT_WHITE);
+    for (int y = 0; y < n; y++) {
+        int run = -1;   // horizontal runs of dark modules: one fillRect each
+        for (int x = 0; x <= n; x++) {
+            const bool on = x < n && (s_qrBits[(y * n + x) >> 3] >> ((y * n + x) & 7)) & 1;
+            if (on && run < 0) run = x;
+            if (!on && run >= 0) {
+                t.fillRect(x0 + (2 + run) * px, y0 + (2 + y) * px, (x - run) * px, px, TFT_BLACK);
+                run = -1;
+            }
+        }
+    }
+    if (cap) {
+        t.setTextSize(1);
+        t.setTextColor(Theme::VAPOR_YELLOW, Theme::BG);
+        const char* c = "SCAN: WHAT TO DO";
+        t.setCursor(cx - t.textWidth(c) / 2, y0 + qs + 2);
+        t.print(c);
+    }
+    return true;
+}
+}  // namespace
+#endif
 static bool s_touched = false;
 static bool s_redacted = false;
 void uiAlertSetRedacted(bool r) { s_redacted = r; }
@@ -597,7 +681,24 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
         if (gy + gr + 4 > floorY) gr = floorY - gy - 4;
         const int grMax = wideAlert(w) ? 92 : 60;
         if (gr > grMax) gr = grMax;
-        if (gr > 8) {
+        // A tracker alert about you: the guide's QR code in the gauge's box.
+        const char* qrAnchor = nullptr;
+#ifdef ALERT_QR
+        if (!s_redacted) {
+            if (s_followMin)    qrAnchor = "withyou";
+            else if (s_days)    qrAnchor = "days";
+            else if (strcmp(vendorText(s_last), "Away-Owner") == 0) qrAnchor = "away";
+        }
+#endif
+        bool qrDrawn = false;
+        if (qrAnchor && gr > 8) {
+            t.fillRect(gx - gr - 4, gy - gr - 4, (gr + 4) * 2, (gr + 4) * 2, Theme::BG);
+            t.drawRect(gx - gr - 4, gy - gr - 4, (gr + 4) * 2, (gr + 4) * 2, typeCol);
+#ifdef ALERT_QR
+            qrDrawn = qrFor(qrAnchor) && drawQr(t, gx, gy, (gr + 4) * 2 - 4);
+#endif
+        }
+        if (gr > 8 && !qrDrawn) {
             t.fillRect(gx - gr - 4, gy - gr - 4, (gr + 4) * 2, (gr + 4) * 2, Theme::BG);
             t.drawRect(gx - gr - 4, gy - gr - 4, (gr + 4) * 2, (gr + 4) * 2, typeCol);
             Theme::drawTypeIcon(t, s_last.type, gx, gy, gr / 2);

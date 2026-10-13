@@ -1160,6 +1160,7 @@ static const uint16_t BUZZ_CHIRP_MS = 80;
 static bool twatchStill();
 #endif
 static void queuePushAlert(const Detection& d, uint16_t followMins);   // PUSH ALERTS, below
+static void serviceHomeAps();   // the home network's own access points, below
 static bool alertMayInterrupt(const Detection& d) {
     const bool exempt = engine.isWatched(d.mac, true) || engine.isWatched(d.mac, false);
 #if defined(TWATCH_S3)
@@ -2279,6 +2280,7 @@ static void servicePush(uint32_t now) {
             homeAt = now ? now : 1;
             engine.setHomeSsid(OtaWifi::savedCount() ? OtaWifi::savedSsidAt(OtaWifi::savedUse()) : "");
         }
+        serviceHomeAps();
     }
     uiClearSetPushWaiting(Settings::pushOn() && s_pushQ.waiting() ? s_pushQ.count() : 0);
     if (s_pushRadio) return;
@@ -2361,26 +2363,82 @@ static AwayDays::Table s_awayDays;
 static uint8_t s_awayFake[6];
 static bool    s_awayFakePending = false;
 void benchAwayDays(const uint8_t mac[6]) { memcpy(s_awayFake, mac, 6); s_awayFakePending = true; }
+static bool s_awaySaveNow = false;   // a console change: saved on the next pass
+static void awayDaysLoad() {
+    static bool loaded = false;
+    if (loaded) return;
+    loaded = true;
+    Preferences p;
+    if (p.begin("awaydays", true)) {
+        uint8_t blob[1 + AwayDays::SLOTS * sizeof(AwayDays::Slot)];
+        const size_t n = p.getBytes("t", blob, sizeof blob);
+        s_awayDays.load(blob, n);
+        p.end();
+    }
+}
+// The LOG's "2d away" (uiLogSetAwayDays).
+static uint8_t awayDaysFor(const uint8_t mac[6]) { return s_awayDays.days(mac); }
+// AWAYDAYS LIST prints "AWD <mac> <days> <last day> <told day>" per tracker,
+// "AWD HOME <access points known> <home in view 0/1> <home name>", and
+// "AWD END <n> <today>" (days since 1970, local; 0 = clock not set).
+// AWAYDAYS DEL <mac> forgets one, AWAYDAYS CLEAR all. For the web flasher's
+// AWAY DAYS panel, and a board that counted a bench test's fake days.
+static bool awayDaysConsole(const char* line) {
+    if (strncasecmp(line, "AWAYDAYS", 8) != 0) return false;
+    awayDaysLoad();
+    const char* a = line + 8;
+    while (*a == ' ') a++;
+    if (!*a || strcasecmp(a, "LIST") == 0) {
+        for (uint8_t i = 0; i < s_awayDays.count(); i++) {
+            const AwayDays::Slot* s = s_awayDays.at(i);
+            Serial.printf("AWD %02x%02x%02x%02x%02x%02x %u %lu %lu\n", s->mac[0], s->mac[1], s->mac[2], s->mac[3],
+                          s->mac[4], s->mac[5], (unsigned)s->days, (unsigned long)s->lastDay, (unsigned long)s->toldDay);
+        }
+        Serial.printf("AWD HOME %u %d %s\n", (unsigned)engine.homeAps().count(),
+                      engine.homeSsid()[0] && engine.homeInView(millis()) ? 1 : 0, engine.homeSsid());
+        Serial.printf("AWD END %u %lu\n", (unsigned)s_awayDays.count(),
+                      (unsigned long)(Clock::isSet() ? Clock::localDay() : 0));
+        return true;
+    }
+    if (strcasecmp(a, "CLEAR") == 0) {
+        s_awayDays.clear();
+        s_awaySaveNow = true;
+        Serial.println("[awaydays] cleared");
+        return true;
+    }
+    if (strncasecmp(a, "DEL ", 4) == 0) {
+        const char* p = a + 4;
+        uint8_t mac[6];
+        bool ok = true;
+        for (int i = 0; i < 6 && ok; i++) {
+            while (*p == ':' || *p == '-' || *p == ' ') p++;
+            char hx[3] = { p[0], p[0] ? p[1] : '\0', '\0' };
+            char* end = nullptr;
+            const long v = strtol(hx, &end, 16);
+            ok = hx[0] && hx[1] && end == hx + 2;
+            mac[i] = (uint8_t)v;
+            p += 2;
+        }
+        if (!ok) { Serial.println("[awaydays] bad: a MAC is twelve hex digits"); return true; }
+        const bool gone = s_awayDays.remove(mac);
+        if (gone) s_awaySaveNow = true;
+        Serial.println(gone ? "[awaydays] removed" : "[awaydays] not on the list");
+        return true;
+    }
+    Serial.println("[awaydays] one of: AWAYDAYS LIST, AWAYDAYS DEL <mac>, AWAYDAYS CLEAR");
+    return true;
+}
 static void serviceTrackerDays(uint32_t now) {
     static uint32_t last = 0, savedAt = 0;
-    static bool     loaded = false;
-    if (now - last < 60000) return;
+    if (now - last < 60000 && !s_awaySaveNow) return;
     last = now;
-    if (!loaded) {
-        loaded = true;
-        Preferences p;
-        if (p.begin("awaydays", true)) {
-            uint8_t blob[1 + AwayDays::SLOTS * sizeof(AwayDays::Slot)];
-            const size_t n = p.getBytes("t", blob, sizeof blob);
-            s_awayDays.load(blob, n);
-            p.end();
-        }
-    }
+    awayDaysLoad();
     // A change is saved now, or ten minutes after the last save: a handful
-    // of writes a day to the settings store, not one a minute.
+    // of writes a day to the settings store, not one a minute. One from the
+    // console (DEL, CLEAR) is saved straight away.
     static bool pending = false;
     if (s_awayDays.takeDirty()) pending = true;
-    if (pending && (!savedAt || now - savedAt > 10u * 60u * 1000u)) {
+    if (pending && (!savedAt || now - savedAt > 10u * 60u * 1000u || s_awaySaveNow)) {
         uint8_t blob[1 + AwayDays::SLOTS * sizeof(AwayDays::Slot)];
         const size_t n = s_awayDays.save(blob, sizeof blob);
         Preferences p;
@@ -2388,6 +2446,7 @@ static void serviceTrackerDays(uint32_t now) {
         savedAt = now ? now : 1;
         pending = false;
     }
+    s_awaySaveNow = false;
     if (!Clock::isSet() || (state != AppState::CLEAR && state != AppState::LOG)) return;
     const uint32_t today = Clock::localDay();
     if (s_awayFakePending) {
@@ -2398,6 +2457,10 @@ static void serviceTrackerDays(uint32_t now) {
     // Away from home: no home set (every day counts, as before), or home not
     // heard in the last few minutes.
     const bool away = !engine.homeSsid()[0] || !engine.homeInView(now);
+    // Just booted and home not heard yet: not known to be away. Counting
+    // then gave a board sitting at home an away day at every restart (seen
+    // 2026-10-13) -- the scan needs a moment to hear the router.
+    if (away && engine.homeSsid()[0] && !engine.homeSeenMs() && now < DetectionEngine::HOME_MS) return;
     const Detection* due = nullptr;
     uint8_t dueDays = 0;
     for (uint8_t i = 0; i < engine.logCount(); i++) {
@@ -2428,6 +2491,48 @@ static void serviceTrackerDays(uint32_t now) {
         enterAlert(*d);
         uiAlertSetDays(days);       // one a minute at most: the next waits its turn
     }
+}
+
+// The home network's own access points (home_aps.h), kept in NVS
+// ("homeaps": "ssid" = the home name they belong to, "b" = the list). Loaded
+// when the home name is set or changes -- a list learned for another name is
+// dropped -- and grown by every join to the home network.
+static void serviceHomeAps() {
+    static char     loadedFor[33] = "";
+    static bool     loaded = false;
+    static uint32_t joinSeq = 0;
+    const char* h = engine.homeSsid();
+    HomeAps::Set& aps = engine.homeAps();
+    if (!loaded || strcmp(loadedFor, h) != 0) {
+        loaded = true;
+        strncpy(loadedFor, h, sizeof loadedFor - 1);
+        loadedFor[sizeof loadedFor - 1] = 0;
+        aps.clear();
+        Preferences p;
+        if (h[0] && p.begin("homeaps", true)) {
+            char ssid[33] = "";
+            p.getString("ssid", ssid, sizeof ssid);
+            if (strcmp(ssid, h) == 0) {
+                uint8_t blob[2 + HomeAps::SLOTS * 6];
+                aps.load(blob, p.getBytes("b", blob, sizeof blob));
+            }
+            p.end();
+        }
+        Serial.printf("[home] %s: %u access point(s) known\n", h[0] ? h : "(none)", (unsigned)aps.count());
+    }
+    uint8_t b[6];
+    int8_t  idx = -1;
+    const uint32_t q = OtaWifi::joinedBssid(b, &idx);
+    if (q == joinSeq) return;
+    joinSeq = q;
+    if (!h[0] || idx < 0 || idx >= (int8_t)OtaWifi::savedCount() || strcmp(OtaWifi::savedSsidAt((uint8_t)idx), h) != 0) return;
+    if (!aps.learn(b)) return;
+    uint8_t blob[2 + HomeAps::SLOTS * 6];
+    const size_t n = aps.save(blob, sizeof blob);
+    Preferences p;
+    if (n && p.begin("homeaps", false)) { p.putString("ssid", h); p.putBytes("b", blob, n); p.end(); }
+    Serial.printf("[home] learned %02x:%02x:%02x:%02x:%02x:%02x for %s (%u known)\n",
+                  b[0], b[1], b[2], b[3], b[4], b[5], h, (unsigned)aps.count());
 }
 
 static TrackerFollow::Table* s_follow = nullptr;
@@ -4284,6 +4389,10 @@ void setup() {
     // type sits out, and those are read in init().
     Dex::begin();
     Regulars::begin();
+    // AWAYDAYS on the console, and "2d away" on the LOG (the away-days table).
+    awayDaysLoad();
+    Clock::setConsoleHook(awayDaysConsole);
+    uiLogSetAwayDays(awayDaysFor);
     MuleSkin::setIdleProvider([]() { return Notices::idleLine(engine); });
     applyBrightness();
     // After a wipe the board comes back the way the wipe asked: straight to the
@@ -7362,6 +7471,10 @@ void loop() {
                 else            snprintf(info.home, sizeof info.home, "%.20s, heard %lus ago%s", h,
                                          (unsigned long)((millis() - seen) / 1000),
                                          engine.homeInView(millis()) ? "" : " (away)");
+                // How many of its routers are known: 0 = recognised by name only.
+                const size_t l = strlen(info.home);
+                if (h[0] && l + 8 < sizeof info.home)
+                    snprintf(info.home + l, sizeof info.home - l, ", %u AP", (unsigned)engine.homeAps().count());
             }
             info.resetReason = resetReasonName();
             info.loopFree    = s_loopHeapFree;

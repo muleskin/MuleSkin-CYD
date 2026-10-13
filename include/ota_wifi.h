@@ -78,6 +78,11 @@ uint8_t     savedCount();
 const char* savedSsidAt(uint8_t i);
 uint8_t     savedUse();
 int8_t      savedIndexOf(const char* ssid);   // -1 when it is not saved
+// The access point (BSSID) the last join to a saved network went through,
+// and which saved network that was: how the board learns its home's own
+// routers (home_aps.h). Returns a count that goes up with each join; 0 when
+// nothing has joined since boot.
+uint32_t    joinedBssid(uint8_t out[6], int8_t* savedIdx);
 SavedResult savedResult(uint8_t i);
 // Add a network, or replace the password of one already saved. False when
 // the list is full.

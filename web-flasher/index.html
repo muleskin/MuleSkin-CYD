@@ -582,6 +582,17 @@
     </div>
     <p class="browser-note"><strong>Ignored devices</strong> lists the devices the board never raises an alert for -- your own AirTag, your own doorbell -- and lets you remove one or add one by its address. They are still scanned and logged. The board stays connected until DONE. Needs firmware v3.2.2 or later.</p>
     <div class="identify-row">
+      <button id="awdBtn" class="identify-btn">[ AWAY DAYS ]</button>
+      <button id="awdCloseBtn" class="identify-btn" style="display:none">[ DONE ]</button>
+      <div class="identify-result" id="awdResult"></div>
+    </div>
+    <div class="browser-note" id="awdBox" style="display:none">
+      <div id="awdHome" style="margin-bottom:.5em"></div>
+      <table id="awdTable" style="width:100%;border-collapse:collapse"></table>
+      <button id="awdClearBtn" class="identify-btn" style="margin-top:.4em">[ CLEAR ALL ]</button>
+    </div>
+    <p class="browser-note"><strong>Away days</strong> lists the trackers, away from their owner, that the board has heard on days it was <em>away from home</em> -- three days makes the <a href="alerts/#days">NEAR YOU ON N DAYS</a> alert -- and the home network it goes by, with how many of its routers it has learned. Remove a tag you know (or IGNORE it for good). Needs firmware v3.4.0 or later.</p>
+    <div class="identify-row">
       <button id="selfBtn" class="identify-btn">[ SELF-TEST ]</button>
       <div class="identify-result" id="selfResult"></div>
     </div>
@@ -1162,7 +1173,7 @@
                (awayN ? ' -- <span style="color:#ff1744;font-weight:bold">' + awayN + ' tracker' + (awayN === 1 ? '' : 's') +
                         ' away from the owner</span> (<a href="alerts/#away" target="_blank" rel="noopener">what that means</a>)' : '') + '</div>';
     html += '<table style="width:100%;border-collapse:collapse;font-size:0.75rem;text-align:left">' +
-            '<tr style="color:#5f7896"><th>type</th><th>who</th><th>signal</th><th>seen</th><th>ago</th></tr>';
+            '<tr style="color:#5f7896"><th>type</th><th>who</th><th>signal</th><th>seen</th><th>ago</th><th></th></tr>';
     rows.forEach(function (d) {
       var ago = Math.round((now - d.seen) / 1000);
       var col = LIVE_COLOURS[d.type] || '#18ffff';
@@ -1175,7 +1186,9 @@
           (away ? '<br><span style="color:#ff1744">AWAY FROM OWNER</span>' : '') + '</td>' +
         '<td>' + esc(d.name || d.vendor || '') + '<br><span style="color:#5f7896">' + esc(d.mac) + '</span></td>' +
         '<td>' + d.rssi + ' dBm<br><span style="color:' + col + '">' + '█'.repeat(bar) + '</span></td>' +
-        '<td>x' + d.hits + '</td><td>' + (ago < 3 ? 'now' : ago + ' s') + '</td></tr>';
+        '<td>x' + d.hits + '</td><td>' + (ago < 3 ? 'now' : ago + ' s') + '</td>' +
+        '<td>' + (live.ignored[d.mac] ? '<span style="color:#5f7896">' + esc(live.ignored[d.mac]) + '</span>'
+                 : '<button class="identify-btn live-ign" data-mac="' + esc(d.mac) + '" style="font-size:0.7rem;padding:2px 6px">IGNORE</button>') + '</td></tr>';
     });
     liveResult.innerHTML = html + '</table>';
   }
@@ -1186,7 +1199,7 @@
       var port = await navigator.serial.requestPort();
       await port.open({ baudRate: isNativeUsb(port) ? 115200 : 2000000, bufferSize: 65536 });
       try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (e) {}
-      live = { port: port, reader: null, devices: {}, lines: 0, timer: null };
+      live = { port: port, reader: null, devices: {}, lines: 0, timer: null, ignored: {}, pendingIgn: null };
       liveBtn.textContent = '[ STOP LIVE VIEW ]';
       for (var sec = 10; sec > 0 && live; sec--) {
         liveResult.textContent = 'Letting the board boot... ' + sec;
@@ -1209,6 +1222,12 @@
           var line = buf.slice(0, nl).replace(/\r$/, '');
           buf = buf.slice(nl + 1);
           if (line.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
+          // The board's answer to a row's IGNORE.
+          if (line.indexOf('[ignore] ') === 0 && live.pendingIgn) {
+            live.ignored[live.pendingIgn] = /added/.test(line) ? 'IGNORED' : line.slice(9);
+            live.pendingIgn = null;
+            continue;
+          }
           if (line.indexOf('[live] ') !== 0 || line.indexOf('[live] on') === 0 || line.indexOf('[live] off') === 0) continue;
           var f = line.slice(7).split(',');
           if (f.length < 8) continue;
@@ -1241,6 +1260,22 @@
     if (!quiet) liveResult.insertAdjacentHTML('afterbegin', '<div>STOPPED.</div>');
   }
   window.addEventListener('beforeunload', function () { if (live) stopLive(true); });
+  // A row's IGNORE: IGNORE ADD over the same cable, while the view runs --
+  // your own AirPods, your car's camera. The board answers "[ignore] added".
+  if (liveResult) liveResult.addEventListener('click', async function (ev) {
+    var b = ev.target.closest && ev.target.closest('.live-ign');
+    if (!b || !live || live.pendingIgn) return;
+    var mac = b.getAttribute('data-mac'), hex = String(mac).toLowerCase().replace(/[^0-9a-f]/g, '');
+    if (hex.length !== 12 || !confirm('Ignore ' + mac.toUpperCase() + ' on this board for good? (IGNORED DEVICES can undo it.)')) return;
+    live.pendingIgn = mac;
+    live.ignored[mac] = '...';
+    try {
+      var w = live.port.writable.getWriter();
+      await w.write(new TextEncoder().encode('\nIGNORE ADD ' + hex + '\n'));
+      w.releaseLock();
+    } catch (e) { live.ignored[mac] = 'not sent'; live.pendingIgn = null; }
+    drawLive();
+  });
 
   // ---- Push alerts -------------------------------------------------------------
   // Sets the board up to send its alerts to an ntfy server: PUSH URL, PUSH
@@ -1463,6 +1498,15 @@
         if (/\[blackbox\] (end|off)/.test(text) || text.indexOf('[security] locked') >= 0) break;
       }
       await r.cancel(); r.releaseLock();
+      // Each tracker's away days (v3.4.0+; an older board says nothing and
+      // the column stays empty): mac -> days.
+      var awayDays = {};
+      if (text.indexOf('[security] locked') < 0) {
+        try {
+          parseAwayDays(await talk(port, '\nAWAYDAYS LIST\n', /AWD END \d+ \d+/, 2500)).rows
+            .forEach(function (a) { awayDays[a.mac] = a.days; });
+        } catch (e) {}
+      }
       await port.close(); port = null;
       if (text.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
       if (/\[blackbox\] off/.test(text)) throw new Error('this board has no black box (no room for it in flash)');
@@ -1480,7 +1524,7 @@
         var f = l.split(',');
         return f.length < 11 ? l : f.slice(0, 9).concat([''], f.slice(9)).join(',');
       });
-      then(lines.slice(1, split < 0 ? lines.length : split), dets);
+      then(lines.slice(1, split < 0 ? lines.length : split), dets, awayDays);
     } catch (err) {
       bbResult.className = 'identify-result err';
       bbResult.textContent = 'Couldn’t read it: ' + (err && err.message ? err.message : 'unknown error');
@@ -1492,10 +1536,13 @@
 
   // Detections, oldest first, as a spreadsheet-ready CSV. The name is the last
   // field and may hold commas, so it is re-joined and quoted.
-  function saveLog(boots, dets) {
+  function saveLog(boots, dets, awayDays) {
     // conf: the sighting's grade (empty from a board before v3.2.9); away:
-    // a tracker that said it was away from its owner (vendor "Away-Owner").
-    var out = ['time_utc,boot,epoch,up_s,type,mac,rssi,channel,hits,again,conf,away,vendor,name'];
+    // a tracker that said it was away from its owner (vendor "Away-Owner");
+    // away_days: the days the board has heard that tracker away from home
+    // (its AWAY DAYS table, v3.4.0+), on every row of that tracker.
+    awayDays = awayDays || {};
+    var out = ['time_utc,boot,epoch,up_s,type,mac,rssi,channel,hits,again,conf,away,away_days,vendor,name'];
     var n = 0, cleared = 0;
     dets.forEach(function (l) {
       if (l[0] === '#') { cleared++; return; }
@@ -1503,7 +1550,8 @@
       if (f.length < 12) return;
       var name = f.slice(11).join(',');
       var q = function (s) { return /[",]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-      out.push([isoOf(f[1])].concat(f.slice(0, 10), [f[10] === 'Away-Owner' ? 'yes' : '', q(f[10]), q(name)]).join(','));
+      var ad = awayDays[String(f[4]).toLowerCase().replace(/[^0-9a-f]/g, '')];
+      out.push([isoOf(f[1])].concat(f.slice(0, 10), [f[10] === 'Away-Owner' ? 'yes' : '', ad ? ad : '', q(f[10]), q(name)]).join(','));
       n++;
     });
     var day = new Date().toISOString().slice(0, 10);
@@ -1842,6 +1890,108 @@
       }
       ignMac.value = '';
       ignDo('IGNORE ADD ' + hex.toLowerCase());
+    });
+  }
+
+  // AWAY DAYS: the board's away-days table (AWAYDAYS LIST / DEL / CLEAR),
+  // kept open until DONE like IGNORED DEVICES.
+  var awdBtn = document.getElementById('awdBtn'), awdCloseBtn = document.getElementById('awdCloseBtn');
+  var awdResult = document.getElementById('awdResult'), awdBox = document.getElementById('awdBox');
+  var awdTable = document.getElementById('awdTable'), awdHome = document.getElementById('awdHome');
+  var awdClearBtn = document.getElementById('awdClearBtn');
+  var awdPort = null, awdBusy = false;
+  if (awdBtn && !('serial' in navigator)) awdBtn.disabled = true;
+
+  // "AWD <mac> <days> <last> <told>" rows, "AWD HOME <aps> <inview> <name>",
+  // "AWD END <n> <today>" -> { rows, home, today }.
+  function parseAwayDays(text) {
+    var out = { rows: [], home: null, today: 0, ok: /AWD END \d+ \d+/.test(text) };
+    text.split(/\r?\n/).forEach(function (l) {
+      var m;
+      if ((m = l.match(/^AWD ([0-9a-f]{12}) (\d+) (\d+) (\d+)/))) out.rows.push({ mac: m[1], days: +m[2], last: +m[3] });
+      else if ((m = l.match(/^AWD HOME (\d+) (\d) ?(.*)$/))) out.home = { aps: +m[1], inView: m[2] === '1', name: m[3] };
+      else if ((m = l.match(/^AWD END \d+ (\d+)/))) out.today = +m[1];
+    });
+    return out;
+  }
+
+  async function awdTalk(line, until) {
+    var text = await talk(awdPort, '\n' + line + '\n', until, 6000);
+    if (text.indexOf('[security] locked') >= 0) throw new Error('the board is locked. Unlock it on its screen, then try again');
+    return text;
+  }
+
+  async function awdRefresh() {
+    var a = parseAwayDays(await awdTalk('AWAYDAYS LIST', /AWD END \d+ \d+|\[security\] locked/));
+    if (!a.ok) throw new Error('no answer. This needs firmware v3.4.0 or later');
+    var h = a.home;
+    awdHome.textContent = !h || !h.name ? 'No home network set (mark one USE on the board): every day counts as away.'
+      : 'Home: ' + h.name + ' -- ' + (h.inView ? 'in range now' : 'not in range now') + ', ' +
+        (h.aps ? h.aps + ' of its router' + (h.aps === 1 ? '' : 's') + ' learned'
+               : 'recognised by name only until the board joins it');
+    awdTable.textContent = '';
+    if (!a.rows.length) { var tr0 = awdTable.insertRow(); tr0.insertCell().textContent = 'No tracker counted.'; }
+    a.rows.sort(function (x, y) { return y.days - x.days; }).forEach(function (r) {
+      var tr = awdTable.insertRow();
+      tr.insertCell().textContent = r.mac.match(/../g).join(':').toUpperCase();
+      var c = tr.insertCell();
+      c.textContent = r.days + ' day' + (r.days === 1 ? '' : 's');
+      if (r.days >= 3) c.style.color = '#ff1744';
+      var ago = a.today && r.last ? a.today - r.last : -1;
+      tr.insertCell().textContent = ago < 0 ? '' : ago === 0 ? 'last: today' : 'last: ' + ago + ' day' + (ago === 1 ? '' : 's') + ' ago';
+      var b = document.createElement('button');
+      b.className = 'identify-btn'; b.textContent = '[ REMOVE ]';
+      b.onclick = function () { awdDo('AWAYDAYS DEL ' + r.mac); };
+      tr.insertCell().appendChild(b);
+    });
+    awdResult.className = 'identify-result';
+    awdResult.textContent = a.rows.length + ' tracker' + (a.rows.length === 1 ? '' : 's') + ' counted.';
+  }
+
+  async function awdDo(cmd) {
+    if (awdBusy || !awdPort) return;
+    awdBusy = true;
+    try {
+      var text = await awdTalk(cmd, /\[awaydays\] [^\n]*\n/);
+      var m = text.match(/\[awaydays\] ([^\r\n]*)/);
+      await awdRefresh();
+      if (m) awdResult.textContent += ' (' + m[1] + ')';
+    } catch (err) {
+      awdResult.className = 'identify-result err';
+      awdResult.textContent = 'Couldn’t: ' + (err && err.message ? err.message : 'unknown error');
+    } finally { awdBusy = false; }
+  }
+
+  if (awdBtn && 'serial' in navigator) {
+    awdBtn.addEventListener('click', async function () {
+      if (awdPort) return;
+      awdBtn.disabled = true;
+      try {
+        awdResult.className = 'identify-result';
+        awdResult.textContent = 'Pick the board’s port...';
+        awdPort = await openConsole('Reading the away days.', awdResult);
+        await awdRefresh();
+        awdBox.style.display = '';
+        awdCloseBtn.style.display = '';
+      } catch (err) {
+        awdResult.className = 'identify-result err';
+        awdResult.textContent = 'Couldn’t read them: ' + (err && err.message ? err.message : 'unknown error');
+        try { if (awdPort) await awdPort.close(); } catch (e) {}
+        awdPort = null;
+        awdBtn.disabled = false;
+      }
+    });
+    awdCloseBtn.addEventListener('click', async function () {
+      try { if (awdPort) await awdPort.close(); } catch (e) {}
+      awdPort = null;
+      awdBox.style.display = 'none';
+      awdCloseBtn.style.display = 'none';
+      awdBtn.disabled = false;
+      awdResult.className = 'identify-result';
+      awdResult.textContent = 'Disconnected.';
+    });
+    awdClearBtn.addEventListener('click', function () {
+      if (confirm('Forget every tracker\'s away days on this board?')) awdDo('AWAYDAYS CLEAR');
     });
   }
 

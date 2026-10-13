@@ -36,7 +36,10 @@ STAGE=starting; FAILED_BOARDS=""
 # status <state> <message>: state is running, ok or failed.
 status() {
   mkdir -p "$STATUS_DIR" 2>/dev/null || return 0
-  local msg=${2//\\/\/}; msg=${msg//\"/\'}
+  # Backslashes and double quotes would break the JSON: / and ' instead.
+  # Quoted patterns, which every bash reads alike (5.3 dropped the escaped one).
+  local bs="\\" dq="\"" sq="'" sl="/"
+  local msg=${2//"$bs"/"$sl"}; msg=${msg//"$dq"/"$sq"}
   local fb="" b
   for b in $FAILED_BOARDS; do fb="$fb${fb:+, }\"$b\""; done
   printf '{\n  "tag": "%s",\n  "state": "%s",\n  "stage": "%s",\n  "message": "%s",\n  "failed": [%s],\n  "started": "%s",\n  "updated": "%s"\n}\n' \

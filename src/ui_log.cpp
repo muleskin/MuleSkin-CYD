@@ -126,6 +126,9 @@ const Detection* uiLogRow(const DetectionEngine& eng, int idx) {
     return &row;
 }
 
+static uint8_t (*s_awayDaysFn)(const uint8_t mac[6]) = nullptr;
+void uiLogSetAwayDays(uint8_t (*fn)(const uint8_t mac[6])) { s_awayDaysFn = fn; }
+
 void uiLogInit(TFT_eSPI& t) {
     g_scroll = 0;
     invalidatePage();
@@ -452,22 +455,25 @@ void uiLogTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, int scroll
         // A regular's neighbour-name comes first, in pink, then whatever the
         // device calls itself. "Gary" on its own when it calls itself nothing.
         const char* reg = Regulars::nameFor(d->mac);
-        if (d->name[0] || reg) {
+        const uint8_t awayD = s_awayDaysFn ? s_awayDaysFn(d->mac) : 0;
+        if (d->name[0] || reg || awayD) {
             const int nameX   = labelEnd + 8;
             const int nameMax = (w - tw - 14) - 6 - nameX;
             if (nameMax > 0) {
-                char nm[sizeof(d->name) + 16];
+                char nm[sizeof(d->name) + 28];
                 char pv[40];
                 const char* own = Privacy::name(d->name, pv, sizeof pv);
-                if (reg && d->name[0]) snprintf(nm, sizeof nm, "%s: %s", reg, own);
-                else if (reg)          snprintf(nm, sizeof nm, "%s", reg);
-                else                   snprintf(nm, sizeof nm, "%s", own);
+                char ad[12] = "";
+                if (awayD) snprintf(ad, sizeof ad, "%ud away%s", (unsigned)awayD, (reg || d->name[0]) ? " " : "");
+                if (reg && d->name[0]) snprintf(nm, sizeof nm, "%s%s: %s", ad, reg, own);
+                else if (reg)          snprintf(nm, sizeof nm, "%s%s", ad, reg);
+                else                   snprintf(nm, sizeof nm, "%s%s", ad, own);
                 while (nm[0] && t.textWidth(nm) > nameMax) nm[strlen(nm) - 1] = '\0';
                 if (nm[0]) {
                     // Centred against the size-2 type label beside it.
                     // Sharing its top edge would leave the small text
                     // hanging off the cap height of the big text.
-                    t.setTextColor(kept ? dim : (reg ? Theme::VAPOR_PINK : Theme::WHITE), Theme::BG);
+                    t.setTextColor(kept ? dim : (awayD ? Theme::VAPOR_YELLOW : reg ? Theme::VAPOR_PINK : Theme::WHITE), Theme::BG);
                     t.setCursor(nameX, y + topPad + (nameH - detailH) / 2);
                     t.print(nm);
                 }

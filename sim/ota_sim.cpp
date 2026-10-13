@@ -195,6 +195,7 @@ void        forget()    { s_saved = false; s_n = 0; }
 uint8_t     savedCount()           { return s_saved ? s_n : 0; }
 const char* savedSsidAt(uint8_t i) { return i < savedCount() ? s_list[i].ssid : ""; }
 uint8_t     savedUse()             { return s_use; }
+uint32_t    joinedBssid(uint8_t*, int8_t*) { return 0; }
 int8_t      savedIndexOf(const char* ssid) {
     for (uint8_t i = 0; i < savedCount(); i++) if (!strcmp(s_list[i].ssid, ssid)) return (int8_t)i;
     return -1;

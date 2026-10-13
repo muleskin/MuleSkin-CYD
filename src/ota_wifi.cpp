@@ -327,6 +327,18 @@ void parseRelease(const char* body) {
     if (name[0] || n) OtaCore::noteRelease(name, ptr, n);
 }
 
+// joinedBssid(): written by whichever join just succeeded.
+static uint8_t  s_joinedBssid[6];
+static int8_t   s_joinedIdx = -1;
+static volatile uint32_t s_joinedSeq = 0;
+static void noteJoined(int8_t i) {
+    const uint8_t* b = WiFi.BSSID();
+    if (i < 0 || !b) return;
+    memcpy(s_joinedBssid, b, 6);
+    s_joinedIdx = i;
+    s_joinedSeq = s_joinedSeq + 1;
+}
+
 bool join() {
     s_state = State::CONNECTING;
     Serial.printf("[ota] joining %s\n", s_ssid);
@@ -350,6 +362,7 @@ bool join() {
     if (s_save && !saveNetwork(s_ssid, s_pass))
         Serial.println("[ota] wifi: the network list is full, not saved");
     setResult(savedIndexOf(s_ssid), SavedResult::JOINED);
+    noteJoined(savedIndexOf(s_ssid));
     return true;
 }
 
@@ -508,6 +521,15 @@ void run(void*) {
 }
 
 }  // namespace
+
+uint32_t joinedBssid(uint8_t out[6], int8_t* savedIdx) {
+    const uint32_t q = s_joinedSeq;
+    if (q) {
+        if (out) memcpy(out, s_joinedBssid, 6);
+        if (savedIdx) *savedIdx = s_joinedIdx;
+    }
+    return q;
+}
 
 int8_t bestSavedInScan();   // below, with the rest of the list
 
@@ -922,7 +944,7 @@ bool bootCheck(uint32_t budgetMs) {
     memset(pass, 0, sizeof pass);
     // How it went, for the WIFI NETWORKS screen. A join that merely ran out
     // of time says nothing about the password, so it changes nothing.
-    if (st == WL_CONNECTED)           setResult((int8_t)pick, SavedResult::JOINED);
+    if (st == WL_CONNECTED)           { setResult((int8_t)pick, SavedResult::JOINED); noteJoined((int8_t)pick); }
     else if (st == WL_NO_SSID_AVAIL)  setResult((int8_t)pick, SavedResult::NOT_FOUND);
     else if (st == WL_CONNECT_FAILED) setResult((int8_t)pick, SavedResult::BAD_PASSWORD);
     bool found = false;
@@ -1077,6 +1099,7 @@ bool joinBest(char* ssid, size_t cap, const char* tag, int8_t skip = -1, int8_t*
         return false;
     }
     setResult((int8_t)pick, SavedResult::JOINED);
+    noteJoined((int8_t)pick);
     return true;
 }
 
