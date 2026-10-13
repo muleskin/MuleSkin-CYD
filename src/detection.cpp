@@ -372,6 +372,26 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
                 label    = uuidName(0xFEAA);
             }
         }
+        // A SmartTag's payload is SERVICE DATA under 0xFD5A (Yu et al.); one
+        // that does not also list the UUID among its services is caught here.
+        if (det.type == DetectionType::UNKNOWN && adv->haveServiceData() &&
+            lookupUuid(0xFD5A) == DetectionType::SAMSUNG_TAG &&
+            !adv->getServiceData(NimBLEUUID((uint16_t)0xFD5A)).empty()) {
+            det.type = DetectionType::SAMSUNG_TAG;
+            label    = uuidName(0xFD5A);
+        }
+        // DULT (0xFCB2), the cross-brand standard: reported only when the tag
+        // says it is SEPARATED from its owner -- the near-owner kind is a
+        // person with their own keys. Filed with the network trackers
+        // (GOOGLE_TAG: the brands adopting DULT are Chipolo, Pebblebee,
+        // Motorola, on Google's and Apple's networks), named "DULT".
+        if (det.type == DetectionType::UNKNOWN && adv->haveServiceData()) {
+            const std::string sd = adv->getServiceData(NimBLEUUID((uint16_t)0xFCB2));
+            if (dultNearOwner((const uint8_t*)sd.data(), sd.size()) == 0) {
+                det.type = DetectionType::GOOGLE_TAG;
+                label    = "DULT";
+            }
+        }
 
         // Service UUIDs
         if (det.type == DetectionType::UNKNOWN && adv->haveServiceUUID()) {
@@ -448,10 +468,28 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         // tag sends only when it is away from its owner (HIGH -- a tag you
         // carry for someone else's phone), or any other 30-byte Apple advert,
         // AirPods pairing included (LOW). See isFindMySeparated().
+        // ...and the same for the other tracker families (signatures.h,
+        // "Trackers away from their owner"): HIGH and "Away-Owner" when the
+        // advert says separated, MED when it says (or may say) near its owner.
         bool tagAway = false;
         if (det.type == DetectionType::AIRTAG) {
-            tagAway  = isFindMySeparated(adv->getPayload().data(), (uint8_t)adv->getPayload().size());
-            det.conf = tagAway ? Confidence::HIGH_CONF : Confidence::LOW_CONF;
+            const uint8_t* pl = adv->getPayload().data();
+            const uint8_t  pn = (uint8_t)adv->getPayload().size();
+            tagAway  = isFindMySeparated(pl, pn);
+            det.conf = tagAway ? Confidence::HIGH_CONF
+                     : isFindMyBeacon(pl, pn) ? Confidence::MED_CONF    // a Find My device beside its owner
+                     : Confidence::LOW_CONF;                            // AirPods pairing and the like
+        } else if (det.type == DetectionType::GOOGLE_TAG && label && strcmp(label, "DULT") == 0) {
+            tagAway  = true;                                            // only separated DULT tags get here
+            det.conf = Confidence::HIGH_CONF;
+        } else if (det.type == DetectionType::GOOGLE_TAG) {
+            const std::string sd = adv->getServiceData(NimBLEUUID((uint16_t)0xFEAA));
+            tagAway  = fmdnSeparated((const uint8_t*)sd.data(), sd.size());
+            det.conf = tagAway ? Confidence::HIGH_CONF : Confidence::MED_CONF;
+        } else if (det.type == DetectionType::SAMSUNG_TAG) {
+            const std::string sd = adv->getServiceData(NimBLEUUID((uint16_t)0xFD5A));
+            tagAway  = smartTagSeparated(smartTagState((const uint8_t*)sd.data(), sd.size()));
+            det.conf = tagAway ? Confidence::HIGH_CONF : Confidence::MED_CONF;
         }
         // ...except HACKER, which is the one type deliberately holding
         // signatures of very different strength. Reaching here on anything
@@ -491,6 +529,10 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         // Set vendor label based on the matched table entry.
         if (det.type == DetectionType::AIRTAG) {
             det.vendor = tagAway ? "Away-Owner" : "Apple";
+        } else if (det.type == DetectionType::GOOGLE_TAG && tagAway) {
+            det.vendor = "Away-Owner";
+        } else if (det.type == DetectionType::SAMSUNG_TAG && tagAway) {
+            det.vendor = "Away-Owner";
         } else if (det.type == DetectionType::DRONE) {
             det.vendor = "DroneID";
         } else if (det.type == DetectionType::META) {

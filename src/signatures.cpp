@@ -744,13 +744,28 @@ bool isAirTagPayload(const uint8_t* payload, uint8_t len) {
     return false;
 }
 
-bool isFindMySeparated(const uint8_t* payload, uint8_t len) {
-    if (!payload || len < 4) return false;
+// Where the Find My beacon starts (its 0x4C), or -1.
+static int findMyAt(const uint8_t* payload, uint8_t len) {
+    if (!payload || len < 4) return -1;
     for (uint8_t i = 0; i + 3 < len; i++)
         if (payload[i] == 0x4C && payload[i + 1] == 0x00 &&
-            payload[i + 2] == 0x12 && payload[i + 3] == 0x19) return true;
-    return false;
+            payload[i + 2] == 0x12 && payload[i + 3] == 0x19) return i;
+    return -1;
 }
+
+bool isFindMyBeacon(const uint8_t* payload, uint8_t len) { return findMyAt(payload, len) >= 0; }
+
+bool isFindMySeparated(const uint8_t* payload, uint8_t len) {
+    const int i = findMyAt(payload, len);
+    if (i < 0 || i + 4 >= len) return false;          // no status byte: not provably separated
+    return (payload[i + 4] & 0x04) == 0;               // "maintained" clear
+}
+
+bool fmdnSeparated(const uint8_t* sd, size_t n) { return sd && n >= 1 && sd[0] == 0x41; }
+
+int smartTagState(const uint8_t* sd, size_t n) { return (sd && n >= 1) ? (sd[0] >> 5) & 0x07 : -1; }
+
+int dultNearOwner(const uint8_t* sd, size_t n) { return (sd && n >= 2) ? (sd[1] & 0x01) : -1; }
 
 Confidence confidenceFor(DetectionType t) {
     // Per docs/DETECTIONS.md. FLOCK/AXON/META/SKIMMER/CAMERA are graded

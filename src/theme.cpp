@@ -1291,6 +1291,18 @@ void drawRadarBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd) {
     static int16_t colRx[MAXW];
     static uint8_t colAx[MAXW];
     static bool    colRight[MAXW];
+    // LEVEL in RAM: it is read once a pixel at a scattered offset (blob x
+    // angle behind the arm), and from flash that was a cache miss as often as
+    // not -- the background's biggest cost. 4 KB, copied once; flash if the
+    // heap cannot spare it.
+    static uint8_t* levelRam = nullptr;
+    static bool     levelTried = false;
+    if (!levelTried) {
+        levelTried = true;
+        levelRam = (uint8_t*)malloc(sizeof LEVEL);
+        if (levelRam) memcpy(levelRam, LEVEL, sizeof LEVEL);
+    }
+    const uint8_t* const lvlTab = levelRam ? levelRam : LEVEL;
 
     // Cover: the larger scale wins, the excess is cropped equally.
     const int coverW = (W * REF_H >= H * REF_W) ? W : H * REF_W / REF_H;
@@ -1331,7 +1343,7 @@ void drawRadarBackground(TFT_eSPI& t, uint32_t now, int yStart, int yEnd) {
             if (colRight[x]) a = up ? q : (uint8_t)(128 - q);
             else             a = up ? (uint8_t)(256 - q) : (uint8_t)(128 + q);
             const uint8_t px = prow[colRx[x]];
-            int lv = (px >> 4) + LEVEL[(px & 0x0F) * 256 + (uint8_t)(sweep - a)];
+            int lv = (px >> 4) + lvlTab[(px & 0x0F) * 256 + (uint8_t)(sweep - a)];
             line[x - dx0] = PALETTE[lv > 15 ? 15 : lv];
         }
         const int n = dx1 - dx0;

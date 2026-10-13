@@ -1929,6 +1929,27 @@ static PushQueue::DailyCap s_pushCap;    // DAILY_CAP ordinary alerts a day (pus
 
 static uint32_t pushDay() { return Clock::isSet() ? Clock::localDay() : 0; }
 
+// The ignore list, kept in step across the boards on one push topic. A change
+// made HERE -- the alert's IGNORE, the IGNORED DEVICES screen, the console or
+// the web flasher -- goes to the command topic as "SYNC IGNORE <mac> <type>
+// <board>" (or SYNC UNIGNORE), and every other board applies it without a
+// word. A change that ARRIVED from the topic is applied with s_ignSyncMute set,
+// so it is never sent on again: no echo between boards.
+static bool s_ignSyncMute = false;
+static void ignoreSync(const uint8_t* mac, DetectionType type, bool added) {
+    if (s_ignSyncMute || !Settings::pushOn() || !Settings::pushUrl()[0]) return;
+    PushQueue::Msg m{};
+    m.cmd = true;
+    if (added)
+        snprintf(m.body, sizeof m.body, "SYNC IGNORE %02x%02x%02x%02x%02x%02x %u %s",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], (unsigned)type, boardId());
+    else
+        snprintf(m.body, sizeof m.body, "SYNC UNIGNORE %02x%02x%02x%02x%02x%02x %s",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], boardId());
+    s_pushQ.add(m, millis(), false);
+    Serial.printf("[ignore] %s, for the other boards\n", added ? "added" : "removed");
+}
+
 // PAUSE 2 H from a notification: ordinary pushes from this board held until
 // then (WITH YOU still goes). RAM only -- a restart ends it.
 static uint32_t s_pushPausedUntil = 0;
@@ -1988,7 +2009,7 @@ static void queuePushAlert(const Detection& d, uint16_t followMins) {
                  d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
         queuePush(title, body, 5, "rotating_light", true, seq, act);
     } else {
-        const bool away = d.type == DetectionType::AIRTAG && strcmp(vendorText(d), "Away-Owner") == 0;
+        const bool away = strcmp(vendorText(d), "Away-Owner") == 0;
         snprintf(title, sizeof title, away ? "%s away from its owner" : "%s nearby", detectionTypeName(d.type));
         snprintf(body, sizeof body, "%s%s%d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
                  vendor, vendor[0] ? ", " : "", (int)d.rssi,
@@ -2179,6 +2200,18 @@ static void servicePush(uint32_t now) {
             // The confirmation's Undo button posts this back (see ota_wifi.h).
             snprintf(undo, sizeof undo, "%s %02x%02x%02x%02x%02x%02x %s", kind == 1 ? "UNSNOOZE" : "UNIGNORE",
                      mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], boardId());
+            // Changes from the topic never go back to it (ignoreSync).
+            s_ignSyncMute = true;
+            struct Unmute { ~Unmute() { s_ignSyncMute = false; } } unmute;
+            // Another board's own-screen change: applied here without a word.
+            // This board's own SYNC, read back off the topic: already done.
+            if (kind == 6 || kind == 7) {
+                if (!mine) {
+                    if (kind == 6) IgnoreList::add(mac, t); else IgnoreList::remove(mac);
+                    Serial.printf("[ignore] %s from another board\n", kind == 6 ? "added" : "removed");
+                }
+                continue;
+            }
             // Another board's button: do it here too, but let that board be
             // the one that says so -- one confirmation, not one per board.
             // PAUSE and RESUME are only ever that board's.
@@ -2329,9 +2362,12 @@ static void serviceFollowing(uint32_t now) {
             // away from its owner (HIGH, "Away-Owner"): your own AirPods case
             // or AirTag beside your own phone sends none, and was the most
             // common WITH YOU that was not one.
-            case DetectionType::AIRTAG: if (d->conf != Confidence::HIGH_CONF) continue; break;
-            case DetectionType::TILE:
-            case DetectionType::SAMSUNG_TAG: case DetectionType::GOOGLE_TAG: break;
+            // The same for Google's and Samsung's tags, whose adverts say it
+            // too (HIGH = separated). Tile's says nothing either way: all count.
+            case DetectionType::AIRTAG: case DetectionType::GOOGLE_TAG: case DetectionType::SAMSUNG_TAG:
+                if (d->conf != Confidence::HIGH_CONF) continue;
+                break;
+            case DetectionType::TILE: break;
             default: continue;
         }
         if (IgnoreList::contains(d->mac)) continue;
@@ -3672,6 +3708,7 @@ void setup() {
     twatchApplyCharge();
 #endif
     Security::begin();
+    IgnoreList::setChangeHook(ignoreSync);   // the other boards hear of this one's ignore list changes
     // Retired features' NVS, erased once on a board upgraded from a build
     // that had them: MuleSkinMesh's squad phrase and key ("meshtalk"), and
     // BINGO's card ("bingo", removed in v3.2.5). The check is a read, so a

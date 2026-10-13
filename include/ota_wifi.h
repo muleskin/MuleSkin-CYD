@@ -139,7 +139,9 @@ int         pushLastCode();     // the last POST's HTTP status (0: none / no con
 // main loop takes them one at a time (IgnoreList is not the WiFi task's).
 // SNOOZE 1 DAY rides the same path: `snooze` says which button it was.
 // kind: 0 IGNORE, 1 SNOOZE, 2 UNIGNORE, 3 UNSNOOZE (the confirmation's Undo),
-// 4 PAUSE, 5 RESUME (pushes from one board, two hours; no MAC).
+// 4 PAUSE, 5 RESUME (pushes from one board, two hours; no MAC), 6 SYNC IGNORE,
+// 7 SYNC UNIGNORE (a change made on one board's own screen or cable, for the
+// others -- main.cpp's ignoreSync()).
 // Each carries the id of the board that pushed the alert -- the last two
 // bytes of its Bluetooth address, "5AF6" -- and `mine` says whether that is
 // this board. Boards sharing a topic all read every command: an IGNORE is

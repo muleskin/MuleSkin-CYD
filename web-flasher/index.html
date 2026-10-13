@@ -166,6 +166,17 @@
   }
   .version-row{margin:0 0 18px}
   .version-hint{margin:7px 0 0;font-size:13px;opacity:.72}
+  .log-charts{margin:10px 0 0;text-align:left;font-size:12px}
+  .log-chart-head{margin:10px 0 4px;opacity:.85}
+  .log-bar-row{display:flex;align-items:center;gap:6px;margin:2px 0}
+  .log-bar-label{flex:0 0 96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .log-bar-track{flex:1;height:10px;background:rgba(255,255,255,.08)}
+  .log-bar-fill{display:block;height:100%}
+  .log-bar-num{flex:0 0 40px;text-align:right}
+  .log-hours{display:flex;align-items:flex-end;gap:2px;height:62px;border-bottom:1px solid rgba(255,255,255,.2)}
+  .log-hour{flex:1;background:#00e5ff;min-height:1px}
+  .log-hour-scale{font-size:10px;opacity:.6;white-space:pre;overflow:hidden}
+  .log-repeat{font-family:monospace;margin:2px 0}
   .release-history{margin:10px 0 0;font-size:13px}
   .release-history summary{cursor:pointer;opacity:.85}
   .release-history ul{margin:6px 0 0;padding-left:18px}
@@ -1459,6 +1470,74 @@
     download('muleskin-log-' + day + '.csv', out.join('\n') + '\n', 'text/csv');
     bbResult.textContent = 'SAVED: ' + n + ' detections from ' + boots.length + ' boots' +
       (cleared ? ' (including rows cleared with CLR on the board)' : '') + ' -> muleskin-log-' + day + '.csv';
+    showLogCharts(dets);
+  }
+
+  // The log at a glance, under DOWNLOAD LOG: detections by type, by hour of
+  // the day (this computer's time), and the devices seen on more than one day
+  // -- the tag on three days running, the camera on the commute. Plain bars,
+  // no library; the rows are the black box's own (boot, epoch, up, type, mac,
+  // ...), and a row without a real clock counts by type only.
+  function showLogCharts(dets) {
+    var byType = {}, byHour = new Array(24).fill(0), days = {}, typeOf = {};
+    dets.forEach(function (l) {
+      if (l[0] === '#') return;
+      var f = l.split(',');
+      if (f.length < 11) return;
+      var t = f[3], mac = f[4], e = +f[1];
+      byType[t] = (byType[t] || 0) + 1;
+      if (e > 1500000000) {
+        var d = new Date(e * 1000);
+        byHour[d.getHours()]++;
+        var key = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+        (days[mac] = days[mac] || {})[key] = 1;
+        typeOf[mac] = t;
+      }
+    });
+    var box = document.createElement('div');
+    box.className = 'log-charts';
+    function head(text) { var h = document.createElement('div'); h.className = 'log-chart-head'; h.textContent = text; box.appendChild(h); }
+    function bar(label, n, max, colour) {
+      var row = document.createElement('div'); row.className = 'log-bar-row';
+      var name = document.createElement('span'); name.className = 'log-bar-label'; name.textContent = label;
+      var track = document.createElement('span'); track.className = 'log-bar-track';
+      var fill = document.createElement('span'); fill.className = 'log-bar-fill';
+      fill.style.width = Math.max(2, Math.round(100 * n / max)) + '%';
+      fill.style.background = colour || '#00e5ff';
+      var num = document.createElement('span'); num.className = 'log-bar-num'; num.textContent = n;
+      track.appendChild(fill); row.appendChild(name); row.appendChild(track); row.appendChild(num); box.appendChild(row);
+    }
+    var types = Object.keys(byType).sort(function (a, b) { return byType[b] - byType[a]; });
+    if (!types.length) return;
+    head('By type');
+    var tmax = byType[types[0]];
+    types.forEach(function (t) { bar(t, byType[t], tmax, LIVE_COLOURS[t]); });
+    var hmax = Math.max.apply(null, byHour);
+    if (hmax > 0) {
+      head('By hour of the day');
+      var hours = document.createElement('div'); hours.className = 'log-hours';
+      byHour.forEach(function (n, h) {
+        var col = document.createElement('span'); col.className = 'log-hour';
+        col.style.height = Math.max(n ? 4 : 1, Math.round(60 * n / hmax)) + 'px';
+        col.title = h + ':00 -- ' + n;
+        hours.appendChild(col);
+      });
+      box.appendChild(hours);
+      var scale = document.createElement('div'); scale.className = 'log-hour-scale';
+      scale.textContent = '0h            6h            12h            18h           23h';
+      box.appendChild(scale);
+    }
+    var repeat = Object.keys(days).map(function (m) { return { mac: m, n: Object.keys(days[m]).length }; })
+      .filter(function (r) { return r.n >= 2; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 8);
+    if (repeat.length) {
+      head('Seen on more than one day');
+      repeat.forEach(function (r) {
+        var p = document.createElement('div'); p.className = 'log-repeat';
+        p.textContent = r.mac.toUpperCase() + '  ' + (typeOf[r.mac] || '') + '  on ' + r.n + ' days';
+        box.appendChild(p);
+      });
+    }
+    bbResult.appendChild(box);
   }
 
   // The boots, newest first: what restarted it, and for a crash where.
@@ -1499,7 +1578,8 @@
   function saveBackup(b) { try { localStorage.setItem(BACKUP_KEY, JSON.stringify(b)); return true; } catch (e) { return false; } }
   function showBackupState() {
     var b = loadBackup();
-    if (restoreBtn) restoreBtn.textContent = b ? '[ RESTORE SETTINGS ] (' + b.lines.length + ' from ' + b.when.slice(0, 10) + ')' : '[ RESTORE SETTINGS ]';
+    if (restoreBtn) restoreBtn.textContent = b ? '[ RESTORE SETTINGS ] (' + b.lines.length + ' from ' + b.when.slice(0, 10) +
+                                                 (b.board ? ', ' + b.board : '') + ')' : '[ RESTORE SETTINGS ]';
   }
   if (backupBtn && restoreBtn) {
     if (!('serial' in navigator)) {
@@ -1557,6 +1637,24 @@
     return port;
   }
 
+  // When each board was last backed up, by its Bluetooth name (WHO's second
+  // word, the same for a board whatever it is called): {"MuleSkin-5AF6":
+  // "2026-10-13T..."}. Only dates -- the backup itself is BACKUP_KEY's.
+  var BACKUP_DATES_KEY = 'muleskin-backup-dates';
+  var lastWho = null;
+  function backupDates() { try { return JSON.parse(localStorage.getItem(BACKUP_DATES_KEY) || '{}'); } catch (e) { return {}; } }
+  function noteBackupDate(bt, when) {
+    try { var d = backupDates(); d[bt] = when; localStorage.setItem(BACKUP_DATES_KEY, JSON.stringify(d)); } catch (e) {}
+  }
+  // " -- last backed up 3 days ago", or a nudge when never or over a month.
+  function backupAge(bt) {
+    var when = backupDates()[bt];
+    if (!when) return ' -- never backed up in this browser: BACK UP SETTINGS below';
+    var days = Math.floor((Date.now() - Date.parse(when)) / 86400000);
+    if (days > 30) return ' -- last backed up ' + days + ' days ago: time for another (BACK UP SETTINGS)';
+    return ' -- last backed up ' + (days ? days + ' day' + (days > 1 ? 's' : '') + ' ago' : 'today');
+  }
+
   // Which board is on the cable -- its push name, its Bluetooth name and
   // version -- shown above the buttons, so one board is never taken for
   // another. WHO is v3.2.5 or later; an older board just stays unnamed.
@@ -1567,8 +1665,9 @@
       var m = text.match(/WHO (\S+) (\S+) (\S+) (\d+)/);
       if (!m || !el) return;
       var name = m[1].replace(/_/g, ' ');
+      lastWho = { name: name, bt: m[2], version: m[3] };
       el.textContent = 'Connected: ' + (name === m[2] ? m[2] : name + ' (' + m[2] + ')') + ', firmware ' + m[3] +
-                       (+m[4] && +m[4] < 64 ? ', the old 20 KB settings store' : '');
+                       (+m[4] && +m[4] < 64 ? ', the old 20 KB settings store' : '') + backupAge(m[2]);
       el.style.display = '';
     } catch (e) {}
   }
@@ -1788,8 +1887,9 @@
       var lines = text.split(/\r?\n/).filter(function (l) {
         return /^NVS \S+ \S+ [0-9a-f]{2} [0-9a-f]*$/.test(l) && !/^NVS (END|SKIP) /.test(l);
       });
-      var b = { when: new Date().toISOString(), lines: lines };
+      var b = { when: new Date().toISOString(), lines: lines, board: lastWho ? lastWho.bt : '' };
       saveBackup(b);
+      if (lastWho) noteBackupDate(lastWho.bt, b.when);
       showBackupState();
       // And as a file, for a different computer or a cleared browser.
       var a = document.createElement('a');

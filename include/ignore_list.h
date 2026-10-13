@@ -39,6 +39,11 @@ namespace IgnoreList {
 
     bool remove(const uint8_t* mac);
 
+    // Told of every add() and remove() that changed the list -- how main.cpp
+    // passes a change made on this board to the others on its push topic.
+    // nullptr: nobody (the default, and the host tests').
+    void setChangeHook(void (*hook)(const uint8_t* mac, DetectionType type, bool added));
+
     uint8_t count();
 
     // nullptr when idx is out of range. Points into the module's own

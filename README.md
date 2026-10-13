@@ -35,8 +35,8 @@ headlines in Orbitron.
 | `DRONE` | Remote ID drones, and DJI / Tello drones that send none over WiFi | Service UUID `0xFFFA`, then the ASTM F3411 message **decoded** — aircraft position, altitude, serial, and the operator's location; DJI's 10 registered OUI and the Tello's `TELLO-`/`RMTT-` network (rules set 4) |
 | `ALPR` | Motorola Solutions / Genetec plate readers | 6 WiFi OUI |
 | `CAMERA` | Generic / covert IP cameras | 17 WiFi OUI (Wyze, Amazon, Tuya, Verkada, Avigilon, Axis, …) |
-| `SAMSUNG_TAG` | Samsung Galaxy SmartTag / SmartTag+ | BLE service UUID `0xFD5A` |
-| `GOOGLE_TAG` | Google Find My Device trackers (Chipolo, Pebblebee, Moto Tag) | Service data under `0xFEAA` with the tracker frame type `0x40`/`0x41` -- not the plain Eddystone beacons that share the UUID |
+| `SAMSUNG_TAG` | Samsung Galaxy SmartTag / SmartTag+ | BLE service UUID / service data `0xFD5A`; its tag state (bits 5-7 of the first byte) 2 or 3 is lost / long lost -- **away from its owner**, HIGH, `Away-Owner` -- else MED |
+| `GOOGLE_TAG` | Google Find My Device trackers (Chipolo, Pebblebee, Moto Tag), and any tracker on the DULT standard | Service data under `0xFEAA` with the tracker frame type `0x40`/`0x41` -- not the plain Eddystone beacons that share the UUID. `0x41` (Google's unwanted-tracking mode = DULT's separated state) is **away from its owner**, HIGH; `0x40` MED. And DULT's own `0xFCB2` service data with the near-owner bit clear: a separated tracker of any brand |
 | `TILE` | Tile BLE trackers | BLE service UUID `0xFEED` / `0xFEEC` |
 | `RING` | Ring doorbells / cameras | 15 WiFi OUI (Ring LLC's registered block + Amazon's) |
 | `DEAUTH` | WiFi deauthentication floods | Rate-detected burst, not a signature |
@@ -125,7 +125,11 @@ one it is as it connects -- its name, its Bluetooth name and its firmware:
 - **Push options** picks exactly which types PUSH ALERTS sends, and quiet
   hours for PUSH AT NIGHT of their own.
 - **Download log** saves every detection the board has kept as a
-  spreadsheet; **Crash report** reads what it kept about its last crash.
+  spreadsheet, and charts it on the page: by type, by hour of the day, and
+  the devices seen on more than one day. **Crash report** reads what it kept
+  about its last crash.
+- As it connects, the page says which board it is and when this browser last
+  backed it up -- and nudges when that was never, or over a month ago.
 - **Self-test** checks the board's parts -- memory, touch, both radios, the
   black box, SD card, settings, clock, WiFi, update keys, rules -- and lists
   anything that needs a look.
@@ -342,9 +346,10 @@ evening summary counts them. WITH YOU always goes, either way.
   [deploy/README.md](deploy/README.md).
 - **Several boards on one topic**: an Ignore or Snooze pressed on any board's
   alert is applied by all of them -- your own AirTag is yours everywhere --
-  but only the board that sent the alert says so back. Give each a **board
-  name** in SET UP PUSH ALERTS ("Car", "Desk") so you can tell their pushes
-  apart.
+  but only the board that sent the alert says so back. A device ignored (or
+  un-ignored) on one board's own screen, or over its cable, is passed to the
+  others the same way. Give each a **board name** in SET UP PUSH ALERTS
+  ("Car", "Desk") so you can tell their pushes apart.
 
 A server that says "too many" (HTTP 429) is not asked again two minutes
 later: the board waits as long as it says, or 15 minutes, then 30, 60 and

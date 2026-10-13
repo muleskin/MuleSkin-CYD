@@ -77,12 +77,35 @@ const char* btNameVendor(const char* name);
 // that costs; the short version is that this deliberately trades some
 // precision for actually catching a tag that has just been powered on.
 bool isAirTagPayload(const uint8_t* payload, uint8_t len);
-// The Find My beacon itself (4C 00 12 19): what an AirTag sends only once it
-// is DISCONNECTED from its owner's iPhone -- connected, it sends none (Adam
-// Catley's AirTag teardown; AirGuard filters on the same two bytes). So a tag
-// heard sending it is away from its owner: the one worth an alert. The rest
-// of isAirTagPayload() (any 30-byte Apple advert) is also AirPods pairing.
+// ---- Trackers away from their owner -----------------------------------------
+// Each family says so in its own advertisement; each check below is from that
+// family's published layout. A tracker away from its owner is the one worth an
+// alert (and the only kind WITH YOU counts); one beside its owner is a person
+// walking past with their keys.
+//
+// Apple: the Find My beacon (4C 00 12 19) and its status byte right after.
+// Bit 2 (0x04), "maintained", is set while the owner's devices are still in
+// touch -- near its owner -- and clear once it is separated (VIGIL's parser,
+// AirTagHunter). isFindMyBeacon(): the beacon at all; isFindMySeparated(): the
+// beacon with "maintained" clear. The rest of isAirTagPayload() (any 30-byte
+// Apple advert) is also AirPods pairing.
+bool isFindMyBeacon(const uint8_t* payload, uint8_t len);
 bool isFindMySeparated(const uint8_t* payload, uint8_t len);
+// Google's Find Hub network (service data under 0xFEAA, after the UUID): frame
+// type 0x41 is "unwanted tracking protection mode", which Google's FMDN spec
+// maps to DULT's "separated state"; 0x40 is normal.
+bool fmdnSeparated(const uint8_t* sd, size_t n);
+// Samsung SmartTag (service data under 0xFD5A, after the UUID): the tag state
+// is bits 5-7 of byte 0 -- 1 just disconnected, 2 lost (15 min on), 3 lost a
+// day or more, 4-6 paired / connected to its owner (Yu et al., USENIX Security
+// 2024; VIGIL decodes it the same). -1 when there is no byte to read.
+int  smartTagState(const uint8_t* sd, size_t n);
+inline bool smartTagSeparated(int state) { return state == 2 || state == 3; }
+// DULT, the IETF draft Apple and Google wrote for every brand (service data
+// under 0xFCB2, after the UUID): byte 0 the network ID, byte 1's lowest bit
+// "near owner" -- 0 is separated (draft-ietf-dult-accessory-protocol-00,
+// Table 1). -1 when too short, else 1 near owner / 0 separated.
+int  dultNearOwner(const uint8_t* sd, size_t n);
 
 // iBeacon check, run against the PARSED manufacturer-data field (company
 // ID included, i.e. what NimBLE's getManufacturerData() returns).

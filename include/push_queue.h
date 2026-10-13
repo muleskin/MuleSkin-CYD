@@ -38,7 +38,10 @@ namespace PushQueue {
 // `act`, when set, is the body of the notification's IGNORE button: the phone
 // posts it to the board's command topic (ota_wifi.cpp), and the board picks
 // it up the next time it joins.
-struct Msg { char title[40]; char body[160]; uint8_t prio; char tags[24]; char seq[24]; char act[32]; };
+// `cmd` set: not a notification but a line for the command topic (the
+// ignore list kept in step across boards: "SYNC IGNORE ..."), posted to
+// <push URL>-cmd with no title, priority or buttons.
+struct Msg { char title[40]; char body[160]; uint8_t prio; char tags[24]; char seq[24]; char act[32]; bool cmd; };
 
 const uint8_t  CAP       = 8;
 const uint32_t GATHER_MS = 3000;

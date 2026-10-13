@@ -1140,14 +1140,15 @@ int hexNib(char c) {
 
 // "IGNORE aabbccddeeff 12" or "SNOOZE aabbccddeeff 12" -> queued for the main loop.
 void noteCommand(const char* msg) {
-    static const char* const KINDS[] = { "IGNORE ", "SNOOZE ", "UNIGNORE ", "UNSNOOZE ", "PAUSE ", "RESUME " };
+    static const char* const KINDS[] = { "IGNORE ", "SNOOZE ", "UNIGNORE ", "UNSNOOZE ", "PAUSE ", "RESUME ",
+                                         "SYNC IGNORE ", "SYNC UNIGNORE " };
     int kind = -1;
-    for (int k = 0; k < 6 && kind < 0; k++)
+    for (int k = 0; k < 8 && kind < 0; k++)
         if (strncasecmp(msg, KINDS[k], strlen(KINDS[k])) == 0) kind = k;
     if (kind < 0) return;
     const char* p = msg + strlen(KINDS[kind]);
     uint8_t rec[9] = { 0 };
-    if (kind <= 3) {                             // the device's MAC, then its type (IGNORE / SNOOZE)
+    if (kind <= 3 || kind >= 6) {                // the device's MAC, then its type (IGNORE / SNOOZE / SYNC IGNORE)
         for (int i = 0; i < 6; i++) {
             while (*p == ':' || *p == '-') p++;
             const int a = hexNib(p[0]), b = a < 0 ? -1 : hexNib(p[1]);
@@ -1156,7 +1157,7 @@ void noteCommand(const char* msg) {
             p += 2;
         }
         while (*p == ' ') p++;
-        if (kind <= 1) {
+        if (kind <= 1 || kind == 6) {
             rec[6] = (uint8_t)atoi(p);
             while (*p && *p != ' ') p++;
         }
@@ -1285,6 +1286,18 @@ void psRun(void*) {
         // in five seconds is not going to, and detection is blind meanwhile.
         for (uint8_t i = 0; i < s_psN; i++) {
             HTTPClient http;
+            if (s_psMsgs[i].cmd) {
+                // A line for the other boards, on the command topic.
+                if (!http.begin(*client(), String(Settings::pushUrl()) + "-cmd")) break;
+                http.setTimeout(5000);
+                if (Settings::pushToken()[0]) http.addHeader("Authorization", String("Bearer ") + Settings::pushToken());
+                const int code = http.POST((uint8_t*)s_psMsgs[i].body, strlen(s_psMsgs[i].body));
+                http.end();
+                s_psCode = code < 0 ? 0 : code;
+                if (code < 200 || code >= 300) { Serial.printf("[push] command topic said %d\n", code); break; }
+                s_psSent++;
+                continue;
+            }
             if (!http.begin(*client(), Settings::pushUrl())) break;
             http.setTimeout(5000);
             http.addHeader("Title", s_psMsgs[i].title);

@@ -88,6 +88,9 @@ bool contains(const uint8_t* mac) {
     return indexOf(mac) >= 0;
 }
 
+static void (*s_hook)(const uint8_t*, DetectionType, bool) = nullptr;
+void setChangeHook(void (*hook)(const uint8_t*, DetectionType, bool)) { s_hook = hook; }
+
 bool add(const uint8_t* mac, DetectionType type) {
     begin();
     if (!mac || s_count >= MAX) return false;
@@ -96,6 +99,7 @@ bool add(const uint8_t* mac, DetectionType type) {
     s_rec[(size_t)s_count * REC + 6] = (uint8_t)type;
     s_count++;
     save();
+    if (s_hook) s_hook(mac, type, true);
     return true;
 }
 
@@ -110,6 +114,7 @@ bool remove(const uint8_t* mac) {
         memcpy(&s_rec[(size_t)idx * REC], &s_rec[(size_t)last * REC], REC);
     s_count--;
     save();
+    if (s_hook) s_hook(mac, DetectionType::UNKNOWN, false);
     return true;
 }
 

@@ -126,6 +126,33 @@ int main() {
             return isFindMySeparated(b, sizeof b);
         }());
         ck("too short is nothing", !isFindMySeparated(away, 3));
+        uint8_t near[31] = { 0x1E, 0xFF, 0x4C, 0x00, 0x12, 0x19, 0x14 };   // "maintained" (0x04) set
+        ck("the beacon with 'maintained' set is near its owner", isFindMyBeacon(near, sizeof near) &&
+                                                                  !isFindMySeparated(near, sizeof near));
+        ck("a beacon cut before its status byte is not provably away", !isFindMySeparated(away, 6));
+    }
+
+    suite("other trackers away from their owner");
+    {
+        const uint8_t fmdnNear[21] = { 0x40 }, fmdnAway[21] = { 0x41 };
+        ck("Google frame 0x41 is separated", fmdnSeparated(fmdnAway, sizeof fmdnAway));
+        ck("...0x40 is not", !fmdnSeparated(fmdnNear, sizeof fmdnNear));
+        ck("...nor nothing", !fmdnSeparated(fmdnAway, 0));
+        // SmartTag state in bits 5-7 of byte 0, the low bits other fields.
+        const uint8_t st2[20] = { (uint8_t)((2 << 5) | 0x11) }, st3[20] = { (uint8_t)((3 << 5) | 0x01) };
+        const uint8_t st1[20] = { (uint8_t)(1 << 5) }, st5[20] = { (uint8_t)((5 << 5) | 0x15) };
+        ck("SmartTag state read from the top bits", smartTagState(st2, 20) == 2 && smartTagState(st5, 20) == 5);
+        ck("...lost and overmature lost are separated", smartTagSeparated(smartTagState(st2, 20)) &&
+                                                          smartTagSeparated(smartTagState(st3, 20)));
+        ck("...just disconnected and connected are not", !smartTagSeparated(smartTagState(st1, 20)) &&
+                                                          !smartTagSeparated(smartTagState(st5, 20)));
+        ck("...no byte, no state", smartTagState(st2, 0) == -1);
+        // DULT: network ID, then the near-owner byte (lowest bit).
+        const uint8_t dSep[4] = { 0x02, 0x00 }, dNear[4] = { 0x02, 0x01 }, dNearHi[4] = { 0x02, 0xF1 };
+        ck("DULT near-owner bit 0 is separated", dultNearOwner(dSep, sizeof dSep) == 0);
+        ck("...1 is near its owner", dultNearOwner(dNear, sizeof dNear) == 1);
+        ck("...whatever the reserved bits say", dultNearOwner(dNearHi, sizeof dNearHi) == 1);
+        ck("...too short says nothing", dultNearOwner(dSep, 1) == -1);
     }
 
     return report();
