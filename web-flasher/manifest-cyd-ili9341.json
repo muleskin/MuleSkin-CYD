@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (2.8\" CYD, ILI9341)",
-  "version": "3.4.0",
-  "release_name": "Home routers & QR",
-  "whats_new": ["Home known by its router, not its name", "AWAY DAYS panel; Nd away in the LOG", "Alert QR code to what to do", "Live view: ignore from a row"],
+  "version": "3.5.0",
+  "release_name": "Upstream fixes",
+  "whats_new": ["Update errors say why; retries", "70 KB flash back; Raven fix", "C5: 5 GHz and its black box", "SD log by date; POCKET MODE"],
   "new_install_prompt_erase": true,
   "builds": [
     {
