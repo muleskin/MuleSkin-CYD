@@ -22,6 +22,12 @@ namespace {
 
 #if defined(SQW_S3) || defined(CROWPANEL7)
 const uint32_t BASE    = 0x810000;   // the gap after app1; partitions_twatch.csv (both SQW_S3 boards) and partitions_crowpanel7.csv, the same 16 MB shape
+// The NM-CYD-C5 has a table of its own, and the CYDs' 0x3D0000 sits inside
+// its app0: regionFree() saw it and kept the black box off, so the board never
+// had one (upstream SquachWatch v1.36.0 found it drawing the tables). Here the
+// settings store moved to 0xC20000 (v3.2.0), so the box goes after it.
+#elif defined(NM_CYD_C5)
+const uint32_t BASE    = 0xC40000;   // the free space after nvs; see partitions_ota_16mb.csv
 #else
 const uint32_t BASE    = 0x3D0000;   // the gap after app1; see partitions_ota.csv
 #endif

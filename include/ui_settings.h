@@ -57,6 +57,9 @@ enum class SettingsRow : uint8_t {
 #if SQW_HAS_BUZZER
     BUZZER,          // boards that can chirp (buzzer.h): the CrowPanel 7, the 2.8" CYD's speaker
 #endif
+#if SQW_WIFI_5G
+    WIFI_BANDS,      // a chip with 5 GHz only (the NM-CYD-C5): 2.4+5, or 2.4
+#endif
     BOARD_BATTERY,   // the Freenove S3 only: the cell's voltage, on the SYSTEM page
     CHARGE_MODE,     // the CYD boards: radios and screen off so a battery charges faster
     LAST_RUN,        // the CYD boards: how long the previous boot ran, on the SYSTEM page
@@ -109,6 +112,11 @@ bool uiSettingsTapPinnedBack(TFT_eSPI& t, int x, int y, int screenW, int screenH
 // just the screen dimensions) since row height now depends on actual
 // font metrics -- same reasoning as ui_log.cpp's uiLogRowAt().
 SettingsRow uiSettingsHitTest(TFT_eSPI& t, int x, int y, int screenW, int screenH);
+// BRIGHT carries a real - and + button. For a tap that uiSettingsHitTest put
+// on that row: -1 on the minus, +1 on the plus, 0 anywhere else on the row --
+// which does nothing, so a thumb resting on the label never nudges the value.
+// (Ported from upstream SquachWatch v1.35.0.)
+int uiSettingsStepHit(TFT_eSPI& t, int x, int y, int screenW, int screenH);
 
 // ---- confirmation panel ---------------------------------------------------
 // Two rows here cannot be taken back by tapping them again: CALIBRATE TOUCH

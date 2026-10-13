@@ -1,10 +1,14 @@
 // MuleSkin-CYD — wardriving capture and storage. See wardrive.h.
 #include "wardrive.h"
+#include "wardrive_capture.h"
 #include "gnss.h"
 #include <Arduino.h>
 #include <Preferences.h>
 #include <string.h>
 #include <math.h>
+
+// The CYD GPS builds take the same API from wardrive_sd.cpp.
+#if !defined(CYD_GPS)
 
 #if __has_include(<esp_flash.h>) && defined(TWATCH_S3)
 #include <esp_flash.h>
@@ -143,56 +147,19 @@ bool append(Record& r) {
 }
 
 // ---- the queue --------------------------------------------------------------
-// Two single-producer rings, one per radio task, drained by loop(). Each
-// producer only writes its own head and each consumer only its own tail.
-struct Pending {
-    uint8_t kind, flags, mac[6];
-    int8_t  rssi;
-    uint8_t channel;
-    uint16_t auth;
-    uint8_t nameLen;
-    char    name[32];
-};
-const uint8_t QN = 32;
-struct Q {
-    Pending item[QN];
-    volatile uint8_t head = 0, tail = 0;
-    bool push(const Pending& p) {
-        const uint8_t h = head, nx = (uint8_t)((h + 1) % QN);
-        if (nx == tail) return false;
-        item[h] = p;
-        __sync_synchronize();
-        head = nx;
-        return true;
-    }
-    bool pop(Pending& p) {
-        const uint8_t t = tail;
-        if (t == head) return false;
-        __sync_synchronize();
-        p = item[t];
-        tail = (uint8_t)((t + 1) % QN);
-        return true;
-    }
-};
-Q s_wifiQ, s_bleQ;
+// Pending, Q and QN are in wardrive_capture.h.
+// Made by begin(), which only a board that can wardrive calls. As plain
+// globals they were 3 KB of RAM on every CYD, none of which has a GPS
+// (found in the firmware's symbol table, 2026-10-03). Set before s_ready,
+// which is what the radio tasks check first.
+Q* s_wifiQ = nullptr;
+Q* s_bleQ  = nullptr;
 
 // ---- not the same thing twice from the same place ------------------------------
-// A network heard ten times a second while you stand still is one row, not
-// six hundred a minute. A device is written again once it is five minutes
-// since its last row, or from 50 m away, whichever comes first -- enough for
-// WiGLE to place it, and enough to follow one that moves.
-struct Seen { uint8_t mac[6]; uint8_t kind; uint8_t used; int32_t lat7, lon7; uint32_t epoch; };
+// Seen, AGAIN_S, AGAIN_M and metres() are in wardrive_capture.h. The watch
+// keeps its own 1024-entry table, by hash.
 const uint16_t SEEN_N = 1024;
 Seen* s_seen = nullptr;
-const uint32_t AGAIN_S = 300;
-const float    AGAIN_M = 50.0f;
-
-float metres(int32_t la1, int32_t lo1, int32_t la2, int32_t lo2) {
-    const float k = 0.0111319f;                       // metres per 10^-7 degree of latitude
-    const float c = cosf((float)la1 * 1e-7f * 0.0174533f);
-    const float dy = (float)(la2 - la1) * k, dx = (float)(lo2 - lo1) * k * c;
-    return sqrtf(dx * dx + dy * dy);
-}
 
 uint16_t slotFor(const uint8_t* mac, uint8_t kind) {
     uint32_t h = 2166136261u ^ kind;
@@ -231,6 +198,8 @@ bool begin() {
         s_used = slotsUsed((uint32_t)s_head);
         s_full = valid ? valid - 1 : 0;
     }
+    if (!s_wifiQ) s_wifiQ = new Q();
+    if (!s_bleQ)  s_bleQ  = new Q();
     s_ready = true;
     if (s_prefs.begin("wardrive", false)) { s_on = s_prefs.getBool("on", false); s_prefs.end(); }
     Serial.printf("[wardrive] %lu records kept of %lu, %s\n", (unsigned long)count(), (unsigned long)capacity(), s_on ? "ON" : "off");
@@ -251,7 +220,7 @@ void noteWifi(const uint8_t* bssid, const char* ssid, uint16_t auth, uint8_t cha
     memcpy(p.mac, bssid, 6);
     p.rssi = rssi; p.channel = channel; p.auth = auth;
     if (ssid) { size_t n = strnlen(ssid, 32); memcpy(p.name, ssid, n); p.nameLen = (uint8_t)n; }
-    if (!s_wifiQ.push(p)) s_dropped++;
+    if (!s_wifiQ->push(p)) s_dropped++;
 }
 
 void noteBle(const uint8_t* mac, const char* name, int8_t rssi, bool haveMfgr, uint16_t mfgr) {
@@ -263,10 +232,11 @@ void noteBle(const uint8_t* mac, const char* name, int8_t rssi, bool haveMfgr, u
     p.rssi = rssi;
     if (haveMfgr) { p.flags |= F_HAS_MFGR; p.auth = mfgr; }
     if (name) { size_t n = strnlen(name, 32); memcpy(p.name, name, n); p.nameLen = (uint8_t)n; }
-    if (!s_bleQ.push(p)) s_dropped++;
+    if (!s_bleQ->push(p)) s_dropped++;
 }
 
 void tick(uint32_t nowMs) {
+    if (!s_wifiQ || !s_bleQ) return;        // begin() never ran: nothing can have been queued
     Pending p;
     // Emptied either way, so a queue filled while there was no fix does not
     // turn into rows stamped with the first fix that arrives later.
@@ -274,7 +244,7 @@ void tick(uint32_t nowMs) {
     const Gnss::Fix& f = Gnss::fix();
     const uint32_t epoch = f.epoch ? f.epoch + (nowMs - f.atMs) / 1000u : 0;
     for (int n = 0; n < 2 * QN; n++) {
-        const bool got = s_wifiQ.pop(p) || s_bleQ.pop(p);
+        const bool got = s_wifiQ->pop(p) || s_bleQ->pop(p);
         if (!got) break;
         if (!fix || !epoch) continue;
         if (!worthWriting(p, f, epoch)) { s_skipped++; continue; }
@@ -326,3 +296,5 @@ void clear() {
 }
 
 }  // namespace Wardrive
+
+#endif  // !CYD_GPS

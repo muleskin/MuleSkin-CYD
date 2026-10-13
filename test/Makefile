@@ -27,7 +27,7 @@ ifneq ($(findstring mingw,$(shell $(CXX) -dumpmachine)),)
 CXXFLAGS += -include $(SIM)/win_compat.h
 endif
 
-TESTS := remote_id_test ibeacon_test signatures_test emitter_roundtrip_test ignore_list_test hacker_test pwnagotchi_test shim_fidelity_test qwerty_test device_info_test security_test blackbox_test hunt_test bgretire_test autoquiet_test framepush_test touchfit_test logindex_test dex_test regulars_test spam_test gnss_test wigle_test wardrive_test lora_survey_test lora_msgs_test lora_json_test lora_feed_test lora_airtime_test lora_ident_test lora_enrich_test lora_channels_test lora_nodes_test lora_crypto_test lora_meshtastic_test lora_meshcore_test lora_lorawan_test lora_ham_test version_test auto_time_test radar_blip_test night_mode_test tracker_follow_test today_test sig_extra_test push_queue_test muleskin_art_test karma_watch_test tracker_verdict_test away_days_test home_aps_test
+TESTS := remote_id_test ibeacon_test signatures_test emitter_roundtrip_test ignore_list_test hacker_test pwnagotchi_test shim_fidelity_test qwerty_test device_info_test security_test blackbox_test hunt_test bgretire_test autoquiet_test framepush_test touchfit_test logindex_test dex_test regulars_test spam_test gnss_test wigle_test wardrive_test wardrive_seen_test lora_survey_test lora_msgs_test lora_json_test lora_feed_test lora_airtime_test lora_ident_test lora_enrich_test lora_channels_test lora_nodes_test lora_crypto_test lora_meshtastic_test lora_meshcore_test lora_lorawan_test lora_ham_test version_test auto_time_test radar_blip_test night_mode_test tracker_follow_test today_test sig_extra_test push_queue_test muleskin_art_test karma_watch_test tracker_verdict_test away_days_test home_aps_test sd_row_test
 
 # Only the units under test get linked in. Pulling the whole firmware
 # would drag in TFT_eSPI, NimBLE and the UI, and a test that needs a
@@ -83,9 +83,14 @@ touchfit_test_SRCS           :=
 spam_test_SRCS               :=
 # The GPS sentences, and the WiGLE file with the WiFi security it writes.
 gnss_test_SRCS               := $(SRC)/gnss.cpp
+# The SD log's file name and row (from upstream SquachWatch v1.36.0).
+sd_row_test_SRCS             := $(SRC)/sd_row.cpp
 wigle_test_SRCS              := $(SRC)/wardrive_fmt.cpp $(SRC)/wifi_auth.cpp
 # Wardrive capture and storage, on the emulator's RAM flash.
 wardrive_test_SRCS           := $(SRC)/wardrive.cpp $(SRC)/gnss.cpp
+# The CYD GPS builds' 256-entry repeat table; the file is empty without CYD_GPS.
+wardrive_seen_test_SRCS      := $(SRC)/wardrive_seen.cpp
+wardrive_seen_test_FLAGS     := -DCYD_GPS=1
 # The LoRa decoders' AES, SHA-256, CMAC, HMAC and CRCs, against published vectors.
 lora_crypto_test_SRCS        := $(SRC)/lora_crypto.cpp
 # Meshtastic: the header, the channel hashes, the cipher round trip, the payloads.

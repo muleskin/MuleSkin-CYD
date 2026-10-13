@@ -96,6 +96,30 @@ static volatile uint32_t s_wifiRaw = 0;  // every frame the sniffer was handed
 // hopChannel().
 static volatile uint16_t s_chanFrames[14];
 static uint16_t          s_chanRate[14];
+#if SQW_WIFI_5G
+// 5 GHz, on the one chip here that has it (the ESP32-C5). Indexed by the
+// driver's own 5 GHz channel bit, so 1-8 are channels 36-64, 9-20 are 100-144
+// and 21-28 are 149-177 (wifi_5g_channel_bit_t). Only channels the radio
+// agreed to tune to at boot are in s5Chan; the country decides which.
+//
+// The 2.4 GHz sweep is left exactly as it was. After each one, a short 5 GHz
+// slice: every 5 GHz channel that has been busy lately, plus two silent ones
+// in turn, so a new access point is found within a few sweeps. See hop5().
+#include <soc/soc_caps.h>
+static_assert(SOC_WIFI_SUPPORT_5G, "SQW_WIFI_5G needs a chip with 5 GHz WiFi");
+static uint8_t           s5Chan[29];        // bit -> channel; 0 = not allowed here
+static volatile uint16_t s5Frames[29];      // frames since the hop onto it
+static uint16_t          s5Rate[29];        // frames a second x16, smoothed, as s_chanRate
+static uint8_t           s5Count = 0;       // how many the radio accepted
+static bool              s5On    = true;    // BAND BOTH (true) or BAND 2 (false)
+static uint8_t           s5Slice[29];       // this slice's channels, in visiting order
+static uint8_t           s5Len = 0, s5Pos = 0;
+static uint8_t           s5Next = 1;        // where the silent-channel rotation resumes
+static uint32_t          s5Frames24 = 0;    // frames heard on 5 GHz since boot, for RADIO
+static inline uint8_t    bit5(uint8_t ch) { return (ch > 14) ? (uint8_t)CHANNEL_TO_BIT_NUMBER(ch) : 0; }
+bool wifi5Enabled()          { return s5On && s5Count; }
+void setWifi5Enabled(bool on) { s5On = on; }
+#endif
 #if defined(TWATCH_S3)
 // Two 512-bit memories of Bluetooth addresses, by hash: this five minutes
 // and the five before. An address in neither is an arrival. A collision
@@ -157,6 +181,18 @@ void radioReport(bool withScan) {
 #endif
         Serial.println(line);
     }
+#if SQW_WIFI_5G
+    {
+        char line[200];
+        int n = snprintf(line, sizeof line, "[radio] 5 GHz %s, %u channels allowed, %lu frames; busy:",
+                         s5On ? "on" : "OFF (BAND 2)", (unsigned)s5Count, (unsigned long)s5Frames24);
+        bool any = false;
+        for (uint8_t b = 1; b <= 28 && n < (int)sizeof line - 12; b++)
+            if (s5Chan[b] && s5Rate[b]) { n += snprintf(line + n, sizeof line - n, " %u:%u", (unsigned)s5Chan[b], (unsigned)(s5Rate[b] / 16)); any = true; }
+        if (!any) snprintf(line + n, sizeof line - n, " none yet");
+        Serial.println(line);
+    }
+#endif
     if (!withScan) return;
     esp_wifi_set_promiscuous(false);
     wifi_scan_config_t cfg = {};
@@ -198,6 +234,33 @@ void setScanInterval(uint16_t ms, uint8_t w) {
 }
 static volatile uint8_t s_scanPin = 0;   // 0 auto, 1 active, 2 passive -- the bench's say
 void setScanPin(uint8_t pin) { s_scanPin = pin > 2 ? 0 : pin; }
+
+#if defined(CYD_GPS)
+// Wardriving's name and company ID from an advert's AD structures (length,
+// type, data): the complete name (0x09), else the short one (0x08), and the
+// first two bytes of the manufacturer data (0xFF). No allocation.
+static void wardriveAdFields(const uint8_t* p, size_t n, char* name /* [33] */, bool& hasId, uint16_t& cid) {
+    name[0] = 0;
+    bool full = false;
+    for (size_t i = 0; i + 1 < n; ) {
+        const uint8_t len = p[i];
+        if (!len || i + 1 + len > n) break;
+        const uint8_t type = p[i + 1];
+        const uint8_t* d = p + i + 2;
+        const size_t dn = len - 1;
+        if ((type == 0x09 || (type == 0x08 && !full && !name[0])) && dn) {
+            const size_t k = dn < 32 ? dn : 32;
+            memcpy(name, d, k);
+            name[k] = 0;
+            if (type == 0x09) full = true;
+        } else if (type == 0xFF && dn >= 2 && !hasId) {
+            hasId = true;
+            cid = (uint16_t)(d[0] | (d[1] << 8));
+        }
+        i += 1 + len;
+    }
+}
+#endif
 
 class BleScanCallbacks : public NimBLEScanCallbacks {
     // First sight of every advert, before any reply. The counts live here
@@ -264,6 +327,17 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
                 if (md.size() >= 2) { hasId = true; cid = (uint16_t)((uint8_t)md[0] | ((uint8_t)md[1] << 8)); }
             }
             Wardrive::noteBle(mac, nm.c_str(), (int8_t)adv->getRSSI(), hasId, cid);
+        }
+#elif defined(CYD_GPS)
+        // Wardriving on the CYD GPS builds: the same, read straight from the
+        // advert's bytes. The watch's std::string calls would allocate on the
+        // Bluetooth task, and the CYD has too little heap for that.
+        if (Wardrive::enabled()) {
+            char nm[33];
+            bool hasId = false; uint16_t cid = 0;
+            const std::vector<uint8_t>& pl = adv->getPayload();
+            wardriveAdFields(pl.data(), pl.size(), nm, hasId, cid);
+            Wardrive::noteBle(mac, nm, (int8_t)adv->getRSSI(), hasId, cid);
         }
 #endif
         if (!g_engine) return;
@@ -423,22 +497,20 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
                             break;
                         }
                     }
-                    // Raven's services run 0x3100-0x3500, not just the five
-                    // round ones above: 0x3101 and 0x3102 are the ones that
-                    // hand out its GPS position (Flock-You, issue #15).
-                    // getValue() is the 16-bit value's own bytes, little-endian.
-                    // A DROP UUID 0x3100 rule withdraws the whole range.
+                    // Raven is the five round services above and nothing in
+                    // between. Matching every value from 0x3100 to 0x3500 --
+                    // over a thousand numbers nobody has registered, on the
+                    // strength of 0x3101/0x3102, which the Raven write-ups
+                    // list inside its GPS service rather than in its advert
+                    // -- named an NVIDIA Shield a gunshot detector (upstream
+                    // SquachWatch issue #41, fixed in its v1.36.0).
                     // Then any other 16-bit UUID, for the extra rules: an
                     // added UUID rule is a value this list has never heard of.
+                    // getValue() is the 16-bit value's own bytes, little-endian.
                     if (det.type == DetectionType::UNKNOWN && u.getValue()) {
                         const uint8_t* p = u.getValue();
                         const uint16_t v = (uint16_t)(p[0] | (p[1] << 8));
-                        if (v >= 0x3100 && v <= 0x3500) {
-                            if (lookupUuid(0x3100) == DetectionType::RAVEN) {
-                                det.type = DetectionType::RAVEN;
-                                label    = uuidName(0x3100);
-                            }
-                        } else if (lookupUuid(v) != DetectionType::UNKNOWN) {
+                        if (lookupUuid(v) != DetectionType::UNKNOWN) {
                             det.type = lookupUuid(v);
                             label    = uuidName(v);
                         }
@@ -697,6 +769,24 @@ bool DetectionEngine::init() {
     }
     Serial.printf("[boot] heap with WiFi started: %lu free, %lu largest\n", (unsigned long)ESP.getFreeHeap(), (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     esp_wifi_set_promiscuous(true);
+#if SQW_WIFI_5G
+    {
+        // Both bands, then ask the radio which 5 GHz channels it will tune
+        // to. Receive only: nothing here transmits, but the driver still
+        // applies the country's channel list, so its answer is the list.
+        const esp_err_t be = esp_wifi_set_band_mode(WIFI_BAND_MODE_AUTO);
+        s5Count = 0;
+        for (uint8_t b = 1; b <= 28; b++) {
+            const uint8_t ch = (uint8_t)BIT_NUMBER_TO_CHANNEL(b, WIFI_BAND_5G);
+            s5Chan[b] = (be == ESP_OK && esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE) == ESP_OK) ? ch : 0;
+            if (s5Chan[b]) s5Count++;
+        }
+        esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+        s5On = Settings::wifi5();
+        Serial.printf("[boot] 5 GHz: band mode err %d, %u of 28 channels accepted, %s\n",
+                      (int)be, (unsigned)s5Count, s5On ? "on" : "off (BAND 2)");
+    }
+#endif
     wifi_promiscuous_filter_t filter;
     filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT | WIFI_PROMIS_FILTER_MASK_DATA;
     esp_wifi_set_promiscuous_filter(&filter);
@@ -707,6 +797,9 @@ bool DetectionEngine::init() {
         {
             const uint8_t ch = pkt->rx_ctrl.channel;
             if (ch >= 1 && ch <= 13 && s_chanFrames[ch] < 0xFFFF) s_chanFrames[ch]++;
+#if SQW_WIFI_5G
+            else if (const uint8_t b = bit5(ch)) { if (s5Frames[b] < 0xFFFF) s5Frames[b]++; s5Frames24++; }
+#endif
         }
         if (pkt->rx_ctrl.sig_len < 24) return;
         // 802.11 frame header: bytes 0..23 contain frame control, duration,
@@ -762,6 +855,13 @@ bool DetectionEngine::init() {
 #if defined(TWATCH_S3)
             // Wardriving: every access point, with its security read from the
             // RSN and WPA elements (the last four bytes are the FCS).
+            if (Wardrive::enabled() && sigLen > 40) {
+                const uint16_t cap = (uint16_t)(frame[34] | (frame[35] << 8));
+                Wardrive::noteWifi(frame + 16, ssid, WifiAuth::parse(cap, frame + 36, (uint16_t)(sigLen - 40)),
+                                   pkt->rx_ctrl.channel, (int8_t)pkt->rx_ctrl.rssi);
+            }
+#elif defined(CYD_GPS)
+            // Wardriving on the CYD GPS builds: the same call as the watch.
             if (Wardrive::enabled() && sigLen > 40) {
                 const uint16_t cap = (uint16_t)(frame[34] | (frame[35] << 8));
                 Wardrive::noteWifi(frame + 16, ssid, WifiAuth::parse(cap, frame + 36, (uint16_t)(sigLen - 40)),
@@ -1128,6 +1228,9 @@ void DetectionEngine::hopChannel() {
     // beacon interval (about 100 ms).
     const uint32_t now = millis();
     if (now - _lastHopMs < _dwellMs) return;
+#if SQW_WIFI_5G
+    if (hop5(now)) return;
+#endif
     {
         // How busy the channel being left was: frames a second, times 16.
         // A visit that ran long (the loop was held up, or the radios were
@@ -1142,7 +1245,13 @@ void DetectionEngine::hopChannel() {
         }
     }
     _lastHopMs = now;
+#if SQW_WIFI_5G
+    const uint8_t left = _wifiChannel;
+#endif
     _wifiChannel = (_wifiChannel % 13) + 1;
+#if SQW_WIFI_5G
+    if (left == 13 && start5(now)) return;
+#endif
     s_chanFrames[_wifiChannel] = 0;
     // Shares: 4 for a channel at least a quarter as busy as the busiest,
     // 2 for one with anything on it, 1 for a silent one. Split 3.9 s.
@@ -1159,6 +1268,70 @@ void DetectionEngine::hopChannel() {
     if (_dwellMs < 120) _dwellMs = 120;
     esp_wifi_set_channel(_wifiChannel, WIFI_SECOND_CHAN_NONE);
 }
+
+#if SQW_WIFI_5G
+// The 5 GHz slice, between one 2.4 GHz sweep and the next. The busy 5 GHz
+// channels are where the access points and their clients are, so each gets a
+// look every sweep. A silent channel gets one every few sweeps, two at a time
+// in rotation, which is how a new one is found. A slice never runs past
+// 1.5 s, so 2.4 GHz keeps about three quarters of the radio's time.
+//
+// 150 ms is the shortest look: an access point beacons about every 102 ms,
+// so any access point on the channel is heard at least once.
+static const uint16_t SLICE5_MS = 1500, LOOK5_BUSY = 250, LOOK5_QUIET = 150;
+
+bool DetectionEngine::start5(uint32_t now) {
+    if (!s5On || !s5Count) return false;
+    s5Len = 0;
+    uint16_t budget = SLICE5_MS;
+    for (uint8_t b = 1; b <= 28 && budget >= LOOK5_BUSY; b++)
+        if (s5Chan[b] && s5Rate[b]) { s5Slice[s5Len++] = b; budget -= LOOK5_BUSY; }
+    for (uint8_t k = 0, tried = 0; k < 2 && tried < 28 && budget >= LOOK5_QUIET; tried++) {
+        const uint8_t b = s5Next;
+        s5Next = (uint8_t)(s5Next % 28 + 1);
+        if (!s5Chan[b] || s5Rate[b]) continue;
+        s5Slice[s5Len++] = b; budget -= LOOK5_QUIET; k++;
+    }
+    if (!s5Len) return false;
+    s5Pos = 0;
+    const uint8_t b = s5Slice[0];
+    s5Frames[b] = 0;
+    _dwellMs = s5Rate[b] ? LOOK5_BUSY : LOOK5_QUIET;
+    _lastHopMs = now;
+    esp_wifi_set_channel(s5Chan[b], WIFI_SECOND_CHAN_NONE);
+    return true;
+}
+
+// True while the slice still owns the radio. After the last channel it
+// returns false and hopChannel() carries on to channel 1. It leaves
+// _wifiChannel at 0 for that: hopChannel() then scores "channel 0", which
+// nothing counts and nothing reads (every busyness loop runs 1-13), instead
+// of scoring 13 as silent for a visit it never had. 13 was scored when the
+// slice began, and 0 wraps to 1 without starting another slice.
+bool DetectionEngine::hop5(uint32_t now) {
+    if (s5Pos >= s5Len) return false;
+    {
+        const uint8_t b = s5Slice[s5Pos];
+        const uint32_t spent = now - _lastHopMs, f = s5Frames[b];
+        s5Frames[b] = 0;
+        if (spent <= 2u * _dwellMs + 200u) {
+            uint32_t rate = f * 16000u / (spent ? spent : 1);
+            if (rate > 0xFFFFu) rate = 0xFFFFu;
+            // A busy channel that goes quiet decays to silent within a few
+            // looks, and then goes back into the rotation.
+            s5Rate[b] = (uint16_t)(((uint32_t)s5Rate[b] * 3u + rate) / 4u);
+            if (s5Rate[b] < 4) s5Rate[b] = 0;
+        }
+    }
+    if (++s5Pos >= s5Len) { s5Len = 0; s5Pos = 0; _wifiChannel = 0; return false; }
+    const uint8_t b = s5Slice[s5Pos];
+    s5Frames[b] = 0;
+    _dwellMs = s5Rate[b] ? LOOK5_BUSY : LOOK5_QUIET;
+    _lastHopMs = now;
+    esp_wifi_set_channel(s5Chan[b], WIFI_SECOND_CHAN_NONE);
+    return true;
+}
+#endif
 
 void DetectionEngine::clearLog() {
     _logCount = 0;
@@ -1505,6 +1678,10 @@ void DetectionEngine::wakeRadios() {
     g_rawMode = RawScanMode::NONE;
     esp_wifi_start();
     esp_wifi_set_promiscuous(true);
+#if SQW_WIFI_5G
+    s5Len = s5Pos = 0;                           // a slice cut short by the rest is dropped, not scored
+    if (!_wifiChannel) _wifiChannel = 1;
+#endif
     esp_wifi_set_channel(_wifiChannel, WIFI_SECOND_CHAN_NONE);
     _lastHopMs = millis();                       // the visit starts now, not before the rest
     s_chanFrames[_wifiChannel] = 0;
@@ -1881,6 +2058,14 @@ void DetectionEngine::pushLog(const Detection& d) {
     _latestChangeMs = millis();
     _typeCounts[(uint8_t)d.type]++;
     if (d.channel == 0 && (uint8_t)d.type < SpamWatch::TYPES) _newBle[(uint8_t)d.type]++;
+#if SQW_WIFI_5G
+    // A new row from 5 GHz, on the console: the one catch no other board can
+    // make, and otherwise only visible as a channel number on the SD card.
+    // WiFi rows come from loop() (processWiFiQ), never the Bluetooth task.
+    if (d.channel > 14)
+        Serial.printf("[5g] new %s %02x:%02x:%02x:%02x:%02x:%02x on ch %u, %d dBm\n", detectionTypeName(d.type),
+                      d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5], (unsigned)d.channel, (int)d.rssi);
+#endif
     _lifetimeTotal++;
     if ((uint8_t)d.type < (uint8_t)DetectionType::COUNT) _lifetimeByType[(uint8_t)d.type]++;
     // Counted here, on the Bluetooth host task, and written to flash from

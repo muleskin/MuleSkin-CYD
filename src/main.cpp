@@ -59,6 +59,11 @@
 #include "ui_diagnostics.h"   // CrashReport, used by the breadcrumb below
 #include "blackbox.h"
 #include "gnss.h"
+#if defined(CYD_GPS)
+#include "sd_row.h"
+static void cydGpsStart();
+static void cydGpsTick(uint32_t now);
+#endif
 #include "privacy.h"
 #include "lora_sniffer.h"   // the watch's SX1262; inline no-ops elsewhere
 #include "wardrive.h"
@@ -943,15 +948,46 @@ static bool     s_onUsb = true;
 static bool s_radiosResting = false;   // the duty cycle's state; see twatchRadioTick()
 #endif
 #if defined(TWATCH_S3) || SQW_BOOT_BTN
-// A crown press (or the CYDs' BOOT button) with the screen on turns it off
-// at once, cable or not. It stays off until the next touch, press or alert:
-// lastTouch moving past this moment is what ends it.
+// POCKET MODE. A crown press (or the CYDs' BOOT button) with the screen on
+// turns it off at once, cable or not, and only another press turns it back
+// on: a touch does not, so a board in a pocket or a bag cannot be woken by
+// whatever it is rubbing against. Alerts still borrow the screen while they
+// are up (see the power saver in loop()), then it goes dark again.
 static bool     s_crownDark   = false;
-static uint32_t s_crownDarkAt = 0;
-// After an alert lights a button-darkened screen, it stays lit until this
-// moment -- the screen timeout, counted from the alert's end -- then goes
-// dark again. 0 = no alert has lit it.
-static uint32_t s_crownLitUntil = 0;
+// When the button was pressed: an alert already on screen then is one the
+// press was meant to put out, so only alerts after it light the screen.
+static uint32_t s_crownPressAt = 0;
+// The first time ever, the screen stays on a moment to say how to get out.
+static uint32_t s_pocketNoteUntil = 0;
+static const uint32_t POCKET_NOTE_MS = 4000;
+#if defined(TWATCH_S3)
+static const char* const POCKET_HOW = "Press the crown to wake";
+#else
+static const char* const POCKET_HOW = "Press BOOT again to wake";
+#endif
+
+// Every short press of the button: in or out of pocket mode, or just a wake
+// when it was the screen timeout that dimmed the screen.
+static void pocketPress(uint32_t now) {
+    if (s_crownDark) {
+        s_crownDark = false;
+        s_pocketNoteUntil = 0;
+        lastTouch = now;
+        Serial.println("[pocket] off");
+    } else if (s_screenDimmed) {
+        lastTouch = now;
+    } else {
+        s_crownDark = true;
+        s_crownPressAt = now;
+        if (!Settings::pocketNoteShown()) {
+            Settings::markPocketNoteShown();
+            s_pocketNoteUntil = now + POCKET_NOTE_MS;
+            if (!s_pocketNoteUntil) s_pocketNoteUntil = 1;
+            Theme::showToast("POCKET MODE", POCKET_HOW, Theme::CYAN, POCKET_NOTE_MS);
+        }
+        Serial.println("[pocket] on");
+    }
+}
 #endif
 
 static void applyCpuClock();
@@ -1433,6 +1469,15 @@ static void enterAlert(const Detection& d) {
     // worked, which is presumably why nobody noticed the banner was missing.
     s_infoPending = false;
     uiAlertInit(*canvas, d);
+#if defined(CYD_GPS)
+    // Only for a live catch with a fresh fix: a card opened later from
+    // NEARBY shows no place, because the board may have moved since.
+    {
+        const uint32_t nowMs = millis();
+        if (Gnss::fresh(nowMs) && !d.restored && nowMs - d.lastSeen <= Gnss::FRESH_MS)
+            uiAlertSetPlace(true, Gnss::fix().lat7, Gnss::fix().lon7, Gnss::faked());
+    }
+#endif
     // The lifetime count for the type includes this one, so one means first.
     {
         const bool first = engine.lifetimeTypeCount(d.type) == 1;
@@ -2447,7 +2492,9 @@ static void serviceTrackerDays(uint32_t now) {
         pending = false;
     }
     s_awaySaveNow = false;
-    if (!Clock::isSet() || (state != AppState::CLEAR && state != AppState::LOG)) return;
+    // A real clock, not the note-to-self guess a cold boot starts from: a
+    // guess can be days behind, and would count a day that was not one.
+    if (!Clock::trusted() || (state != AppState::CLEAR && state != AppState::LOG)) return;
     const uint32_t today = Clock::localDay();
     if (s_awayFakePending) {
         s_awayFakePending = false;
@@ -2956,6 +3003,8 @@ static void performWipe(WipeBoot after) {
     BlackBox::wipe();        // the log and the crash history kept in flash
 #if defined(TWATCH_S3)
     Wardrive::clear();       // where the watch has been, and everything it heard there
+#elif defined(CYD_GPS)
+    Wardrive::sdWipe();      // the WiGLE file is a record of everywhere the board has been
 #endif
 #if HAVE_NVS_ERASE
     // The frame buffer is 77 KB the wipe can have: the board restarts in a
@@ -3669,18 +3718,7 @@ static void twatchCrownTick(uint32_t now) {
     // buzzes, about 1.5 s) is surely over.
     if (s_drvAwakeAt && now - s_drvAwakeAt > 3000) { s_drvAwakeAt = 0; drvWrite(0x01, 0x40); }
     s_pmu.getIrqStatus();
-    if (s_pmu.isPekeyShortPressIrq()) {
-        if (!s_screenDimmed) {
-            s_crownDark = true;
-            s_crownDarkAt = now;
-            s_crownLitUntil = 0;
-            Serial.println("[crown] screen off");
-        } else {
-            s_crownDark = false;
-            lastTouch = now;
-            Serial.println("[crown] screen on");
-        }
-    }
+    if (s_pmu.isPekeyShortPressIrq()) pocketPress(now);
     s_pmu.clearIrqStatus();
 }
 #endif
@@ -3887,6 +3925,9 @@ void setup() {
     // saved rotation instead of always starting from the board default.
     Settings::load();
     Clock::begin();   // after Settings: the zone is applied there, the history here
+#if defined(CYD_GPS)
+    cydGpsStart();
+#endif
     OtaWifi::loadExtraRules();   // detection rules delivered since the build, before any scanning
 #if defined(TWATCH_S3)
     twatchRtcBegin();      // after Clock::begin(): a real time beats the note's guess
@@ -4768,7 +4809,7 @@ static void wigleExport(bool includeFake) {
     char buf[512];   // the two header lines run past 330 with a long version string
     struct Ctx { bool fake, ok; uint32_t rows, skipped; char* buf; } c = { includeFake, true, 0, 0, buf };
     usbWriteAll("=== WIGLE BEGIN ===\n", 20);
-    const size_t h = Wardrive::headerLines(buf, sizeof buf, FIRMWARE_VERSION, "twatch-s3", "LilyGo T-Watch S3 Plus");
+    const size_t h = Wardrive::headerLines(buf, sizeof buf, FIRMWARE_VERSION, "twatch-s3", "LilyGo T-Watch S3 Plus", "LilyGo");
     c.ok = usbWriteAll(buf, h);
     if (c.ok) Wardrive::forEach([](const Wardrive::Record& r, void* p) {
         Ctx& c = *(Ctx*)p;
@@ -4903,6 +4944,124 @@ uint8_t twatchGpsState() {
 static void wardriveBegin() {
     Wardrive::begin();
     if (Wardrive::enabled()) gpsStart(false);
+}
+#endif
+
+#if defined(CYD_GPS)
+// ---- GPS on the CYD (cyd-gps builds) ------------------------------------------
+// An ATGM336H with its TX on GPIO35 (P3), at 9600 baud. Its sentences go to
+// Gnss (gnss.h); a fresh fix puts a position on each SD row and on the alert
+// card, and its time sets a clock that has no network time this boot.
+// No power control (the CYD has none) and no baud search.
+//
+// Not behind CYD: the emulator's squachsim-live compiles this file with no
+// board macro, and its Serial2 replays the NMEA file named by SQUACHSIM_NMEA.
+//
+// Console: GPS STATUS; GPS FAKE lat lon (a bench fix, marked FAKE on the
+// screens and the SD rows, and never used for the clock); GPS OFF ends it.
+// Where the module is, per board: the CYD's ATGM336H on GPIO35 at 9600 on the
+// third UART, by default. The Marauder V8's GPS talks on GPIO14 at 115200
+// (found on the board, 2026-10-12), and the C5 has no third UART, so it says
+// so in its own build flags.
+#ifndef CYD_GPS_RX
+#define CYD_GPS_RX 35
+#endif
+#ifndef CYD_GPS_BAUD
+#define CYD_GPS_BAUD 9600
+#endif
+#ifndef CYD_GPS_SERIAL
+#define CYD_GPS_SERIAL Serial2
+#endif
+static bool     s_cydGpsClockSet = false;   // set from GPS once this boot
+static uint32_t s_cydGpsFirstFixMs = 0;     // millis() of the first real fix, 0 until then
+
+static void cydGpsStart() {
+    Gnss::reset();
+    // TX -1: the module's RX is not wired. The core fills in its default
+    // pins only when both are negative, so TX stays unassigned here; the
+    // default TX2 is GPIO17, the status light.
+    CYD_GPS_SERIAL.begin(CYD_GPS_BAUD, SERIAL_8N1, CYD_GPS_RX, -1);
+    Wardrive::sdBegin();
+}
+
+static const char* cydWardriveStateName(Wardrive::SdState st) {
+    switch (st) {
+        case Wardrive::SdState::OFF:             return "off";
+        case Wardrive::SdState::NO_CARD:         return "NO CARD";
+        case Wardrive::SdState::LOW_MEMORY:      return "LOW MEMORY";
+        case Wardrive::SdState::WAITING_FOR_FIX: return "WAITING FOR FIX";
+        case Wardrive::SdState::LOGGING:         return "ON";
+    }
+    return "?";
+}
+
+static void cydGpsTick(uint32_t now) {
+    const uint8_t cmd = g_consoleGps;
+    if (cmd) g_consoleGps = 0;
+    if (cmd == 2) { Gnss::reset(); Serial.println("[gps] reset: any bench fix is gone"); }
+    else if (cmd == 3) {
+        const Gnss::Sky k = Gnss::sky();
+        const Gnss::Fix& f = Gnss::fix();
+        Serial.printf("[gps] status: sentences %lu good, %lu bad; in view %u, heard %u, used %u; ",
+                      (unsigned long)Gnss::good(), (unsigned long)Gnss::bad(), k.view, k.heard, f.used);
+        if (s_cydGpsFirstFixMs) Serial.printf("first fix %lu s after boot; ", (unsigned long)(s_cydGpsFirstFixMs / 1000));
+        else                    Serial.print(Gnss::faked() ? "no real fix yet; " : "no fix yet; ");
+        if (f.valid) {
+            char la[16], lo[16];
+            SdRow::degreesText(la, sizeof la, f.lat7, 7);
+            SdRow::degreesText(lo, sizeof lo, f.lon7, 7);
+            Serial.printf("%s at %s,%s\n",
+                          Gnss::faked() ? "bench fix" : Gnss::fresh(now) ? "fixed" : "lost", la, lo);
+        } else {
+            Serial.println("no position");
+        }
+        const char* fn = Wardrive::sdFileName();
+        Serial.printf("[wardrive] %s; file %s; written %lu, skipped %lu as repeats, dropped %lu\n",
+                      cydWardriveStateName(Wardrive::sdState(now)), *fn ? fn : "none yet",
+                      (unsigned long)Wardrive::written(), (unsigned long)Wardrive::skipped(),
+                      (unsigned long)Wardrive::dropped());
+    }
+    else if (cmd == 4) {
+        Gnss::fake(g_consoleFakeLat7, g_consoleFakeLon7, Clock::isSet() ? Clock::nowEpoch() : 0, now);
+        char la[16], lo[16];
+        SdRow::degreesText(la, sizeof la, g_consoleFakeLat7, 7);
+        SdRow::degreesText(lo, sizeof lo, g_consoleFakeLon7, 7);
+        Serial.printf("[gps] BENCH FIX at %s,%s: SD rows written now carry FAKE, and the clock is left alone\n",
+                      la, lo);
+    }
+    else if (cmd == 5) {
+        Wardrive::setEnabled(true);
+        Serial.println("[wardrive] ON: rows go to the SD card once the GPS has a real fix");
+    }
+    else if (cmd == 6) { Wardrive::setEnabled(false); Serial.println("[wardrive] off"); }
+    else if (cmd >= 7 && cmd <= 9) {
+        const char* fn = Wardrive::sdFileName();
+        Serial.printf("[wardrive] the WiGLE file is on the SD card: %s\n", *fn ? fn : "none yet");
+    }
+    else if (cmd) Serial.println("[gps] not on this board");
+
+    // A bench fix is held until a real one replaces it; refreshed here so it
+    // does not go stale while the console test runs.
+    if (Gnss::faked()) Gnss::fake(Gnss::fix().lat7, Gnss::fix().lon7, Clock::isSet() ? Clock::nowEpoch() : 0, now);
+
+    while (CYD_GPS_SERIAL.available()) Gnss::feed((char)CYD_GPS_SERIAL.read(), now);
+    Wardrive::sdTick(now, engine.sd().ready());
+
+    const Gnss::Fix& f = Gnss::fix();
+    if (f.valid && !Gnss::faked() && !s_cydGpsFirstFixMs) {
+        s_cydGpsFirstFixMs = now ? now : 1;
+        Serial.printf("[gps] FIRST FIX after %lu s, %u satellites\n", (unsigned long)(now / 1000), f.used);
+    }
+    // Network time stays the preferred source: a synced clock is never
+    // overwritten, and a later NTP sync replaces this one. Once a boot, then
+    // again only if something left the clock untrusted.
+    if (Gnss::fresh(now) && !Gnss::faked() && Gnss::utcEpoch() && !Clock::synced() &&
+        (!s_cydGpsClockSet || !Clock::trusted())) {
+        if (Clock::setEpoch(Gnss::utcEpoch())) {
+            s_cydGpsClockSet = true;
+            Serial.println("[clock] set from GPS");
+        }
+    }
 }
 #endif
 
@@ -5061,8 +5220,7 @@ static void bootButtonTick(uint32_t now) {
     if (!down && was && !longDone && now - downAt >= 30) {
         Serial.println("[button] short press");
         if (s_chargeMode) exitChargeMode();
-        else if (!s_screenDimmed) { s_crownDark = true; s_crownDarkAt = now; s_crownLitUntil = 0; }
-        else { s_crownDark = false; lastTouch = now; }
+        else pocketPress(now);
     }
     was = down;
 }
@@ -5159,7 +5317,8 @@ void loop() {
     // so a wake tap that turns into a drag cannot scroll a list either.
     //
     // lastTouch is still updated here, because that is what actually undims
-    // on the next frame -- the touch is being consumed, not ignored.
+    // on the next frame -- the touch is being consumed, not ignored. In
+    // POCKET MODE it undims nothing: only the button does.
     static bool s_swallowTouch = false;
     if (s_screenDimmed && touchJustDown) {
         s_swallowTouch = true;
@@ -5172,6 +5331,9 @@ void loop() {
         touchJustUp = false;
     }
     engine.loop();
+#if defined(CYD_GPS)
+    cydGpsTick(millis());
+#endif
     Lora::tick(now);   // nothing outside a MULESKIN_LORA build
 #if MULESKIN_LORA && defined(TWATCH_S3)
     twatchLoraBuzzTick(now);
@@ -6641,10 +6803,13 @@ void loop() {
                             applyColorOrder();
                             break;
                         case SettingsRow::ROTATION_LOCK: Settings::toggleRotationLock(); break;
-                        case SettingsRow::BRIGHTNESS:
-                            Settings::adjustBrightness(gestureStartX < tft.width() / 2 ? -16 : 16);
-                            applyBrightness();
+                        case SettingsRow::BRIGHTNESS: {
+                            // Only the row's - and + buttons move it; a tap on
+                            // the label or the number does nothing.
+                            const int d = uiSettingsStepHit(*canvas, gestureStartX, gestureStartY, tft.width(), tft.height());
+                            if (d) { Settings::adjustBrightness((int8_t)(d * 16)); applyBrightness(); }
                             break;
+                        }
                         case SettingsRow::CONFIDENCE: Settings::cycleMinConfidence(); break;
                         case SettingsRow::AUTO_QUIET:  Settings::cycleAutoQuiet(); break;
 #if SQW_HAS_BUZZER
@@ -6654,6 +6819,12 @@ void loop() {
                             // signed up for before a camera does. OFF is silent.
                             Settings::toggleBuzzer();
                             if (Settings::buzzerOn()) Buzzer::chirp(BUZZ_CHIRP_MS);
+                            break;
+#endif
+#if SQW_WIFI_5G
+                        case SettingsRow::WIFI_BANDS:
+                            Settings::setWifi5(!Settings::wifi5());
+                            setWifi5Enabled(Settings::wifi5());   // from the next sweep
                             break;
 #endif
                         case SettingsRow::DETECTION_FILTER: enterDetFilter(); break;
@@ -6708,6 +6879,17 @@ void loop() {
                                 twatchBuzz(Buzz::SAMPLE);
                             }
                             Serial.printf("[buzz] %s\n", Settings::buzzModeName());
+                            break;
+#endif
+#if defined(CYD_GPS)
+                        case SettingsRow::WATCH_WARDRIVE:
+                            // Through the console's path, as on the watch.
+                            g_consoleGps = Wardrive::enabled() ? 6 : 5;
+                            Theme::showToast(Wardrive::enabled() ? "WARDRIVE OFF" : "WARDRIVE ON",
+                                             Wardrive::enabled() ? nullptr
+                                                 : !engine.sd().ready() ? "Needs an SD card"
+                                                 : "Logging once the GPS has a fix",
+                                             Theme::CYAN);
                             break;
 #endif
                         case SettingsRow::STATUS_LIGHT: enterLight(); break;
@@ -7453,6 +7635,23 @@ void loop() {
             info.lastScreenUs   = s_lastScreenUs;
             info.freeHeap = ESP.getFreeHeap();
             info.largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+#if defined(CYD_GPS)
+            {
+                const Gnss::Fix& f = Gnss::fix();
+                const Gnss::Sky k = Gnss::sky();
+                const uint32_t nowMs = millis();
+                info.gpsShown = true;
+                info.gpsGood = Gnss::good(); info.gpsBad = Gnss::bad();
+                info.view = k.view; info.heard = k.heard; info.used = f.used;
+                info.accM = f.accM; info.lat7 = f.lat7; info.lon7 = f.lon7;
+                info.fixAgeMs = f.atMs ? nowMs - f.atMs : UINT32_MAX;
+                info.fresh = Gnss::fresh(nowMs); info.faked = Gnss::faked();
+                info.wdOn = Wardrive::enabled();
+                info.wdState = (uint8_t)Wardrive::sdState(nowMs);
+                info.wdWritten = Wardrive::written(); info.wdSkipped = Wardrive::skipped();
+                info.wdDropped = Wardrive::dropped(); info.wdFile = Wardrive::sdFileName();
+            }
+#endif
             info.nvsPercent   = nvsFullPercent();
             info.pushWarn     = pushStatusText(info.push, sizeof info.push) != 0;
             {
@@ -7651,37 +7850,30 @@ void loop() {
         if (s_onUsb) wantDim = false;
 #endif
 #if defined(TWATCH_S3) || SQW_BOOT_BTN
-        // The crown, which beats the cable, the desk and a timeout of NEVER.
-        // A touch since the press, or an alert that wants the screen, ends it.
+        // POCKET MODE, which beats the cable, the desk and a timeout of NEVER.
+        // Only the button ends it (pocketPress); a touch never does.
         //
-        // An alert lights it without ending it: once the alert is over the
-        // screen goes dark again after the screen timeout (30 s when that is
-        // NEVER), the way it would on battery. Taps on the alert card -- the
-        // one that dismisses it above all -- do not count as the touch that
-        // ends crown mode; a touch after that does.
+        // Things that need to be seen borrow the screen without ending it:
+        // an alert card for as long as it is up on its own (ten seconds; a
+        // WATCH card, which waits for a tap, goes dark with the card still
+        // on it), and the first-time note. Then it is dark again, not the
+        // main screen after.
         {
-            static bool wasAlerting = false;
-            if (s_crownDark) {
-                if (alerting || wasAlerting) s_crownDarkAt = now;
-                if (wasAlerting && !alerting) {
-                    uint32_t t = Settings::screenTimeoutSecRaw();
-                    if (!t) t = 30;
-                    s_crownLitUntil = now + t * 1000UL;
-                    if (!s_crownLitUntil) s_crownLitUntil = 1;
-                }
-                if ((int32_t)(lastTouch - s_crownDarkAt) > 0) s_crownDark = false;
-            }
-            wasAlerting = alerting;
-        }
-        if (s_crownDark) {
-            const bool alertWants = Settings::wakeOnAlert() && alerting;
-            const bool lit = s_crownLitUntil && (int32_t)(s_crownLitUntil - now) > 0;
-            wantDim = !alertWants && !lit;
+            const uint32_t shownAt = state == AppState::WATCH_ALERT ? watchAlertStart : alertStart;
+            const bool alertLit = alerting && Settings::wakeOnAlert() &&
+                                  (int32_t)(now - shownAt) < (int32_t)ALERT_AUTO_DISMISS_MS &&
+                                  (int32_t)(shownAt - s_crownPressAt) > 0;
+            const bool noteLit = s_pocketNoteUntil && (int32_t)(s_pocketNoteUntil - now) > 0;
+            if (!noteLit) s_pocketNoteUntil = 0;
+            if (s_crownDark) wantDim = !alertLit && !noteLit;
         }
 #endif
         if (wantDim != s_screenDimmed) {
             s_screenDimmed = wantDim;
             applyBrightness();
+#if defined(TWATCH_S3) || SQW_BOOT_BTN
+            if (s_crownDark) Serial.println(wantDim ? "[pocket] screen dark" : "[pocket] screen lit for an alert");
+#endif
         }
 
         // Auto-lock, on the saver's idle clock: after N idle minutes, or the

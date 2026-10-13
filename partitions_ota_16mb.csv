@@ -26,7 +26,7 @@
 #   0x610000    6 MB  app1
 #   0xC10000   64 KB  coredump
 #   0xC20000  128 KB  nvs
-#   0xC40000  ~3.8 MB (free)      unassigned, room for a filesystem later
+#   0xC40000  ~3.8 MB (free)      unassigned: the black box (128 KB) at its start
 #
 # Name,   Type, SubType, Offset,    Size,     Flags
 otadata,  data, ota,     0xe000,    0x2000,

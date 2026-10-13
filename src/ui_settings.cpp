@@ -81,6 +81,11 @@ static const SettingsRow ALL_ROWS[] = {
     SettingsRow::PUSH_NIGHT,
     SettingsRow::PUSH_HOME,
     SettingsRow::PUSH_DAILY,
+#if SQW_WIFI_5G
+    // What the sniffer listens to, beside what it does with what it hears.
+    // Only on a chip that has 5 GHz, so every other board's list is as it was.
+    SettingsRow::WIFI_BANDS,
+#endif
     SettingsRow::DETECTION_FILTER,
     SettingsRow::IGNORED_DEVICES,
     // APPEARANCE opens the display page -- see APPEARANCE_ROWS. It sat at the
@@ -94,6 +99,9 @@ static const SettingsRow ALL_ROWS[] = {
     SettingsRow::REPLAY_INTRO, SettingsRow::SHOW_OFF, SettingsRow::VIEW_DIARY,
     SettingsRow::DEX,
     SettingsRow::POWER_SAVER,
+#if defined(CYD_GPS)
+    SettingsRow::WATCH_WARDRIVE,   // the watch's row and setting, on the CYD GPS builds
+#endif
 #if defined(ESP32) && !defined(TWATCH_S3)
     SettingsRow::CHARGE_MODE,
 #endif
@@ -198,6 +206,10 @@ static RowGroupId groupFor(SettingsRow r) {
     // a leftover. It goes to SYSTEM there -- still reachable, which is the
     // part that matters, since the display rows live behind it.
     if (r == SettingsRow::APPEARANCE && Settings::boringMode()) return RowGroupId::SYSTEM;
+#if defined(CYD_GPS)
+    // Under its neighbor's heading: a CYD has no WATCH heading.
+    if (r == SettingsRow::WATCH_WARDRIVE) return groupFor(SettingsRow::POWER_SAVER);
+#endif
     switch (r) {
         case SettingsRow::WATCH_BATTERY:
         case SettingsRow::WATCH_RADIO:
@@ -241,6 +253,9 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::PUSH_NIGHT:
         case SettingsRow::PUSH_HOME:
         case SettingsRow::PUSH_DAILY:
+#if SQW_WIFI_5G
+        case SettingsRow::WIFI_BANDS:
+#endif
         case SettingsRow::DETECTION_FILTER:
         case SettingsRow::IGNORED_DEVICES:
             return RowGroupId::BEHAVIOR;
@@ -730,6 +745,43 @@ static void drawRow(TFT_eSPI& t, int w, int y, int hgt, const char* label,
     }
 }
 
+// ---- the stepper row ----------------------------------------------------------
+// BRIGHT: a percent between a real - and a real + button, at the row's
+// right-hand end where a value sits. It used to be "BRIGHT -  +" in the label
+// with the row split down the middle, which meant a thumb landing anywhere on
+// it moved the value; now only the buttons do. The draw and the hit test both
+// go through stepperLayout(), so the buttons are exactly where they look.
+static bool isStepperRow(SettingsRow r) { return r == SettingsRow::BRIGHTNESS; }
+static const char* stepperValue(char* buf, size_t n) {
+    snprintf(buf, n, "%u%%", (unsigned)(Settings::brightness() * 100 / 255));
+    return buf;
+}
+// The + against the right margin, the value before it, the - before that.
+// Buttons nearly the row's height: finger-sized on every panel.
+static void stepperLayout(TFT_eSPI& t, int w, int y, int hgt, bool compact, const char* value,
+                          int& minusX, int& plusX, int& valX, int& bw, int& bh, int& by) {
+    t.setTextSize(compact ? 1 : Theme::uiMenuTextSize(t));
+    const int vw = t.textWidth(value);
+    bh = hgt - 4;
+    bw = bh + 10;
+    by = y + (hgt - bh) / 2;
+    plusX  = w - 18 - bw;
+    valX   = plusX - 8 - vw;
+    minusX = valX - 8 - bw;
+}
+static void drawStepperRow(TFT_eSPI& t, int w, int y, int hgt, const char* label, const char* value,
+                           uint16_t labelColor, bool compact) {
+    drawRow(t, w, y, hgt, label, nullptr, false, labelColor, compact);
+    int mx, px, vx, bw, bh, by;
+    stepperLayout(t, w, y, hgt, compact, value, mx, px, vx, bw, bh, by);
+    t.setTextColor(Theme::WHITE, Theme::BG);
+    t.setCursor(vx, y + (hgt - t.fontHeight()) / 2);
+    t.print(value);
+    Theme::drawWin95Button(t, mx, by, bw, bh, "-", false);
+    Theme::drawWin95Button(t, px, by, bw, bh, "+", false);
+    t.setTextSize(1);
+}
+
 // Fills in what a row actually shows. valBuf is scratch space for
 // rows that need to format a number — only valid for the duration of
 // the caller's own loop iteration, not held onto afterward.
@@ -759,9 +811,7 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             label = "LOCK BACKGROUND"; value = Settings::backgroundLocked() ? "ON" : "OFF";
             break;
         case SettingsRow::BRIGHTNESS:
-            label = "BRIGHT -  +";
-            snprintf(valBuf, valBufN, "%u%%", (unsigned)(Settings::brightness() * 100 / 255));
-            value = valBuf;
+            label = "BRIGHT"; value = stepperValue(valBuf, valBufN);
             break;
         case SettingsRow::NIGHT_MODE:
             label = "NIGHT DIM"; value = NightMode::label(Settings::nightMode());
@@ -790,6 +840,13 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             // the way AT BOOT and AFTER 5 do, so nobody expects a beep per
             // alert. The rules are in crowpanel7_buzzer.h.
             label = "BUZZER"; value = Settings::buzzerOn() ? "NEW ONLY" : "OFF";
+            break;
+#endif
+#if SQW_WIFI_5G
+        case SettingsRow::WIFI_BANDS:
+            // Short values: the label and its value share 240px in portrait
+            // at size 2, the squeeze TYPE FILTER below is named for.
+            label = "WIFI BANDS"; value = Settings::wifi5() ? "2.4+5" : "2.4";
             break;
 #endif
         case SettingsRow::DETECTION_FILTER:
@@ -871,6 +928,22 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
         case SettingsRow::PRIVACY:
             label = "PRIVACY MODE"; value = Settings::privacyMode() ? "ON" : "OFF";
             break;
+#if defined(CYD_GPS)
+        case SettingsRow::WATCH_WARDRIVE:
+            // OFF, or what stands between it and a row, or the rows written.
+            label = "WARDRIVE";
+            switch (Wardrive::sdState(millis())) {
+                case Wardrive::SdState::OFF:             value = "OFF"; break;
+                case Wardrive::SdState::NO_CARD:         value = "NO CARD"; break;
+                case Wardrive::SdState::LOW_MEMORY:      value = "LOW MEMORY"; break;
+                case Wardrive::SdState::WAITING_FOR_FIX: value = "WAITING FOR FIX"; break;
+                case Wardrive::SdState::LOGGING:
+                    snprintf(valBuf, valBufN, "ON  %lu", (unsigned long)Wardrive::written());
+                    value = valBuf;
+                    break;
+            }
+            break;
+#endif
         case SettingsRow::CHARGE_MODE:
             label = "CHARGE MODE"; value = "START";
             break;
@@ -1096,6 +1169,8 @@ void uiSettingsTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
             } else if (isTwoLineRow(items[idx].row)) {
                 drawTwoLineRow(t, w, y, itemH, label, value, groupColor(items[idx].group),
                                items[idx].row == SettingsRow::BACKGROUND);
+            } else if (isStepperRow(items[idx].row)) {
+                drawStepperRow(t, w, y, itemH, label, value, groupColor(items[idx].group), h > w);
             } else {
                 drawRow(t, w, y, itemH, label, value, danger, groupColor(items[idx].group),
                         h > w);
@@ -1141,4 +1216,34 @@ SettingsRow uiSettingsHitTest(TFT_eSPI& t, int x, int y, int screenW, int screen
         idx++;
     }
     return SettingsRow::NONE;
+}
+
+int uiSettingsStepHit(TFT_eSPI& t, int x, int y, int screenW, int screenH) {
+    int top, bodyBottom, rowH, headerH, tallH;
+    computeGeom(t, screenH, top, bodyBottom, rowH, headerH, tallH);
+    DisplayItem items[LIST_MAX_N + 7];
+    uint8_t n = buildDisplayList(items);
+    { const int m = maxScroll(items, n, top, bodyBottom, rowH, headerH, tallH);
+      if (g_scroll > m) g_scroll = m; }
+    int cy = top;
+    int idx = g_scroll;
+    while (idx < n) {
+        const int itemH = itemHeight(items[idx], rowH, headerH, tallH);
+        if (cy + itemH > bodyBottom) break;
+        if (y >= cy && y < cy + itemH) {
+            if (items[idx].isHeader || !isStepperRow(items[idx].row)) return 0;
+            char valBuf[24];
+            const char* value = stepperValue(valBuf, sizeof valBuf);
+            int mx, px, vx, bw, bh, by;
+            stepperLayout(t, screenW, cy, itemH, screenH > screenW, value, mx, px, vx, bw, bh, by);
+            t.setTextSize(1);
+            // A few pixels of slack either side: a near miss should count.
+            if (x >= mx - 4 && x < mx + bw + 4) return -1;
+            if (x >= px - 4 && x < px + bw + 4) return 1;
+            return 0;
+        }
+        cy += itemH;
+        idx++;
+    }
+    return 0;
 }

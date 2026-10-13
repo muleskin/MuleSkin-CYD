@@ -104,6 +104,22 @@ static uint32_t    s_greeted  = 0;
 static uint32_t    s_mileSaid = 0;
 static bool        s_guess    = false;   // running from the note to self
 static uint32_t    s_lastNote = 0;       // millis() of the last note written
+#if defined(ARDUINO_ARCH_ESP32)
+// The guess outlives a restart the same way the time it guessed does. It did
+// not: the note's time stayed in the system clock across the next restart,
+// and that boot, finding a clock already set, took it as a real one -- a
+// board ran ten and a half hours slow, trusted (upstream SquachWatch found
+// it, 2026-10-12, v1.36.0). Here it matters more: the away days and TODAY
+// count by the date. RTC RAM keeps the flag next to the time it describes.
+static const uint32_t GUESS_MAGIC = 0x6E55E550u;
+RTC_NOINIT_ATTR static uint32_t s_guessWord;
+#endif
+static void setGuess(bool g) {
+    s_guess = g;
+#if defined(ARDUINO_ARCH_ESP32)
+    s_guessWord = g ? GUESS_MAGIC : 0u;
+#endif
+}
 // Hourly: the note only bounds a cold boot's guess, and every write is a
 // slot in a 20 KB store (see DetectionEngine::saveLifetime).
 static const uint32_t NOTE_EVERY_MS = 60u * 60u * 1000u;
@@ -190,7 +206,7 @@ bool setEpoch(uint32_t epoch) {
     if (epoch <= kPlausible) return false;
     // A real answer, from wherever: the guess is over, and the note is
     // brought up to date at once rather than ten minutes from now.
-    s_guess = false;
+    setGuess(false);
     writeSystemClock(epoch);
     noteKnown();
     if (s_begun) { s_prefs.putUInt("last", epoch); s_lastNote = millis(); }
@@ -463,12 +479,22 @@ void begin() {
     s_mileSaid = s_prefs.getUInt("mile", 0);
     // Carried across a soft reset with the date already known: the first
     // such boot is still the first day.
-    if (isSet()) { noteKnown(); return; }
+    if (isSet()) {
+#if defined(ARDUINO_ARCH_ESP32)
+        if (s_guessWord == GUESS_MAGIC) {
+            s_guess = true;
+            Serial.println("[clock] still the note's guess from before the restart");
+            return;
+        }
+#endif
+        noteKnown();
+        return;
+    }
     // A cold boot: the note to self, if there is one, as a floor.
     const uint32_t last = s_prefs.getUInt("last", 0);
     if (last > kPlausible) {
         writeSystemClock(last);
-        s_guess = true;
+        setGuess(true);
         char buf[40];
         formatClock(buf, sizeof buf);
         Serial.printf("[clock] no clock; starting from the last note: %s\n", buf);
@@ -714,6 +740,19 @@ void pollSerial() {
             ESP.restart();
         }
         if (strncasecmp(line, "RADIO", 5) == 0) { radioReport(strcasestr(line, "SCAN") != nullptr); continue; }
+#if SQW_WIFI_5G
+        // BAND: which WiFi bands the sniffer sweeps. BAND 2 is 2.4 GHz only,
+        // as on every other board; BAND BOTH adds the 5 GHz slice. Saved.
+        if (strncasecmp(line, "BAND", 4) == 0) {
+            const char* arg = line + 4;
+            while (*arg == ' ') arg++;
+            if (strcasecmp(arg, "2") == 0 || strcasecmp(arg, "2.4") == 0) { Settings::setWifi5(false); setWifi5Enabled(false); }
+            else if (strcasecmp(arg, "BOTH") == 0 || strcasecmp(arg, "5") == 0) { Settings::setWifi5(true); setWifi5Enabled(true); }
+            else if (*arg) { Serial.println("[radio] BAND 2 (2.4 GHz only) or BAND BOTH"); continue; }
+            Serial.printf("[radio] band: %s\n", Settings::wifi5() ? "2.4 + 5 GHz" : "2.4 GHz only");
+            continue;
+        }
+#endif
 #endif
         if (strncasecmp(line, "ZONE ", 5) == 0) {
             // ZONE US EASTERN, or ZONE 4: the flasher sends the name it

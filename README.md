@@ -473,6 +473,41 @@ none of the saved networks is in range. REMOVE takes one off the list.
   is still scanned, counted and logged; only the alert stops. IGNORE is the
   same thing kept for good.
 
+### Brought over from upstream SquachWatch (v1.31-v1.36)
+
+MuleSkin forked from SquachWatch-CYD v1.28.0. These later upstream changes
+were ported (v3.5.0), adapted where the two have grown apart:
+
+- **Update failures that say why** (v1.33): a sign-in page, a network that
+  blocks the site, an https-only redirect, a slow or failing site, or no
+  connection -- each its own sentence, with the detail after it ("(HTTP
+  403)"). Fetches retry up to three times. When the router's name lookup
+  fails, the board reaches flasher.oillie.cloud by the last address the name
+  had (upstream uses GitHub Pages' fixed addresses; this site is our own).
+- **About 70 KB of flash back** (v1.33): C++ exceptions off everywhere (no
+  catch exists in the firmware), and fixed colours as constants.
+- **5 GHz on the NM-CYD-C5** (v1.31, PR #27 by quietradio): a short 5 GHz
+  slice after every 2.4 GHz sweep, WIFI BANDS in Settings, "5G CH 149" on
+  the alert, and the black box at last (it sat inside the C5's app slot).
+- **Raven** (v1.36, #41): only its five service numbers match; the old range
+  called an NVIDIA Shield a gunshot detector.
+- **A guessed clock stays a guess** across a restart (v1.36), and the away
+  days count only on a trusted clock.
+- **POCKET MODE** (v1.34): the BOOT button puts the screen out and only the
+  button brings it back; an alert lights it for its card, then it is dark
+  again.
+- **BRIGHT** has real - and + buttons (v1.35).
+- **SD log by date** (v1.36, PR #46 by jotra7): /MuleSkin-YYYYMMDD.log with
+  the real time in each row (/MuleSkin-nodate.log until the clock is
+  trusted). The security wipe now really removes them: the rename had left
+  it matching nothing.
+- **GPS on the CYD** (v1.36, PR #46 by jotra7): `cyd-gps` and
+  `cyd-ili9341-gps` builds for an ATGM336H on GPIO35 -- a position on each SD
+  row and on the alert, the clock without WiFi, WARDRIVE to a WiGLE file on
+  the card, the fix in DIAGNOSTICS. Not on the flasher until tested on
+  hardware. (Upstream's emulator GPS replay and main-screen GPS label were
+  not brought over.)
+
 ## Project layout
 
 ```
@@ -550,6 +585,9 @@ MuleSkin-CYD/
 - Axon / skimmer / SSID prefix data: compiled with assistance from
   Gemini (Google), expanded against public sources.
 - AirTag manufacturer-data format: public Apple FindMy spec.
+- Ported from SquachWatch after the fork: **quietradio** (5 GHz on the
+  NM-CYD-C5, PR #27) and **jotra7** (GPS, wardriving and the dated SD log,
+  PR #46).
 - AWOK 2.4" board port (ESP32-Marauder V6.1 hardware): **bkbroiler**,
   who did the actual pin-mapping and shared-bus touch-calibration work
   that made this board possible.

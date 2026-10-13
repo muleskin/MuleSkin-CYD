@@ -601,15 +601,15 @@ static bool s_icoPalReady = false;
 
 static void icoPalette(TFT_eSPI& t) {
     if (s_icoPalReady) return;
-    SHELL       = t.color565(104,110,132); SHELL_HI    = t.color565(158,166,192);
-    SHELL_LO    = t.color565(58,62,80);    ICO_INK     = t.color565(26,26,38);
-    ICO_GLASS   = t.color565(36,104,132); ICO_LENS    = t.color565(0,210,220);
-    ICO_METAL   = t.color565(150,150,160); ICO_METAL2  = t.color565(214,214,224);
-    ICO_WARN    = t.color565(255,60,40);   ICO_LED     = t.color565(255,220,60);
-    ICO_APPLE   = t.color565(226,44,40);   ICO_APPLE_HI= t.color565(255,124,98);
-    ICO_APPLE_LO= t.color565(148,20,24);   ICO_STEM    = t.color565(126,84,42);
-    ICO_LEAF    = t.color565(60,192,80);   ICO_SHEEN   = 0xFFFF;
-    ICO_PLASTIC = t.color565(232,228,214);
+    SHELL       = (uint16_t)0x6B70; SHELL_HI    = (uint16_t)0x9D38;
+    SHELL_LO    = (uint16_t)0x39EA;    ICO_INK     = (uint16_t)0x18C4;
+    ICO_GLASS   = (uint16_t)0x2350; ICO_LENS    = (uint16_t)0x069B;
+    ICO_METAL   = (uint16_t)0x94B4; ICO_METAL2  = (uint16_t)0xD6BC;
+    ICO_WARN    = (uint16_t)0xF9E5;   ICO_LED     = (uint16_t)0xFEE7;
+    ICO_APPLE   = (uint16_t)0xE165;   ICO_APPLE_HI= (uint16_t)0xFBEC;
+    ICO_APPLE_LO= (uint16_t)0x90A3;   ICO_STEM    = (uint16_t)0x7AA5;
+    ICO_LEAF    = (uint16_t)0x3E0A;   ICO_SHEEN   = 0xFFFF;
+    ICO_PLASTIC = (uint16_t)0xEF3A;
     s_icoPalReady = true;
 }
 
@@ -961,9 +961,9 @@ void drawWing(TFT_eSPI& t, float sx, float sy, float len, float angDeg,
 void drawLilGuy(TFT_eSPI& t, int x, int baseY, uint32_t now, uint8_t scale, bool flip) {
     static const uint16_t PAL[4] = { 0, 0, 0, 0 };
     (void)PAL;
-    const uint16_t hair = t.color565(0, 255, 245);
-    const uint16_t skin = t.color565(255, 208, 240);
-    const uint16_t body = t.color565(185, 103, 255);
+    const uint16_t hair = (uint16_t)0x07FE;
+    const uint16_t skin = (uint16_t)0xFE9E;
+    const uint16_t body = (uint16_t)0xBB3F;
     const uint8_t  f    = (uint8_t)((now / 80u) % LILGUY_FRAMES);
     const int      s    = scale ? scale : 2;
     const int      top  = baseY - LILGUY_H * s;
@@ -1728,11 +1728,11 @@ static void snowYeti(TFT_eSPI& t, int x, int y, uint32_t now, YPose pose, int bu
     // (219,219,255) -- within one palette step of the snow he stands on,
     // so his whole body vanished and he read as a floating head. The
     // reference sprite is plainly grey against white for the same reason.
-    const uint16_t fur = t.color565(150, 155, 168), furHi = t.color565(205, 210, 222);
-    const uint16_t furS = t.color565(100, 106, 128), mane = t.color565(120, 126, 140);
-    const uint16_t head = t.color565(49, 54, 63),   limb = t.color565(43, 48, 56);
-    const uint16_t eye = t.color565(255, 36, 20),   tooth = t.color565(255, 210, 26);
-    const uint16_t claw = t.color565(232, 237, 243);
+    const uint16_t fur = (uint16_t)0x94D5, furHi = (uint16_t)0xCE9B;
+    const uint16_t furS = (uint16_t)0x6350, mane = (uint16_t)0x7BF1;
+    const uint16_t head = (uint16_t)0x31A7,   limb = (uint16_t)0x2987;
+    const uint16_t eye = (uint16_t)0xF922,   tooth = (uint16_t)0xFE83;
+    const uint16_t claw = (uint16_t)0xEF7E;
 
     if (pose == YPose::DOWN) {
         // Face down in the snow, legs still going. The funniest of the
@@ -1892,8 +1892,8 @@ void drawBackgroundOverlay(TFT_eSPI& t, uint32_t now) {
             int bx = w - 2 - bw;
             if (bx < 1)          bx = 1;
             if (by < yStart + 1) by = yStart + 1;
-            const uint16_t paper = blend(BG, t.color565(236, 232, 218), dim);
-            const uint16_t ink   = blend(BG, t.color565(16, 12, 10), dim);
+            const uint16_t paper = blend(BG, (uint16_t)0xEF5B, dim);
+            const uint16_t ink   = blend(BG, (uint16_t)0x1061, dim);
             t.fillRect(bx, by, bw, bh, paper);
             t.drawRect(bx, by, bw, bh, ink);
             // Tail under the wolf, not under the corner of the bubble.

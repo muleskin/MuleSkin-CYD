@@ -17,6 +17,7 @@ static bool        s_inverted   = false;
 static bool        s_rgbSwapped = false;
 static bool        s_colorChecked = false;
 static bool        s_infoPrimerShown = false;
+static bool        s_pocketNoteShown = false;
 // Locked on the watch: a square screen with a crown has one way up, and a
 // corner button that spins it is a thing to hit by accident on a wrist.
 // Locked on the CrowPanel too, for a different reason: an RGB panel has no
@@ -94,6 +95,9 @@ static const bool DEFAULT_POWER_SAVER = true;
 static const bool DEFAULT_POWER_SAVER = false;
 #endif
 static bool     s_powerSaver   = DEFAULT_POWER_SAVER;
+#if SQW_WIFI_5G
+static bool     s_wifi5        = true;
+#endif
 static uint8_t  s_scrTimeoutIx = 2;    // 30 s
 static uint8_t  s_dimLevel     = 16;   // ~6%, dim but not off
 static uint8_t  s_idleFpsIx    = 2;    // 12 fps
@@ -255,6 +259,10 @@ void cycleIdleCpu() {
     s_prefs.putUChar("idleCpu", s_idleCpuIx);
 }
 
+#if SQW_WIFI_5G
+bool wifi5()           { return s_wifi5; }
+void setWifi5(bool on) { s_wifi5 = on; s_prefs.putBool("wifi5", on); }
+#endif
 void togglePowerSaver() {
     s_powerSaver = !s_powerSaver;
     s_prefs.putBool("pwrOn", s_powerSaver);
@@ -424,6 +432,7 @@ void load() {
     if (s_mascotPace < 10 || s_mascotPace > 500) s_mascotPace = 120;
     if (s_mascotTempo < 50 || s_mascotTempo > 200) s_mascotTempo = 70;
     s_infoPrimerShown = s_prefs.getBool("infoprimer", false);
+    s_pocketNoteShown = s_prefs.getBool("pocketnote", false);
     s_rotationLocked = s_prefs.getBool("rotlock", DEFAULT_ROTATION_LOCK);
     // A new key, not the top hat's: somebody who took the hat off never said
     // anything about the aura, and should see it once before deciding.
@@ -448,6 +457,9 @@ void load() {
     // picker can no longer reach or leave.
     if (!backgroundSelectable(s_background)) s_background = Background::RADAR;
     s_powerSaver   = s_prefs.getBool("pwrOn", DEFAULT_POWER_SAVER);
+#if SQW_WIFI_5G
+    s_wifi5        = s_prefs.getBool("wifi5", true);
+#endif
 #if defined(TWATCH_S3)
     // Once per watch: POWER SAVER on. The default only reaches a watch that
     // never saved the switch, and every watch that went through the bench
@@ -643,6 +655,13 @@ bool infoPrimerShown() { return s_infoPrimerShown; }
 void markInfoPrimerShown() {
     s_infoPrimerShown = true;
     s_prefs.putBool("infoprimer", true);
+}
+
+bool pocketNoteShown() { return s_pocketNoteShown; }
+
+void markPocketNoteShown() {
+    s_pocketNoteShown = true;
+    s_prefs.putBool("pocketnote", true);
 }
 
 bool auraShown() { return s_aura; }
