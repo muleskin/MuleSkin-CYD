@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (2.8\" CYD, ILI9341)",
-  "version": "3.2.7",
-  "release_name": "Away from owner",
-  "whats_new": ["Attack tools push as IMPORTANT", "AWAY FROM OWNER on tag alerts", "Separate token for push buttons", "Release history in the flasher"],
+  "version": "3.2.8",
+  "release_name": "Every tracker away",
+  "whats_new": ["Google/Samsung/DULT tags away", "Ignore list synced across boards", "Log charts in the web flasher", "Smoother radar, 24-26 fps"],
   "new_install_prompt_erase": true,
   "builds": [
     {
