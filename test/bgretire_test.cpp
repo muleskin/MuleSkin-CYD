@@ -8,6 +8,7 @@
 // reading the enum: the picker must never hand it out again, and a
 // board that already had it saved must come up somewhere sensible
 // rather than on a band nothing paints.
+#include <filesystem>
 #include "test_util.h"
 #include "settings.h"
 #include "theme.h"
@@ -28,8 +29,12 @@ using Settings::Background;
 
 int main() {
     // A real file behind the store, so "a restart" means what it says.
-    setenv("MULESKINSIM_NVS", "out", 1);
-    remove("out/settings.nvs");
+    // A directory of its own: these tests run in parallel (make -j), and
+    // three of them sharing out/settings.nvs wiped each other's store
+    // mid-test now and then (CI, 2026-10-13).
+    std::filesystem::create_directories("out/bgretire_nvs");
+    setenv("MULESKINSIM_NVS", "out/bgretire_nvs", 1);
+    remove("out/bgretire_nvs/settings.nvs");
 
     Settings::load();
 

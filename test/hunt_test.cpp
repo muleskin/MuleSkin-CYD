@@ -7,6 +7,7 @@
 // so. This checks the counter goes to the settings store, comes back after a
 // restart, is written only when it changes, and does not come back stale
 // once the hunt is finished.
+#include <filesystem>
 #include "test_util.h"
 #include "settings.h"
 #include "theme.h"
@@ -25,8 +26,12 @@ void        applyZone(uint8_t) {}
 
 int main() {
     // A real file behind the store, so "a restart" means what it says.
-    setenv("MULESKINSIM_NVS", "out", 1);
-    remove("out/settings.nvs");
+    // A directory of its own: these tests run in parallel (make -j), and
+    // three of them sharing out/settings.nvs wiped each other's store
+    // mid-test now and then (CI, 2026-10-13).
+    std::filesystem::create_directories("out/hunt_nvs");
+    setenv("MULESKINSIM_NVS", "out/hunt_nvs", 1);
+    remove("out/hunt_nvs/settings.nvs");
 
     suite("A fresh device");
     Settings::load();

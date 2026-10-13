@@ -16,6 +16,7 @@
 //     comes back must equal SHA256("#tag")[0..15] computed fresh.
 //   - a KEYED channel has nothing to derive from, so its sixteen (or
 //     thirty-two) bytes must come back byte for byte.
+#include <filesystem>
 #include "lora_channels.h"
 #include "lora_meshcore.h"
 #include "lora_meshtastic.h"
@@ -110,8 +111,12 @@ static bool contains(const uint8_t* hay, size_t n, const void* needle, size_t m)
 }
 
 int main() {
-    setenv("MULESKINSIM_NVS", "out", 1);
-    remove("out/settings.nvs");
+    // A directory of its own: these tests run in parallel (make -j), and
+    // three of them sharing out/settings.nvs wiped each other's store
+    // mid-test now and then (CI, 2026-10-13).
+    std::filesystem::create_directories("out/lorachan_nvs");
+    setenv("MULESKINSIM_NVS", "out/lorachan_nvs", 1);
+    remove("out/lorachan_nvs/settings.nvs");
 
     suite("A fresh device");
     Settings::load();
