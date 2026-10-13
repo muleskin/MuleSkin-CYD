@@ -69,9 +69,26 @@ if [ -n "$LAB" ]; then
 fi
 ENVS="cyd cyd-fast cyd-ili9341 cyd-ili9341-fast cyd32c cyd35-fast freenove32 rlphantom-r awok twatch-s3 freenove-s3 crowpanel7 nm-cyd-c5"
 failed=""
+# Every platform and framework the boards need, installed BEFORE the first
+# build: on 2026-10-13 a framework went missing and was re-installed in the
+# middle of a build, and the board it happened under linked against stale
+# library archives ("undefined reference to vtable for VFSImpl") while
+# GitHub's build of the same tag was fine.
+echo "=== installing packages"
+pio pkg install > "$OUT/../pkg-install.log" 2>&1 || echo "    (pio pkg install complained -- see .pio/pkg-install.log; building anyway)"
+# One board, and once more from a clean build directory if that fails: a
+# half-built cache from an interrupted run is the usual reason a tag that
+# builds on GitHub does not build here.
+build_env() {
+  local e=$1
+  pio run -e "$e" > "$OUT/../build-$e.log" 2>&1 && return 0
+  echo "    failed -- once more from a clean build directory"
+  rm -rf ".pio/build/$e"
+  pio run -e "$e" > "$OUT/../build-$e.log" 2>&1
+}
 for e in $ENVS; do
   echo "=== building $e"
-  if pio run -e "$e" > "$OUT/../build-$e.log" 2>&1; then
+  if build_env "$e"; then
     B=.pio/build/$e
     cp "$B/firmware.bin" "$OUT/$PFX$e-firmware.bin"
     # A .sig left over from an older build would make boards download the

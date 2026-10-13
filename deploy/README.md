@@ -56,6 +56,12 @@ On a development machine (or on the server):
 tools/release.sh 3.1.2 --push
 ```
 
+`build_flasher_bins.sh` installs every platform package before building,
+and retries a board that fails once from a clean build directory (a stale
+cache from an interrupted run is the usual cause when GitHub built the same
+tag fine). `redeploy.sh` ends by checking that every firmware the site
+serves carries the tag's version stamp.
+
 That runs the checks CI runs -- host tests, the flasher pages, the screens
 (`--no-checks` skips them) -- then stamps every `web-flasher/manifest-*.json`
 with the version, commits, tags `v3.1.2` and pushes. Before or after, give a

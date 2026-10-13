@@ -61,4 +61,15 @@ if [ $UNSIGNED = 0 ]; then
   case $code in 200|206) ;; *) die "the signature isn't served (HTTP $code)" ;; esac
 fi
 curl -fsS "$SITE/versions.json" | grep -q "\"$TAG\"" || die "versions.json doesn't list $TAG"
+# Every board's firmware, as the site serves it, carries this tag's version
+# stamp (SQWVER:<tag>; ota_core.cpp) -- a bin left over from an older build
+# would carry another, or none.
+echo "== checking every firmware is $TAG"
+for m in web-flasher/manifest-*.json; do
+  e=$(basename "$m" .json); e=${e#manifest-}
+  # grep -c reads to the end: -q would stop at the match and leave curl
+  # writing into a closed pipe, which pipefail counts as a failure.
+  n=$(curl -fsS "$SITE/$e-firmware.bin" | grep -a -c "SQWVER:$TAG;" || true)
+  [ "${n:-0}" -gt 0 ] || die "$e-firmware.bin on the site is not $TAG"
+done
 echo "== done: flasher.oillie.cloud serves $TAG"

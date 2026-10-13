@@ -26,6 +26,13 @@ python tools/bench/ota_e2e.py --expect 3.2.2
 python tools/bench/nvs_snapshot.py compare before.json
 ```
 
+Bench builds (`PLATFORMIO_BUILD_FLAGS=-DBENCH_TOOLS=1`) also take, on the
+console: `ALERTPUSH` (a made-up Flock alert through the push path),
+`DAYSFAKE aa:bb:cc:dd:ee:ff` (the regulars told that device was seen on the
+three days before today -- the "near you on N days" alert without waiting),
+`ADVDUMP [seconds]` (prints `ADV <type> <mac> <hex>` for every tracker heard:
+the source of `test/tracker_adverts.txt`), `ARTBENCH`, `UPDATE NOW`.
+
 then flash the normal build back. Never run two `pio` builds at once: they
 share `~/.platformio/packages`, and a collision once deleted a framework and
 hung an upload.

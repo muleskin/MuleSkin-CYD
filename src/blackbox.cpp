@@ -459,7 +459,10 @@ void dump() {
                       (r.flags & BOOT_DUMP) ? r.task : "", (unsigned long)r.pc, (unsigned long)r.cause);
         return true;
     }, nullptr);
-    Serial.println("boot,epoch,up_s,type,mac,rssi,channel,hits,again,vendor,name");
+    // conf since v3.2.9: this sighting's grade -- with the vendor's
+    // "Away-Owner", what the web flasher's log and charts need to tell a
+    // tracker away from its owner from one walking by with its owner.
+    Serial.println("boot,epoch,up_s,type,mac,rssi,channel,hits,again,conf,vendor,name");
     // Everything the ring holds, CLR or not. The LOG screen stops at the mark
     // a CLR leaves (a restart must not bring back what was cleared), but this
     // is the record: it prints the mark as a line and carries on, so a
@@ -473,12 +476,13 @@ void dump() {
         }
         if (p[0] != KIND_DET) return true;
         const DetRecord& r = *(const DetRecord*)p;
-        Serial.printf("%u,%lu,%lu,%s,%02x:%02x:%02x:%02x:%02x:%02x,%d,%u,%u,%u,%s,%s\n",
+        static const char* const CONF[] = { "LOW", "MED", "HIGH" };
+        Serial.printf("%u,%lu,%lu,%s,%02x:%02x:%02x:%02x:%02x:%02x,%d,%u,%u,%u,%s,%s,%s\n",
                       (unsigned)r.boot, (unsigned long)r.epoch, (unsigned long)r.upSec,
                       detectionTypeName((DetectionType)r.type),
                       r.mac[0], r.mac[1], r.mac[2], r.mac[3], r.mac[4], r.mac[5],
                       (int)r.rssi, (unsigned)r.channel, (unsigned)r.hits,
-                      (r.flags & DET_AGAIN) ? 1u : 0u, r.vendor, r.name);
+                      (r.flags & DET_AGAIN) ? 1u : 0u, r.conf < 3 ? CONF[r.conf] : "?", r.vendor, r.name);
         return true;
     }, nullptr);
     Serial.println("[blackbox] end");

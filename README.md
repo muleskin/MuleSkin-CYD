@@ -128,6 +128,9 @@ one it is as it connects -- its name, its Bluetooth name and its firmware:
   spreadsheet, and charts it on the page: by type, by hour of the day, and
   the devices seen on more than one day. **Crash report** reads what it kept
   about its last crash.
+- The log's CSV has each sighting's confidence and an **away** column (a
+  tracker that said it was away from its owner), and the charts can show
+  only those.
 - As it connects, the page says which board it is and when this browser last
   backed it up -- and nudges when that was never, or over a month ago.
 - **Self-test** checks the board's parts -- memory, touch, both radios, the
@@ -344,6 +347,11 @@ evening summary counts them. WITH YOU always goes, either way.
   meeting, a drive -- with WITH YOU still coming through, and an Undo too.
   On your own ntfy server it needs a one-time step,
   [deploy/README.md](deploy/README.md).
+- **Near you on several days**: a tracker away from its owner seen on three
+  or more different days (the board's regulars count the days) gets the alert
+  -- "NEAR YOU ON N DAYS" -- and a push, once a day each. On a board that
+  sits still at home, a neighbour's tag kept in range will do this too: one
+  Ignore settles it, on every board.
 - **Several boards on one topic**: an Ignore or Snooze pressed on any board's
   alert is applied by all of them -- your own AirTag is yours everywhere --
   but only the board that sent the alert says so back. A device ignored (or

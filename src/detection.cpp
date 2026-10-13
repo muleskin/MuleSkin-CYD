@@ -8,6 +8,9 @@
 #include "blackbox.h"
 #include "dex.h"
 #include "karma_watch.h"
+#if defined(BENCH_TOOLS)
+extern volatile uint32_t g_advDumpUntil;   // ADVDUMP (clock.cpp)
+#endif
 #include "regulars.h"
 #include "clock.h"
 #include <Arduino.h>
@@ -471,26 +474,32 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         // ...and the same for the other tracker families (signatures.h,
         // "Trackers away from their owner"): HIGH and "Away-Owner" when the
         // advert says separated, MED when it says (or may say) near its owner.
+        // The grade and "away" from trackerVerdict() over the raw advert --
+        // the one function the host tests check against captured adverts.
         bool tagAway = false;
-        if (det.type == DetectionType::AIRTAG) {
-            const uint8_t* pl = adv->getPayload().data();
-            const uint8_t  pn = (uint8_t)adv->getPayload().size();
-            tagAway  = isFindMySeparated(pl, pn);
-            det.conf = tagAway ? Confidence::HIGH_CONF
-                     : isFindMyBeacon(pl, pn) ? Confidence::MED_CONF    // a Find My device beside its owner
-                     : Confidence::LOW_CONF;                            // AirPods pairing and the like
-        } else if (det.type == DetectionType::GOOGLE_TAG && label && strcmp(label, "DULT") == 0) {
-            tagAway  = true;                                            // only separated DULT tags get here
-            det.conf = Confidence::HIGH_CONF;
-        } else if (det.type == DetectionType::GOOGLE_TAG) {
-            const std::string sd = adv->getServiceData(NimBLEUUID((uint16_t)0xFEAA));
-            tagAway  = fmdnSeparated((const uint8_t*)sd.data(), sd.size());
-            det.conf = tagAway ? Confidence::HIGH_CONF : Confidence::MED_CONF;
-        } else if (det.type == DetectionType::SAMSUNG_TAG) {
-            const std::string sd = adv->getServiceData(NimBLEUUID((uint16_t)0xFD5A));
-            tagAway  = smartTagSeparated(smartTagState((const uint8_t*)sd.data(), sd.size()));
-            det.conf = tagAway ? Confidence::HIGH_CONF : Confidence::MED_CONF;
+        if (det.type == DetectionType::AIRTAG || det.type == DetectionType::GOOGLE_TAG ||
+            det.type == DetectionType::SAMSUNG_TAG) {
+            TrackerVerdict v;
+            if (trackerVerdict(adv->getPayload().data(), (uint8_t)adv->getPayload().size(), v) && v.type == det.type) {
+                tagAway  = v.away;
+                det.conf = v.conf;
+            }
         }
+#if defined(BENCH_TOOLS)
+        // ADVDUMP (bench): the raw advert of every tracker heard, for
+        // test/tracker_adverts.txt. One line each: ADV <type> <mac> <hex>.
+        if (g_advDumpUntil && (int32_t)(g_advDumpUntil - millis()) > 0 &&
+            (det.type == DetectionType::AIRTAG || det.type == DetectionType::GOOGLE_TAG ||
+             det.type == DetectionType::SAMSUNG_TAG || det.type == DetectionType::TILE)) {
+            const uint8_t* pl = adv->getPayload().data();
+            const size_t   pn = adv->getPayload().size();
+            char hex[2 * 62 + 1];
+            size_t k = 0;
+            for (size_t j = 0; j < pn && k + 2 < sizeof hex; j++) k += snprintf(hex + k, sizeof hex - k, "%02x", pl[j]);
+            Serial.printf("ADV %s %02x:%02x:%02x:%02x:%02x:%02x %s\n", detectionTypeName(det.type),
+                          det.mac[0], det.mac[1], det.mac[2], det.mac[3], det.mac[4], det.mac[5], hex);
+        }
+#endif
         // ...except HACKER, which is the one type deliberately holding
         // signatures of very different strength. Reaching here on anything
         // but the name means one of the exact ones matched: a service UUID

@@ -151,6 +151,8 @@ static uint16_t s_spamFakes = 0;
 void uiAlertSetSpam(bool spam, uint16_t fakes) { s_spam = spam; s_spamFakes = fakes; }
 static uint16_t s_followMin = 0;
 void uiAlertSetFollow(uint16_t minutes) { s_followMin = minutes; }
+static uint8_t s_days = 0;
+void uiAlertSetDays(uint8_t days) { s_days = days; }
 
 void uiAlertInit(TFT_eSPI& t, const Detection& d) {
     s_last = d;
@@ -159,6 +161,7 @@ void uiAlertInit(TFT_eSPI& t, const Detection& d) {
     s_lastFree = false;
     s_spam     = false;
     s_followMin = 0;
+    s_days = 0;
     s_touched = false;
     s_alertStart = millis();
     s_glitchStep = 0;
@@ -525,11 +528,13 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
     t.print(info);
     // The first one of its kind, ever, on this board: a line in the gap
     // between the strip and the plate, in the strip's own colour.
-    if (s_followMin) {
-        // A tracker that has travelled with you. Ahead of everything: it is
-        // the one banner that is about you rather than about the device.
+    if (s_followMin || s_days) {
+        // A tracker that has travelled with you, or one away from its owner
+        // that keeps turning up near you. Ahead of everything: these are the
+        // banners about you rather than about the device.
         char fl[32];
-        snprintf(fl, sizeof fl, "* WITH YOU %u MIN *", (unsigned)s_followMin);
+        if (s_followMin) snprintf(fl, sizeof fl, "* WITH YOU %u MIN *", (unsigned)s_followMin);
+        else             snprintf(fl, sizeof fl, "* NEAR YOU ON %u DAYS *", (unsigned)s_days);
         t.setTextSize(1);
         t.setTextColor(Theme::RED, Theme::BG);
         t.setCursor(PLATE_X + (PLATE_W - t.textWidth(fl)) / 2, stripHOf(w) + 2);

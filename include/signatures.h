@@ -107,6 +107,16 @@ inline bool smartTagSeparated(int state) { return state == 2 || state == 3; }
 // Table 1). -1 when too short, else 1 near owner / 0 separated.
 int  dultNearOwner(const uint8_t* sd, size_t n);
 
+// All of the above at once, from the RAW advertisement -- the AD structures
+// as the radio received them, no Bluetooth library in between -- so the
+// decision the board makes is the one the host tests make (test/
+// tracker_verdict_test.cpp, with adverts captured from real tags). True for a
+// tracker of the four families, with its type, whether it is away from its
+// owner, and this sighting's grade. A DULT tag beside its owner is not
+// reported (false), as the detector does not report it.
+struct TrackerVerdict { DetectionType type; bool away; Confidence conf; };
+bool trackerVerdict(const uint8_t* adv, uint8_t len, TrackerVerdict& out);
+
 // iBeacon check, run against the PARSED manufacturer-data field (company
 // ID included, i.e. what NimBLE's getManufacturerData() returns).
 //

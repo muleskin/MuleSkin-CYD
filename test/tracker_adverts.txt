@@ -1,0 +1,48 @@
+# Raw Bluetooth advertisements and the verdict trackerVerdict() must reach
+# (src/signatures.cpp, test/tracker_verdict_test.cpp).
+#
+#   TYPE AWAY CONF HEX   # where it came from
+#   NONE -    -    HEX   # not a tracker the detector reports
+#
+# CAPTURED lines are real adverts, recorded on 2026-10-13 by a bench board
+# (ADVDUMP) from tags in range. SYNTHETIC lines are built by hand from each
+# family's published layout, for the families that were not in range; the
+# reasoning for each verdict is in its comment, from the layout alone.
+
+# ---- CAPTURED: AirTags away from their owners ------------------------------
+# 1E FF 4C 00 12 19, then the status byte: 0x20 / 0x33 -- bit 2 (0x04,
+# "maintained") clear, so separated from the owner.
+AIRTAG 1 HIGH 1eff4c001219201e0d170d9e43033f8263145ac325a09835de70b93f59007e   # ff:ba:11:cc:8f:5c
+AIRTAG 1 HIGH 1eff4c001219201105ebcea63eeae70682416075d00378aae71aa5473c0320   # f7:3a:46:74:8d:79
+AIRTAG 1 HIGH 1eff4c00121933b1cf5dbe4ec79616334f50cbd62ffe6b13924a9be37d006b   # f4:6c:e8:7c:73:58
+AIRTAG 1 HIGH 1eff4c00121933b1cf5dbe4ec79616334f50cbd62ffe6b13924a9be37d0087   # f4:6c:e8:7c:73:58, a later counter
+
+# ---- SYNTHETIC: Apple --------------------------------------------------------
+# The same beacon with status 0x34: bit 2 set, "maintained" -- near its owner.
+AIRTAG 0 MED  1eff4c00121934b1cf5dbe4ec79616334f50cbd62ffe6b13924a9be37d0087
+# Proximity Pairing (type 0x07), 30 bytes -- AirPods: AirTag-shaped, not a beacon.
+AIRTAG 0 LOW  1eff4c000719010220752b0011223344556677889900aabbccddeeff00112233
+
+# ---- SYNTHETIC: Google Find Hub (service data 0xFEAA, frame type) ----------
+# Flags, then 0x19 bytes of service data: AA FE, frame 0x41 (unwanted-tracking
+# protection = separated), a 20-byte EID, hashed flags.
+GOOGLE_TAG 1 HIGH 0201061916aafe41000102030405060708090a0b0c0d0e0f1011121300
+# Frame 0x40: normal.
+GOOGLE_TAG 0 MED  0201061916aafe40000102030405060708090a0b0c0d0e0f1011121300
+# Frame 0x10: an Eddystone URL beacon on the same UUID -- not a tracker.
+NONE - -          0201060c16aafe10f8036578616d706c65
+
+# ---- SYNTHETIC: Samsung SmartTag (service data 0xFD5A, state in bits 5-7) ---
+# Byte 0 = (2 << 5) | 0x01: state 2, lost -- separated.
+SAMSUNG_TAG 1 HIGH 1516 5afd41000102030405060708090a0b0c0d0e0f10111213
+# Byte 0 = (5 << 5) | 0x15: state 5, connected to its owner.
+SAMSUNG_TAG 0 MED  1516 5afdb5000102030405060708090a0b0c0d0e0f10111213
+
+# ---- SYNTHETIC: DULT (service data 0xFCB2: network ID, near-owner byte) ----
+# Near-owner bit 0: separated -- reported, filed with the network trackers.
+GOOGLE_TAG 1 HIGH 0201060516b2fc0100
+# Near-owner bit 1: beside its owner -- not reported.
+NONE - -          0201060516b2fc0101
+
+# ---- SYNTHETIC: Tile (16-bit UUID 0xFEED listed) ----------------------------
+TILE 0 HIGH 03 03edfe

@@ -1440,9 +1440,18 @@
       var start = text.indexOf('boot,reason,epoch'), end = text.indexOf('[blackbox] end');
       if (start < 0 || end < 0) throw new Error('no answer from the black box. Try once more after the board has booted');
       var lines = text.slice(start, end).split(/\r?\n/).filter(function (l) { return l && l[0] !== '['; });
-      var split = lines.indexOf('boot,epoch,up_s,type,mac,rssi,channel,hits,again,vendor,name');
-      then(lines.slice(1, split < 0 ? lines.length : split),
-           split < 0 ? [] : lines.slice(split + 1));
+      // v3.2.9 boards add a conf column before the vendor; an older board's
+      // rows get an empty one, so everything below reads one layout.
+      var split = lines.indexOf('boot,epoch,up_s,type,mac,rssi,channel,hits,again,conf,vendor,name');
+      var oldFmt = split < 0;
+      if (oldFmt) split = lines.indexOf('boot,epoch,up_s,type,mac,rssi,channel,hits,again,vendor,name');
+      var dets = split < 0 ? [] : lines.slice(split + 1);
+      if (oldFmt) dets = dets.map(function (l) {
+        if (l[0] === '#') return l;
+        var f = l.split(',');
+        return f.length < 11 ? l : f.slice(0, 9).concat([''], f.slice(9)).join(',');
+      });
+      then(lines.slice(1, split < 0 ? lines.length : split), dets);
     } catch (err) {
       bbResult.className = 'identify-result err';
       bbResult.textContent = 'Couldn’t read it: ' + (err && err.message ? err.message : 'unknown error');
@@ -1455,22 +1464,24 @@
   // Detections, oldest first, as a spreadsheet-ready CSV. The name is the last
   // field and may hold commas, so it is re-joined and quoted.
   function saveLog(boots, dets) {
-    var out = ['time_utc,boot,epoch,up_s,type,mac,rssi,channel,hits,again,vendor,name'];
+    // conf: the sighting's grade (empty from a board before v3.2.9); away:
+    // a tracker that said it was away from its owner (vendor "Away-Owner").
+    var out = ['time_utc,boot,epoch,up_s,type,mac,rssi,channel,hits,again,conf,away,vendor,name'];
     var n = 0, cleared = 0;
     dets.forEach(function (l) {
       if (l[0] === '#') { cleared++; return; }
       var f = l.split(',');
-      if (f.length < 11) return;
-      var name = f.slice(10).join(',');
+      if (f.length < 12) return;
+      var name = f.slice(11).join(',');
       var q = function (s) { return /[",]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-      out.push([isoOf(f[1])].concat(f.slice(0, 9), [q(f[9]), q(name)]).join(','));
+      out.push([isoOf(f[1])].concat(f.slice(0, 10), [f[10] === 'Away-Owner' ? 'yes' : '', q(f[10]), q(name)]).join(','));
       n++;
     });
     var day = new Date().toISOString().slice(0, 10);
     download('muleskin-log-' + day + '.csv', out.join('\n') + '\n', 'text/csv');
     bbResult.textContent = 'SAVED: ' + n + ' detections from ' + boots.length + ' boots' +
       (cleared ? ' (including rows cleared with CLR on the board)' : '') + ' -> muleskin-log-' + day + '.csv';
-    showLogCharts(dets);
+    showLogCharts(dets, false);
   }
 
   // The log at a glance, under DOWNLOAD LOG: detections by type, by hour of
@@ -1478,12 +1489,15 @@
   // -- the tag on three days running, the camera on the commute. Plain bars,
   // no library; the rows are the black box's own (boot, epoch, up, type, mac,
   // ...), and a row without a real clock counts by type only.
-  function showLogCharts(dets) {
+  function showLogCharts(dets, awayOnly) {
+    var old = bbResult.querySelector('.log-charts');
+    if (old) old.remove();
     var byType = {}, byHour = new Array(24).fill(0), days = {}, typeOf = {};
     dets.forEach(function (l) {
       if (l[0] === '#') return;
       var f = l.split(',');
-      if (f.length < 11) return;
+      if (f.length < 12) return;
+      if (awayOnly && f[10] !== 'Away-Owner') return;
       var t = f[3], mac = f[4], e = +f[1];
       byType[t] = (byType[t] || 0) + 1;
       if (e > 1500000000) {
@@ -1496,6 +1510,15 @@
     });
     var box = document.createElement('div');
     box.className = 'log-charts';
+    // Only the trackers that said they were away from their owner: the ones
+    // that matter, without every tag that walked past with its owner.
+    var lab = document.createElement('label');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = !!awayOnly;
+    cb.onchange = function () { showLogCharts(dets, cb.checked); };
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(' trackers away from their owner only'));
+    box.appendChild(lab);
     function head(text) { var h = document.createElement('div'); h.className = 'log-chart-head'; h.textContent = text; box.appendChild(h); }
     function bar(label, n, max, colour) {
       var row = document.createElement('div'); row.className = 'log-bar-row';
@@ -1508,7 +1531,11 @@
       track.appendChild(fill); row.appendChild(name); row.appendChild(track); row.appendChild(num); box.appendChild(row);
     }
     var types = Object.keys(byType).sort(function (a, b) { return byType[b] - byType[a]; });
-    if (!types.length) return;
+    if (!types.length) {
+      var none = document.createElement('div'); none.className = 'log-chart-head';
+      none.textContent = awayOnly ? 'No tracker away from its owner in the log.' : 'Nothing in the log yet.';
+      box.appendChild(none); bbResult.appendChild(box); return;
+    }
     head('By type');
     var tmax = byType[types[0]];
     types.forEach(function (t) { bar(t, byType[t], tmax, LIVE_COLOURS[t]); });

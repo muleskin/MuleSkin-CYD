@@ -2347,6 +2347,55 @@ static void serviceNightDim(uint32_t now) {
 // On the heap, made at the first scan (well after boot): as a static its
 // 192 bytes moved the heap's layout enough to cost the largest free block
 // 4 KB, measured.
+// A tracker away from its owner that turns up near this board on several
+// different days -- the regulars count the days (regulars.h) -- is the other
+// shape of being followed: not one long walk (WITH YOU) but every day. Once a
+// minute, from the main screen or the LOG: such a tracker, today, on
+// DAYS_ALERT days or more, gets the alert and a push, once a day each.
+static const uint8_t DAYS_ALERT = 3;
+static void serviceTrackerDays(uint32_t now) {
+    static uint32_t last = 0;
+    static uint8_t  told[8][6];
+    static uint32_t toldDay[8];
+    static uint8_t  toldNext = 0;
+    if (now - last < 60000) return;
+    last = now;
+    if (!Clock::isSet() || (state != AppState::CLEAR && state != AppState::LOG)) return;
+    const uint32_t today = Clock::localDay();
+    for (uint8_t i = 0; i < engine.logCount(); i++) {
+        const Detection* d = engine.logAt(i);
+        if (!d || d->restored || !d->active) continue;
+        if (d->type != DetectionType::AIRTAG && d->type != DetectionType::GOOGLE_TAG &&
+            d->type != DetectionType::SAMSUNG_TAG) continue;
+        if (d->conf != Confidence::HIGH_CONF || IgnoreList::silenced(d->mac)) continue;   // away from its owner only
+        const uint8_t days = Regulars::daysFor(d->mac);
+        if (days < DAYS_ALERT) continue;
+        bool already = false;
+        for (uint8_t k = 0; k < 8 && !already; k++)
+            already = toldDay[k] == today && memcmp(told[k], d->mac, 6) == 0;
+        if (already) continue;
+        memcpy(told[toldNext], d->mac, 6);
+        toldDay[toldNext] = today;
+        toldNext = (uint8_t)((toldNext + 1) % 8);
+        Serial.printf("[days] %s %02x:%02x:%02x:%02x:%02x:%02x away from its owner, near you on %u days\n",
+                      detectionTypeName(d->type), d->mac[0], d->mac[1], d->mac[2], d->mac[3], d->mac[4], d->mac[5],
+                      (unsigned)days);
+        char title[40], body[100], seq[24], act[32];
+        snprintf(title, sizeof title, "%s near you on %u days", detectionTypeName(d->type), (unsigned)days);
+        snprintf(body, sizeof body, "Away from its owner, seen on %u different days. %d dBm, %02X:%02X:%02X:%02X:%02X:%02X",
+                 (unsigned)days, (int)d->rssi, d->mac[0], d->mac[1], d->mac[2], d->mac[3], d->mac[4], d->mac[5]);
+        snprintf(seq, sizeof seq, "days-%02x%02x%02x%02x%02x%02x", d->mac[0], d->mac[1], d->mac[2], d->mac[3], d->mac[4], d->mac[5]);
+        snprintf(act, sizeof act, "IGNORE %02x%02x%02x%02x%02x%02x %u %s",
+                 d->mac[0], d->mac[1], d->mac[2], d->mac[3], d->mac[4], d->mac[5], (unsigned)d->type, boardId());
+        if (Settings::pushOn()) queuePush(title, body, 5, "rotating_light", true, seq, act);
+        s_alertSpam = false;
+        s_alertLastFree = false;
+        enterAlert(*d);
+        uiAlertSetDays(days);
+        break;                      // one a minute is plenty
+    }
+}
+
 static TrackerFollow::Table* s_follow = nullptr;
 static void serviceFollowing(uint32_t now) {
     static uint32_t lastScan = 0;
@@ -5003,6 +5052,7 @@ void loop() {
     serviceAutoTime(now);
     serviceNightDim(now);
     serviceFollowing(now);
+    serviceTrackerDays(now);
     serviceLive(now);
     serviceAutoUpdate(now);
     servicePush(now);

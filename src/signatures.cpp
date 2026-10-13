@@ -767,6 +767,76 @@ int smartTagState(const uint8_t* sd, size_t n) { return (sd && n >= 1) ? (sd[0] 
 
 int dultNearOwner(const uint8_t* sd, size_t n) { return (sd && n >= 2) ? (sd[1] & 0x01) : -1; }
 
+// The service data for a 16-bit UUID in a raw advert: AD type 0x16, its value
+// the UUID (little-endian) then the data. Null when there is none.
+static const uint8_t* serviceData16(const uint8_t* adv, uint8_t len, uint16_t uuid, size_t& n) {
+    for (uint8_t i = 0; i + 1 < len; ) {
+        const uint8_t l = adv[i];
+        if (!l || i + 1 + l > len) break;
+        if (adv[i + 1] == 0x16 && l >= 3 && (uint16_t)(adv[i + 2] | (adv[i + 3] << 8)) == uuid) {
+            n = (size_t)(l - 3);
+            return adv + i + 4;
+        }
+        i = (uint8_t)(i + 1 + l);
+    }
+    n = 0;
+    return nullptr;
+}
+
+// A 16-bit UUID in the advert's service lists (AD types 0x02 / 0x03).
+static bool listsUuid16(const uint8_t* adv, uint8_t len, uint16_t uuid) {
+    for (uint8_t i = 0; i + 1 < len; ) {
+        const uint8_t l = adv[i];
+        if (!l || i + 1 + l > len) break;
+        if (adv[i + 1] == 0x02 || adv[i + 1] == 0x03)
+            for (uint8_t k = 2; k + 1 <= l; k += 2)
+                if ((uint16_t)(adv[i + k] | (adv[i + k + 1] << 8)) == uuid) return true;
+        i = (uint8_t)(i + 1 + l);
+    }
+    return false;
+}
+
+bool trackerVerdict(const uint8_t* adv, uint8_t len, TrackerVerdict& out) {
+    if (!adv || !len) return false;
+    size_t n = 0;
+    const uint8_t* sd = nullptr;
+    // Google Find Hub: its own frame types only (0x40 / 0x41), not Eddystone's.
+    if ((sd = serviceData16(adv, len, 0xFEAA, n)) && n >= 1 && (sd[0] == 0x40 || sd[0] == 0x41)) {
+        out.type = DetectionType::GOOGLE_TAG;
+        out.away = fmdnSeparated(sd, n);
+        out.conf = out.away ? Confidence::HIGH_CONF : Confidence::MED_CONF;
+        return true;
+    }
+    if ((sd = serviceData16(adv, len, 0xFD5A, n)) || listsUuid16(adv, len, 0xFD5A)) {
+        out.type = DetectionType::SAMSUNG_TAG;
+        out.away = smartTagSeparated(smartTagState(sd, n));
+        out.conf = out.away ? Confidence::HIGH_CONF : Confidence::MED_CONF;
+        return true;
+    }
+    if ((sd = serviceData16(adv, len, 0xFCB2, n))) {
+        if (dultNearOwner(sd, n) != 0) return false;   // beside its owner, or unreadable: not reported
+        out.type = DetectionType::GOOGLE_TAG;
+        out.away = true;
+        out.conf = Confidence::HIGH_CONF;
+        return true;
+    }
+    if (listsUuid16(adv, len, 0xFEED) || listsUuid16(adv, len, 0xFEEC) ||
+        serviceData16(adv, len, 0xFEED, n) || serviceData16(adv, len, 0xFEEC, n)) {
+        out.type = DetectionType::TILE;
+        out.away = false;                              // Tile's advert says nothing either way
+        out.conf = confidenceFor(DetectionType::TILE);
+        return true;
+    }
+    if (isAirTagPayload(adv, len)) {
+        out.type = DetectionType::AIRTAG;
+        out.away = isFindMySeparated(adv, len);
+        out.conf = out.away ? Confidence::HIGH_CONF
+                 : isFindMyBeacon(adv, len) ? Confidence::MED_CONF : Confidence::LOW_CONF;
+        return true;
+    }
+    return false;
+}
+
 Confidence confidenceFor(DetectionType t) {
     // Per docs/DETECTIONS.md. FLOCK/AXON/META/SKIMMER/CAMERA are graded
     // High there for the signature path actually active in v1.0 (the

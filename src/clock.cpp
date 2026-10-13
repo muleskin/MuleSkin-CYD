@@ -11,6 +11,7 @@
 #include "flood_bench.h" // FLOOD N, for the bench (a no-op outside FLOOD_BENCH builds)
 #include "settings.h"
 #include "ignore_list.h"
+#include "regulars.h"       // DAYSFAKE, on bench builds
 #include "muleskin_art_row.h"   // ARTBENCH, on bench builds  // IGNORE LIST / ADD / DEL: the web flasher's ignore list
 #include "blackbox.h"    // BLACKBOX dumps it
 #include "ota_core.h"    // VERTEST, on bench builds
@@ -54,6 +55,7 @@ extern volatile bool g_benchPrimNow;
 // Set by UPDATE NOW below, acted on by main.cpp's loop, which owns it.
 extern volatile bool g_benchUpdateNow;
 extern volatile bool g_benchAlertPush;
+volatile uint32_t g_advDumpUntil = 0;     // ADVDUMP: detection.cpp prints tracker adverts until then
 extern volatile bool g_benchUpdateStop;
 #endif
 // INVERT and ROT: the colour-check toggles and the corner rotate button,
@@ -861,6 +863,26 @@ void pollSerial() {
             const uint32_t us = micros() - t0;
             Serial.printf("[bench] art: 320 rows of 320 px in %lu us, %lu ns a pixel\n",
                           (unsigned long)us, (unsigned long)(us * 1000ul / (320ul * 320ul)));
+        } else if (strncasecmp(line, "ADVDUMP", 7) == 0) {
+            // Print the raw advert of every tracker heard for N seconds
+            // (default 60): the source of test/tracker_adverts.txt.
+            const int s = atoi(line + 7);
+            g_advDumpUntil = millis() + (uint32_t)(s > 0 ? s : 60) * 1000u;
+            if (!g_advDumpUntil) g_advDumpUntil = 1;
+            Serial.printf("[bench] dumping tracker adverts for %d s\n", s > 0 ? s : 60);
+        } else if (strncasecmp(line, "DAYSFAKE ", 9) == 0) {
+            // The regulars, told a device was seen on the three days before
+            // today: the "near you on N days" alert without the three days.
+            uint8_t mac[6];
+            unsigned v[6];
+            if (sscanf(line + 9, "%x:%x:%x:%x:%x:%x", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 6 && Clock::isSet()) {
+                for (int i = 0; i < 6; i++) mac[i] = (uint8_t)v[i];
+                for (uint32_t back = 1; back <= 3; back++)
+                    Regulars::noteOnDay(mac, DetectionType::AIRTAG, Clock::localDay() - back);
+                Serial.printf("[bench] %s: seen on the 3 days before today\n", line + 9);
+            } else {
+                Serial.println("[bench] DAYSFAKE aa:bb:cc:dd:ee:ff (and the clock set)");
+            }
         } else if (strncasecmp(line, "ALERTPUSH", 9) == 0) {
             // A made-up Flock alert through the real push path -- the
             // cooldown, the cap, the IGNORE button -- for the bench.
