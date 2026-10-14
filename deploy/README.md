@@ -76,7 +76,7 @@ sudo OTA_SIGNING_KEY=/path/to/ota-key.pem /root/MuleSkin-CYD/deploy/redeploy.sh
 
 `redeploy.sh` fetches, checks the clone out at the newest release tag (or the
 one you name, e.g. `redeploy.sh v3.1.2` to roll back), builds and signs all
-17 boards, rebuilds the flasher container, and then checks that the live site
+18 boards, rebuilds the flasher container, and then checks that the live site
 serves that version, its signatures and `versions.json` -- it fails loudly
 otherwise. Each step is also written to `deploy-status.json` beside the bins,
 which the site serves (`https://flasher.oillie.cloud/deploy-status.json`, and
@@ -93,7 +93,7 @@ cd /root/MuleSkin-CYD && sudo OTA_SIGNING_KEY=/path/to/ota-key.pem tools/build_f
 cd /docker/muleskin-flasher && sudo docker compose up -d --build
 ```
 
-`build_flasher_bins.sh` builds all 17 boards in Docker, signs each image when
+`build_flasher_bins.sh` builds all 18 boards in Docker, signs each image when
 `OTA_SIGNING_KEY` points at the private key (it lives only on the server; the
 public half is `include/ota_pubkey.h`), and, when the checkout is exactly on a
 release tag, keeps a copy in `.pio/flasher-bins/vX.Y.Z/` and rewrites

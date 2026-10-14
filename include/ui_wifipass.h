@@ -18,6 +18,8 @@ enum class WifiPassResult : uint8_t { NONE, OK, BACK };
 
 void           uiWifiPassInit(TFT_eSPI& t, const char* ssid);
 void           uiWifiPassTick(TFT_eSPI& t, uint32_t now);
+// A character from a physical keyboard (the T-Deck's): '\b' deletes, '\n' is OK.
+void           uiWifiPassKey(char c, uint32_t now);
 // The next tick draws everything, not only what changed. For a caller whose
 // buffer does not keep the last frame (the 3.5"'s half-height sprite).
 void           uiWifiPassRedrawAll();

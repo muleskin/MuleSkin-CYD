@@ -139,6 +139,15 @@ static void pinTouch(int x, int y, uint32_t now) {
     }
 }
 
+// A key from a real keyboard: the same as tapping that digit, or DEL.
+void uiPhoneKey(char c) {
+    if (s_pinWaitMsg) return;
+    if (c == '\b') { if (s_len) s_buf[--s_len] = '\0'; return; }
+    if (c < '0' || c > '9') return;
+    if (s_len < s_pinLen) { s_buf[s_len++] = c; s_buf[s_len] = '\0'; }
+    if (s_len == s_pinLen) { s_pinReady = true; s_done = true; }
+}
+
 void uiPhoneTouch(int x, int y, uint32_t now, PhoneTouch phase) {
     if (phase == PhoneTouch::DOWN) pinTouch(x, y, now);
 }

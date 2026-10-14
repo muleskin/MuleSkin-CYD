@@ -23,7 +23,8 @@ static bool        s_pocketNoteShown = false;
 // Locked on the CrowPanel too, for a different reason: an RGB panel has no
 // MADCTL, so rotating it would be a per-pixel software transform of an
 // 800x480 buffer every frame -- and the panel is natively landscape anyway.
-#if defined(TWATCH_S3) || defined(CROWPANEL7)
+// And on the T-Deck: a keyboard under the screen has exactly one way up.
+#if defined(TWATCH_S3) || defined(CROWPANEL7) || defined(TDECK_PLUS)
 static const bool DEFAULT_ROTATION_LOCK = true;
 #else
 static const bool DEFAULT_ROTATION_LOCK = false;
@@ -439,6 +440,9 @@ void load() {
     s_aura           = s_prefs.getBool("aura", true);
     s_rotation = s_prefs.getUChar("rot", DEFAULT_ROTATION);
     if (s_rotation > 3) s_rotation = DEFAULT_ROTATION;
+#if defined(TDECK_PLUS)
+    s_rotation = DEFAULT_ROTATION;   // landscape, keyboard down: the one way the T-Deck is held
+#endif
     s_backgroundLocked = s_prefs.getBool("bglock", false);
     s_brightness = s_prefs.getUChar("bri", 255);
     if (s_brightness < 32) s_brightness = 32;

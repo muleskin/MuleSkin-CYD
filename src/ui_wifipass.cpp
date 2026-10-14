@@ -290,6 +290,14 @@ void uiWifiPassInit(TFT_eSPI& t, const char* ssid) {
     t.fillRect(0, 0, t.width(), t.height(), Theme::BG);
 }
 
+// A key from a real keyboard (the T-Deck's): the same path a tapped key takes.
+// '\b' deletes, '\n' is OK, anything else printable is typed as it came --
+// the keyboard's own shift and symbol keys already chose the character.
+void uiWifiPassKey(char c, uint32_t now) {
+    if (c == '\r') c = K_OK;
+    if (c == K_DEL || c == K_OK || (c >= ' ' && c < 0x7F)) type(c, now);
+}
+
 void uiWifiPassTick(TFT_eSPI& t, uint32_t now) {
     const int w = t.width(), h = t.height();
     layout(w, h);

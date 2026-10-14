@@ -118,6 +118,13 @@ flasher until they have run here:
   `st77922_*.cpp` own the bus, the panel and the touch; the frame (480×320,
   in PSRAM) goes out from the loop, changed bands only, rotated on the way.
   Its SD (SDMMC 2-7), LED (40), battery (8) and backlight (41) pins differ.
+- **LilyGo T-Deck Plus** (`[env:tdeck-plus]`, from upstream v1.36.0): an S3
+  handheld with a 2.8" ST7789, GT911 touch, an SD slot on the display's bus,
+  a battery, a GPS (WARDRIVE to the card) and a real keyboard, which types
+  into the WiFi password and the PIN pad. Its backlight is a 16-step chip
+  that counts pulses, so it is stepped rather than PWM'd; landscape only,
+  keyboard down. The trackball, the LoRa radio and the speaker sit this one
+  out.
 - **Marauder V8** (`[env:marauder-v8]`, from upstream v1.36.0):
   justcallmekoko's ESP32-C5 board -- the NM-CYD-C5's SPI bus with an
   ILI9341 at 40 MHz, resistive touch, an SD slot, a MAX17048 battery gauge

@@ -12,6 +12,9 @@ void uiPhoneTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
 // The edges of a touch; the pad acts on the press and ignores the rest.
 enum class PhoneTouch : uint8_t { DOWN, MOVE, UP };
 void uiPhoneTouch(int x, int y, uint32_t now, PhoneTouch phase);
+// A character from a physical keyboard (the T-Deck's): digits type, '\b'
+// deletes, anything else is ignored.
+void uiPhoneKey(char c);
 
 bool uiPhoneDone();
 

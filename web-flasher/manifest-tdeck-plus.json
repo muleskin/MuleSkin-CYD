@@ -1,0 +1,30 @@
+{
+  "name": "MuleSkin-CYD (LilyGo T-Deck Plus, BETA)",
+  "version": "3.6.0",
+  "release_name": "Two new boards",
+  "whats_new": ["3.5in capacitive CYD (BETA)", "Freenove S3 4.0in (BETA)", "Both from upstream SquachWatch"],
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        {
+          "path": "esp32s3-bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "twatch-s3-partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "esp32-otadata.bin",
+          "offset": 57344
+        },
+        {
+          "path": "tdeck-plus-firmware.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}

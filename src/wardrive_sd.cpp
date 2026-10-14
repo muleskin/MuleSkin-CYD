@@ -28,6 +28,9 @@ namespace { inline void busLock() {} inline void busUnlock() {} }
 #if defined(MARAUDER_V8)
 #define WIGLE_MODEL "Marauder V8"
 #define WIGLE_BRAND "justcallmekoko"
+#elif defined(TDECK_PLUS)
+#define WIGLE_MODEL "T-Deck Plus"
+#define WIGLE_BRAND "LilyGo"
 #else
 #define WIGLE_MODEL "ESP32-2432S028R"
 #define WIGLE_BRAND "Sunton"

@@ -60,7 +60,7 @@ enum class SettingsRow : uint8_t {
 #if SQW_WIFI_5G
     WIFI_BANDS,      // a chip with 5 GHz only (the NM-CYD-C5): 2.4+5, or 2.4
 #endif
-    BOARD_BATTERY,   // the Freenove S3s and the Marauder V8: the cell, on the SYSTEM page
+    BOARD_BATTERY,   // the Freenove S3s, the Marauder V8 and the T-Deck Plus: the cell, on the SYSTEM page
     CHARGE_MODE,     // the CYD boards: radios and screen off so a battery charges faster
     LAST_RUN,        // the CYD boards: how long the previous boot ran, on the SYSTEM page
     PRIVACY,         // PRIVACY MODE: addresses and names masked on screen, on the SYSTEM page

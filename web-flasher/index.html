@@ -494,6 +494,7 @@
       <option value="./manifest-freenove-s3.json">Freenove ESP32-S3 2.8&quot; &mdash; FNK0104 (BETA)</option>
       <option value="./manifest-freenove-s3-35.json">Freenove ESP32-S3 3.5&quot; &mdash; FNK0104N (BETA)</option>
       <option value="./manifest-freenove-s3-40.json">Freenove ESP32-S3 4.0&quot; &mdash; FNK0104S (BETA)</option>
+      <option value="./manifest-tdeck-plus.json">LilyGo T-Deck Plus &mdash; keyboard, GPS (BETA)</option>
       <option value="./manifest-crowpanel7.json">Elecrow CrowPanel 7&quot; &mdash; CrowPanel Advance 7.0 (BETA)</option>
       </optgroup>
       <optgroup label="ESP32-C5 BOARDS">
@@ -784,7 +785,7 @@
          './manifest-lab-cyd35-fast.json', './manifest-lab-awok.json',
          './manifest-lab-nm-cyd-c5.json', './manifest-lab-cyd35c-fast.json',
          './manifest-lab-freenove-s3-40.json', './manifest-lab-marauder-v8.json',
-         './manifest-lab-freenove-s3-35.json'].forEach(function (path) {
+         './manifest-lab-freenove-s3-35.json', './manifest-lab-tdeck-plus.json'].forEach(function (path) {
           fetch(path, { cache: 'no-store' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (m) {
@@ -941,6 +942,7 @@
       { re: /FNK0?104S/,            v: './manifest-freenove-s3-40.json', say: 'That’s the Freenove ESP32-S3 4.0" (BETA). Selected below.' },
       { re: /FNK0?104/,             v: './manifest-freenove-s3.json', say: 'That’s the Freenove ESP32-S3 2.8" (BETA). Selected below.' },
       { re: /CROWPANEL|CROW/,       v: './manifest-crowpanel7.json',  say: 'That’s the CrowPanel 7" (BETA). Selected below.' },
+      { re: /T-?DECK/,              v: './manifest-tdeck-plus.json',  say: 'That’s the LilyGo T-Deck Plus (BETA). Selected below.' },
       { re: /T-?WATCH/,             v: './manifest-twatch-s3.json',   say: 'That’s a T-Watch S3 (BETA). Selected below.' }
     ];
     if (codeIn && codeOut) codeIn.addEventListener('input', function () {

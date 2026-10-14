@@ -42,6 +42,8 @@ extern TFT_eSPI tft;
     #define SD_CS_PIN 14
 #elif defined(NM_CYD_C5)
     #define SD_CS_PIN 10
+#elif defined(TDECK_PLUS)
+    #define SD_CS_PIN 39   // on the display's bus (40/38/41), per LilyGo's utilities.h
 #else
     #define SD_CS_PIN 5
 #endif
@@ -143,6 +145,11 @@ bool SdLog::begin() {
     // with a working card inserted); and GPIO23 is this board's TFT_CS, so
     // the additive GPIO-matrix attach the comment above warns about lands on
     // the display's own chip select.
+    if (!SD.begin(SD_CS_PIN, tft.getSPIinstance(), 4000000, "/sd", SD_MAX_FILES)) {
+#elif defined(TDECK_PLUS)
+    // The T-Deck's slot is on the DISPLAY's bus too (SCK 40, MISO 38, MOSI 41,
+    // CS 39), with the SX1262 beside it on CS 9: the same shared-bus treatment
+    // as the C5 above, TFT_eSPI's own instance and nothing extra attached.
     if (!SD.begin(SD_CS_PIN, tft.getSPIinstance(), 4000000, "/sd", SD_MAX_FILES)) {
 #elif defined(AWOK)
     if (!SD.begin(SD_CS_PIN, SPI, 4000000, "/sd", SD_MAX_FILES)) {
