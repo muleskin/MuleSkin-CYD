@@ -81,6 +81,15 @@ text = open(os.path.join(ROOT, "deploy", "redeploy.sh"), encoding="utf-8").read(
 ck("no curl piped into grep -q (pipefail turns it into a false failure)",
    not re.search(r"curl[^\n|]*\|\s*grep -q", text))
 
+# Plain HTTP serves only the manifests and the firmware files; anything else
+# the verify stage asks for there is a 301 to HTTPS, and curl without -L reads
+# the redirect's body. versions.json was that (2026-10-14).
+for m in re.finditer(r'curl ([^|\n]*)"\$SITE/([^"]+)"', text):
+    flags, path = m.group(1), m.group(2)
+    plain = re.fullmatch(r"(manifest-[^/]*\.json|[^/]*-firmware\.(bin|sig)|\$e-firmware\.bin|\$e-firmware\.sig)", path)
+    if not plain:
+        ck("curl of %s follows the HTTPS redirect (-L)" % path, "L" in flags.replace("-o", ""))
+
 print("tools/flasher_versions.py's versions.json")
 VERSIONS_PY = os.path.join(ROOT, "tools", "flasher_versions.py")
 

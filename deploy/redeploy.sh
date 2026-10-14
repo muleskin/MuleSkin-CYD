@@ -131,7 +131,12 @@ fi
 # grep -c, not -q: -q stops at the match and leaves curl writing into a closed
 # pipe, which pipefail counts as a failure -- the v3.6.0 redeploy said
 # "versions.json doesn't list v3.6.0" while the site listed it.
-n=$(curl -fsS "$SITE/versions.json" | grep -c "\"$TAG\"" || true)
+# -L as well: only the manifests and the firmware files are served on plain
+# HTTP (for the boards; deploy/muleskin-flasher/docker-compose.yml), and
+# versions.json is a 301 to HTTPS there. Without -L the check read the words
+# "Moved Permanently" and reported a good deploy as failed -- every deploy
+# from v3.6.0 to v3.7.0 (found 2026-10-14; the grep -q above was a red herring).
+n=$(curl -fsSL "$SITE/versions.json" | grep -c "\"$TAG\"" || true)
 [ "${n:-0}" -gt 0 ] || die "versions.json doesn't list $TAG"
 # Every board's firmware, as the site serves it, carries this tag's version
 # stamp (SQWVER:<tag>; ota_core.cpp) -- a bin left over from an older build
