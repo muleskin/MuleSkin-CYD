@@ -7,6 +7,11 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <TFT_eSPI.h>
+#if defined(FREENOVE_S3_35)
+#include "st77922_display.h"
+#include "st77922_qspi.h"
+#include "st77922_touch.h"
+#endif
 #if defined(CROWPANEL7)
 #include "crowpanel7_board.h"
 #include "crowpanel7_display.h"
@@ -444,7 +449,11 @@ static void drawCrashCard(TFT_eSPI& t) {
 #define BL_PIN_ORIG 21
 #define BL_PIN_CAP  27
 #define BL_PIN_AWOK 32
+#if defined(FREENOVE_S3_35)
+#define BL_PIN_S3   41   // the Freenove 3.5"'s, through a BSS138 (HIGH is on)
+#else
 #define BL_PIN_S3   45   // the T-Watch S3's and the Freenove S3's, both
+#endif
 #define BL_CH_ORIG  0
 #define BL_CH_CAP   1
 #define BL_CH_AWOK  2
@@ -465,6 +474,11 @@ static void drawCrashCard(TFT_eSPI& t) {
 #if defined(TWATCH_S3)
 // Confirmed on the watch 2026-09-22: the ST7789 wants inversion on (as
 // LilyGo's own setup says); false showed every colour inverted.
+constexpr bool PANEL_NEEDS_INVERSION = true;
+#elif defined(FREENOVE_S3_35)
+// Freenove's init for the 3.5" ST77922 turns inversion on (0x21), which is
+// what St77922TFT::invertDisplay(true) sends. UNCONFIRMED by eye (upstream
+// too); INVERT in Settings flips it if wrong.
 constexpr bool PANEL_NEEDS_INVERSION = true;
 #elif defined(FREENOVE_S3)
 // Freenove's own setup for the S3 2.8" (FNK0104AB) turns inversion on, and
@@ -541,6 +555,10 @@ public:
 // device type and only this hierarchy gives the two a common base. Nothing
 // is ever sent to an SPI display bus on this board -- see the header.
 CrowPanelTFT        tft;
+#elif defined(FREENOVE_S3_35)
+// Likewise not a TFT_eSPI: an ST77922 on a four-lane QSPI bus, wearing the
+// library's interface for the same reason -- see st77922_display.h.
+St77922TFT          tft;
 #else
 TFT_eSPI            tft = TFT_eSPI();
 #endif
@@ -704,8 +722,14 @@ static bool rawReadResistive(int16_t& a, int16_t& b);
 static uint16_t CAP_NX_MIN = CROW_CAP_NX_MIN, CAP_NX_MAX = CROW_CAP_NX_MAX;
 static uint16_t CAP_NY_MIN = CROW_CAP_NY_MIN, CAP_NY_MAX = CROW_CAP_NY_MAX;
 #else
+#if defined(FREENOVE_S3_35)
+// The ST77922's own touch reports panel pixels: a pass-through.
+static uint16_t CAP_NX_MIN = St77922Touch::NX_MIN, CAP_NX_MAX = St77922Touch::NX_MAX;
+static uint16_t CAP_NY_MIN = St77922Touch::NY_MIN, CAP_NY_MAX = St77922Touch::NY_MAX;
+#else
 static uint16_t CAP_NX_MIN = 32,  CAP_NX_MAX = 166;
 static uint16_t CAP_NY_MIN = 10,  CAP_NY_MAX = 308;
+#endif
 #endif
 // Resistive XPT2046 raw ADC range — same idea, factory default was a
 // flat 200-3800 for both axes; not const for the same reason.
@@ -920,6 +944,11 @@ static bool readTouchRaw(int16_t& a, int16_t& b) {
     if (!Gt911::read(x, y)) return false;
     a = (int16_t)x; b = (int16_t)y;
     return true;
+#elif defined(FREENOVE_S3_35)
+    uint16_t x, y;
+    if (!St77922Touch::read(x, y)) return false;
+    a = (int16_t)x; b = (int16_t)y;
+    return true;
 #else
     if (usingCapTouch) return rawReadCap(a, b);
 #if defined(TOUCH_ON_DISPLAY_BUS) || defined(CYD35R)
@@ -937,8 +966,9 @@ static bool readTouchRaw(int16_t& a, int16_t& b) {
 static bool s_screenDimmed = false;
 // The BOOT button (GPIO0) on the plain-ESP32 CYDs: a short press turns the
 // screen off or on, a long one starts CHARGE MODE. The S3 boards and the
-// CrowPanel are left out until somebody has pressed theirs.
-#if defined(ESP32) && !defined(SQW_S3) && !defined(CROWPANEL7)
+// CrowPanel are left out until somebody has pressed theirs -- except the
+// Freenove 3.5", whose one button is GPIO0 like a CYD's (upstream v1.34).
+#if defined(ESP32) && (!defined(SQW_S3) || defined(FREENOVE_S3_35)) && !defined(CROWPANEL7)
 #define SQW_BOOT_BTN 1
 #else
 #define SQW_BOOT_BTN 0
@@ -3111,7 +3141,13 @@ static void twatchPowerUp() {
 }
 #endif
 
-#if defined(FREENOVE_S3)
+#if defined(FREENOVE_S3) || defined(FREENOVE_S3_35)
+// GPIO9 on the 2.8" and 4.0", GPIO8 on the 3.5" (Freenove's battery sketch).
+#if defined(FREENOVE_S3_35)
+#define BOARD_BAT_ADC 8
+#else
+#define BOARD_BAT_ADC 9
+#endif
 // The Freenove S3's battery: a 1-cell LiPo on its JST, a TP4054 charging it
 // from USB, and a 200K/200K divider from the cell to GPIO9 (ADC1, so WiFi does
 // not take it away). No fuel gauge, and the charger's CHRG line goes to an LED
@@ -3119,7 +3155,7 @@ static void twatchPowerUp() {
 // On the cable the cell reads the charger's ~4.2 V, which is the honest reading.
 static uint16_t boardBatteryMv() {
     uint32_t sum = 0;
-    for (int i = 0; i < 8; i++) sum += analogReadMilliVolts(9);
+    for (int i = 0; i < 8; i++) sum += analogReadMilliVolts(BOARD_BAT_ADC);
     return (uint16_t)(sum / 8 * 2);   // the divider halves it
 }
 // Resting LiPo, per cell: rough, but a percent that moves the right way.
@@ -3860,6 +3896,27 @@ static void printBootBanner() {
 #if defined(TWATCH_S3)
 static void wardriveBegin();
 #endif
+// ---- text straight at the panel ----------------------------------------------
+// Three screens write at the panel rather than into the frame: the update
+// check at boot, the calibration-reset prompt and the charge screen. On the
+// Freenove 3.5" the panel is not TFT_eSPI's to write -- its text landed on the
+// QSPI bus as a green hash upstream (2026-10-11) -- so there they draw into
+// the frame and push it, once the frame exists. Everywhere else PANEL is the
+// panel and panelShow() is nothing, which is what they did.
+#if defined(FREENOVE_S3_35)
+#define PANEL ((TFT_eSPI&)frame)
+static bool panelTextOk() { return frameBufferOk && frame.created(); }
+static void panelShow() {
+    if (!panelTextOk()) return;
+    St77922Blit::invalidate();   // every row: nothing drew its way to this
+    St77922Blit::push(frame.buf(), frame.bufW(), frame.bufH(), tft.getRotation());
+}
+#else
+#define PANEL tft
+static bool panelTextOk() { return true; }
+static void panelShow()   {}
+#endif
+
 void setup() {
     // Before anything opens NVS -- crashReportInit() does: settings left in
     // the old 20 KB store by a USB install onto the new table move across.
@@ -4122,15 +4179,20 @@ void setup() {
         ledcWrite(BL_CH_CAP,  24);
         ledcWrite(BL_CH_AWOK, 24);
 #endif
-        tft.fillScreen(Theme::BG);
-        tft.setTextSize(1);
-        tft.setTextWrap(false);
-        tft.setTextColor(Theme::CYAN, Theme::BG);
-        const char* m = "CHECKING FOR UPDATES...";
-        tft.setCursor((tft.width() - tft.textWidth(m)) / 2, tft.height() / 2 - 4);
-        tft.print(m);
+        // The frame does not exist yet on the 3.5", so that board checks
+        // without the message rather than with a garbled one.
+        if (panelTextOk()) {
+            PANEL.fillRect(0, 0, tft.width(), tft.height(), Theme::BG);
+            PANEL.setTextSize(1);
+            PANEL.setTextWrap(false);
+            PANEL.setTextColor(Theme::CYAN, Theme::BG);
+            const char* m = "CHECKING FOR UPDATES...";
+            PANEL.setCursor((tft.width() - PANEL.textWidth(m)) / 2, tft.height() / 2 - 4);
+            PANEL.print(m);
+            panelShow();
+        }
         OtaWifi::bootCheck(9000);
-        tft.fillScreen(Theme::BG);
+        if (panelTextOk()) { PANEL.fillRect(0, 0, tft.width(), tft.height(), Theme::BG); panelShow(); }
     }
 
 
@@ -4159,7 +4221,7 @@ void setup() {
     // 16-bit — the full 16-bit buffer didn't fit in the available
     // contiguous heap on this board.
     frame.setColorDepth(8);
-#if (defined(SQW_S3) && !defined(FREENOVE_S3_40)) || (defined(CROWPANEL7) && CROWPANEL_FRAME_INTERNAL)
+#if (defined(SQW_S3) && !defined(FREENOVE_S3_40) && !defined(FREENOVE_S3_35)) || (defined(CROWPANEL7) && CROWPANEL_FRAME_INTERNAL)
     // (Not the Freenove 4.0": 480x320 at 8 bits is 154 KB, which goes to
     // PSRAM, as upstream SquachWatch does for its 480x320 S3 boards.)
     // 57.6 KB fits in internal RAM with room to spare (75 KB at 320x240), and a sprite in
@@ -4259,6 +4321,20 @@ void setup() {
     // buzzer a crash may have left sounding -- the helper keeps its state
     // across our reset. Not a boot beep.
     Buzzer::begin();
+#elif defined(FREENOVE_S3_35)
+    // The Freenove S3 3.5"'s touch is in the ST77922 itself, on I2C SDA 38 /
+    // SCL 39 at 0x55, reset on GPIO48, interrupt on GPIO47 (unused: polled).
+    St77922Touch::begin(38, 39, 48, 47);
+    // That pulsed the chip's reset, which may be the display's too on a
+    // TDDI part: set the panel up again as a precaution, put its inversion
+    // back, and forget what it was showing.
+    St77922::reinit();
+    tft.invertDisplay(PANEL_NEEDS_INVERSION != Settings::inverted());
+    St77922Blit::invalidate();
+    usingCapTouch = St77922Touch::probe();
+    Serial.println(usingCapTouch ? "Freenove S3 3.5 -- ST77922 touch answered."
+                                 : "Freenove S3 3.5 -- ST77922 touch did not answer; no touch.");
+    { char b[16]; boardBatteryLine(b, sizeof b); Serial.printf("[batt] %s (raw GPIO%d %u mV)\n", b, BOARD_BAT_ADC, (unsigned)analogReadMilliVolts(BOARD_BAT_ADC)); }
 #elif defined(CYD32C) || defined(CYD35C)
     // The GT911, on the CYD's capacitive I2C pins. Raw panel pixels in the
     // panel's own portrait frame, so the five-target calibration maps them
@@ -4322,19 +4398,21 @@ void setup() {
     // make touch too inaccurate to reliably re-tap a "recalibrate"
     // button, so this needs no precision at all — just a hold anywhere
     // during the window right after boot.
-    tft.fillScreen(Theme::BG);
-    tft.setTextColor(Theme::AMBER, Theme::BG);
-    tft.setTextSize(1);
-    tft.setCursor(4, 4);
-    tft.print("Hold anywhere now to reset touch calibration...");
+    PANEL.fillRect(0, 0, tft.width(), tft.height(), Theme::BG);
+    PANEL.setTextColor(Theme::AMBER, Theme::BG);
+    PANEL.setTextSize(1);
+    PANEL.setCursor(4, 4);
+    PANEL.print("Hold anywhere now to reset touch calibration...");
+    panelShow();
     {
         uint32_t holdStart = 0;
         uint32_t windowStart = millis();
         while (millis() - windowStart < 1200) {
             int16_t a, b;
-#if defined(CROWPANEL7) || defined(CYD32C) || defined(CYD35C)
-            // The GT911 is neither of the two below; the two-way dispatch
-            // polled a capacitive controller that is not on this bus.
+#if defined(CROWPANEL7) || defined(CYD32C) || defined(CYD35C) || defined(FREENOVE_S3_35)
+            // The GT911 (and the ST77922's touch) is neither of the two
+            // below; the two-way dispatch polled a capacitive controller that
+            // is not on this bus.
             bool down = readTouchRaw(a, b);
 #else
             bool down = usingCapTouch ? rawReadCap(a, b) : rawReadResistive(a, b);
@@ -4350,12 +4428,13 @@ void setup() {
                     // straight back.
                     clearTftEspiBlobs();
 #endif
-                    tft.fillScreen(Theme::BG);
-                    tft.setTextColor(Theme::AMBER, Theme::BG);
-                    tft.setTextSize(2);
+                    PANEL.fillRect(0, 0, tft.width(), tft.height(), Theme::BG);
+                    PANEL.setTextColor(Theme::AMBER, Theme::BG);
+                    PANEL.setTextSize(2);
                     const char* msg = "CALIBRATION RESET";
-                    tft.setCursor((tft.width() - tft.textWidth(msg)) / 2, tft.height() / 2 - 8);
-                    tft.print(msg);
+                    PANEL.setCursor((tft.width() - PANEL.textWidth(msg)) / 2, tft.height() / 2 - 8);
+                    PANEL.print(msg);
+                    panelShow();
                     delay(1200);
                     break;
                 }
@@ -4365,7 +4444,8 @@ void setup() {
             delay(10);
         }
     }
-    tft.fillScreen(Theme::BG);
+    PANEL.fillRect(0, 0, tft.width(), tft.height(), Theme::BG);
+    panelShow();
 
     // Touch calibration. Every board gets the five-target calibration once:
     // at first boot, and once more after updating from a firmware that used
@@ -4381,14 +4461,15 @@ void setup() {
     // injected against the compiled-in ranges -- a calibration screen would
     // just sit there waiting for a finger.
     initTouchFit();
-#if defined(ESP32) && !defined(CROWPANEL7)
+#if defined(ESP32) && !defined(CROWPANEL7) && !defined(FREENOVE_S3_35)
     if (s_calSource != CalSource::SAVED) {
         Serial.println("Touch: no five-target calibration yet -- running it now.");
         runTouchCalibration();
     }
 #endif
-#if defined(CROWPANEL7)
-    // Never on first boot here. The GT911 reports panel pixels, so the
+#if defined(CROWPANEL7) || defined(FREENOVE_S3_35)
+    // Never on first boot here. The GT911 (and the ST77922's own touch)
+    // reports panel pixels, so the
     // compiled-in fit is already the identity and there is nothing to
     // calibrate -- making someone tap five targets would only replace an
     // exact mapping with a hand-aimed one. SETTINGS can still run it.
@@ -4615,6 +4696,11 @@ static inline void pushFrame(int x, int y) {
     // the 8->16 bit conversion on the way. It declines only if the panel
     // never came up, in which case there is nowhere to put the frame at all.
     CrowBlit::push(frame.buf(), frame.bufW(), frame.bufH(), x, y);
+#elif defined(FREENOVE_S3_35)
+    // The ST77922 over QSPI: TFT_eSPI cannot reach it, so no pushSprite
+    // fallback either -- St77922Blit or nothing (the panel never came up).
+    (void)x; (void)y;
+    St77922Blit::push(frame.buf(), frame.bufW(), frame.bufH(), tft.getRotation());
 #else
     if (frame.getColorDepth() != 8 ||
         !FramePush::push(tft, frame.buf(), frame.bufW(), frame.bufH(), x, y)) {
@@ -5181,25 +5267,26 @@ static void chargeBacklight(uint8_t duty) {
 static void chargeDraw(uint32_t now) {
     s_chargeDrawnAt = now;
     const int w = tft.width(), h = tft.height();
-    tft.fillScreen(TFT_BLACK);
+    PANEL.fillRect(0, 0, tft.width(), tft.height(), TFT_BLACK);
     const uint32_t mins = (now - s_chargeAt) / 60000UL;
     char line[32];
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(Theme::CYAN, TFT_BLACK);
-    tft.setTextSize(3);
-    tft.drawString("CHARGE MODE", w / 2, h / 2 - 50);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.setTextSize(2);
+    PANEL.setTextDatum(MC_DATUM);
+    PANEL.setTextColor(Theme::CYAN, TFT_BLACK);
+    PANEL.setTextSize(3);
+    PANEL.drawString("CHARGE MODE", w / 2, h / 2 - 50);
+    PANEL.setTextColor(TFT_WHITE, TFT_BLACK);
+    PANEL.setTextSize(2);
     snprintf(line, sizeof line, "Charging %luh %02lum", (unsigned long)(mins / 60), (unsigned long)(mins % 60));
-    tft.drawString(line, w / 2, h / 2 - 10);
-    tft.setTextSize(1);
-    tft.setTextColor(Theme::blend(TFT_BLACK, TFT_WHITE, 170), TFT_BLACK);
-    tft.drawString("Radios and screen are off so the battery fills faster.", w / 2, h / 2 + 20);
-    tft.drawString("About 4-6 hours from empty.", w / 2, h / 2 + 34);
-    tft.setTextColor(Theme::GREEN, TFT_BLACK);
-    tft.setTextSize(2);
-    tft.drawString("TAP TO WAKE UP", w / 2, h / 2 + 64);
-    tft.setTextDatum(TL_DATUM);
+    PANEL.drawString(line, w / 2, h / 2 - 10);
+    PANEL.setTextSize(1);
+    PANEL.setTextColor(Theme::blend(TFT_BLACK, TFT_WHITE, 170), TFT_BLACK);
+    PANEL.drawString("Radios and screen are off so the battery fills faster.", w / 2, h / 2 + 20);
+    PANEL.drawString("About 4-6 hours from empty.", w / 2, h / 2 + 34);
+    PANEL.setTextColor(Theme::GREEN, TFT_BLACK);
+    PANEL.setTextSize(2);
+    PANEL.drawString("TAP TO WAKE UP", w / 2, h / 2 + 64);
+    PANEL.setTextDatum(TL_DATUM);
+    panelShow();
 }
 
 static void enterChargeMode() {
@@ -7684,6 +7771,8 @@ void loop() {
             info.boardName = "AWOK";
 #elif defined(FREENOVE_S3_40)
             info.boardName = "freenove-s3-40 BETA";
+#elif defined(FREENOVE_S3_35)
+            info.boardName = "freenove-s3-35 BETA";
 #elif defined(CYD35C)
             info.boardName = "cyd35c BETA";
 #elif defined(CYD35)

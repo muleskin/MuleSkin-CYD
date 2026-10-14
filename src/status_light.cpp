@@ -29,7 +29,7 @@
 // status LED" rather than as a bug.
 #if defined(ESP32) && !defined(CYD35) && !defined(AWOK) && !defined(SQW_S3) && !defined(CROWPANEL7) && !defined(NM_CYD_C5)
 #define STATUS_LIGHT_HW 1
-#elif defined(FREENOVE_S3) || (defined(NM_CYD_C5) && !defined(MARAUDER_V8))
+#elif defined(FREENOVE_S3) || defined(FREENOVE_S3_35) || (defined(NM_CYD_C5) && !defined(MARAUDER_V8))
 #define STATUS_LIGHT_HW 2
 // Not the Marauder V8: Marauder's own build leaves its WS2812 off
 // (HAS_NEOPIXEL_LED commented out) and 27 is a strapping pin on the C5, so it
@@ -62,6 +62,8 @@ static const uint8_t PIN_ACT = 28;
 #if STATUS_LIGHT_HW == 2
 #if defined(NM_CYD_C5)
 static const uint8_t PIN_WS2812 = 27;
+#elif defined(FREENOVE_S3_35)
+static const uint8_t PIN_WS2812 = 40;   // the 3.5", per Freenove's LED sketch
 #else
 static const uint8_t PIN_WS2812 = 42;
 #endif

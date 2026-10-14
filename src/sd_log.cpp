@@ -6,7 +6,7 @@
 #include "gnss.h"
 #endif
 #include <SD.h>
-#if defined(FREENOVE_S3)
+#if defined(FREENOVE_S3) || defined(FREENOVE_S3_35)
 // The Freenove S3's slot is wired for SDMMC, not SPI: every card call in this
 // file goes through CARD, which is SD_MMC there and SD everywhere else. Both
 // are an fs::FS, so open/remove/cardSize read the same either way.
@@ -65,16 +65,25 @@ bool SdLog::begin() {
     return false;
 #endif
     Serial.printf("[sd] mounting: heap %lu, largest block %lu\n", (unsigned long)ESP.getFreeHeap(), (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-#if defined(FREENOVE_S3)
-    // SDMMC on the S3's GPIO matrix. Pins from Freenove's own SDMMC sketch and
+#if defined(FREENOVE_S3) || defined(FREENOVE_S3_35)
+    // SDMMC on the S3's GPIO matrix. (The 3.5": CLK 5, CMD 4, D0 6, D1 7,
+    // D2 2, D3 3 -- upstream v1.34.) Pins from Freenove's own SDMMC sketch and
     // the schematic: CLK 38, CMD 40, D0 39, D1 41, D2 48, D3 47, each with a
     // 10K pull-up on the board. 4-bit first; if a card will not start that
     // way, 1-bit (CLK/CMD/D0 only) before giving up, and the log says which.
+#if defined(FREENOVE_S3_35)
+    SD_MMC.setPins(5, 4, 6, 7, 2, 3);
+#else
     SD_MMC.setPins(38, 40, 39, 41, 48, 47);
+#endif
     bool mounted = SD_MMC.begin("/sd", false, false, SDMMC_FREQ_DEFAULT, SD_MAX_FILES);
     if (!mounted) {
         SD_MMC.end();
+#if defined(FREENOVE_S3_35)
+        SD_MMC.setPins(5, 4, 6);
+#else
         SD_MMC.setPins(38, 40, 39);
+#endif
         mounted = SD_MMC.begin("/sd", true, false, SDMMC_FREQ_DEFAULT, SD_MAX_FILES);
         if (mounted) Serial.println("[sd] 4-bit did not start; mounted 1-bit");
     }

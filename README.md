@@ -112,6 +112,12 @@ flasher until they have run here:
   battery on the same pins. Its 480×320 frame lives in PSRAM. Contributed
   upstream by T0x0pl4sm4 (PR #51). If the picture tears or speckles, build
   with `-DSPI_FREQUENCY=40000000`.
+- **Freenove ESP32-S3 Display 3.5"** (FNK0104N, `[env:freenove-s3-35]`,
+  from upstream v1.34.0): the Freenove 2.8"'s board with a 320×480 ST77922 on
+  a four-lane QSPI bus TFT_eSPI cannot drive, and touch inside the same chip.
+  `st77922_*.cpp` own the bus, the panel and the touch; the frame (480×320,
+  in PSRAM) goes out from the loop, changed bands only, rotated on the way.
+  Its SD (SDMMC 2-7), LED (40), battery (8) and backlight (41) pins differ.
 - **Marauder V8** (`[env:marauder-v8]`, from upstream v1.36.0):
   justcallmekoko's ESP32-C5 board -- the NM-CYD-C5's SPI bus with an
   ILI9341 at 40 MHz, resistive touch, an SD slot, a MAX17048 battery gauge
