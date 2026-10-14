@@ -51,6 +51,14 @@ stage() { STAGE=$1; echo "== $2"; status running "$2"; }
 die() { echo "redeploy: $*" >&2; status failed "$*"; exit 1; }
 trap 'status failed "a command failed at line $LINENO (stage $STAGE)"' ERR
 [ "$(id -u)" = 0 ] || die "run it with sudo"
+# One at a time. Two runs build in the same .pio directory inside docker and
+# break each other's builds (2026-10-14: a second v3.6.0 run started while the
+# first was building, and its build stage failed). The lock is held by fd 9
+# until the script ends; the re-exec of the newest copy below takes it again.
+if command -v flock >/dev/null; then
+  exec 9>/run/muleskin-redeploy.lock
+  flock -n 9 || { echo "redeploy: another redeploy is running -- wait for it to finish" >&2; exit 1; }
+fi
 if [ $UNSIGNED = 0 ]; then
   [ -n "${OTA_SIGNING_KEY:-}" ] || die "OTA_SIGNING_KEY is not set (or pass --unsigned)"
   [ -r "$OTA_SIGNING_KEY" ] || die "can't read $OTA_SIGNING_KEY"
