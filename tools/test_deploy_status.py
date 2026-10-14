@@ -74,6 +74,13 @@ rc, out = run_status('STAGE=done; status ok "flasher.oillie.cloud serves v9.9.9"
 st = json.loads(out) if out else {}
 ck("done: ok", st.get("state") == "ok" and st.get("failed") == [])
 
+# The verify stage pipes curl into grep. "grep -q" stops at the first match and
+# curl, still writing, fails on the closed pipe -- under pipefail a false
+# "failed" (the v3.6.0 redeploy, 2026-10-13). grep -c reads to the end.
+text = open(os.path.join(ROOT, "deploy", "redeploy.sh"), encoding="utf-8").read()
+ck("no curl piped into grep -q (pipefail turns it into a false failure)",
+   not re.search(r"curl[^\n|]*\|\s*grep -q", text))
+
 print("quiet-check.py's flasher pushes")
 spec = importlib.util.spec_from_file_location("quiet_check", os.path.join(ROOT, "deploy", "ntfy", "quiet-check.py"))
 qc = importlib.util.module_from_spec(spec)

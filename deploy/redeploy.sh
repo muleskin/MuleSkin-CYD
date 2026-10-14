@@ -90,7 +90,11 @@ if [ $UNSIGNED = 0 ]; then
   code=$(curl -s -o /dev/null -w '%{http_code}' -r 0-0 "$SITE/cyd-ili9341-firmware.sig")
   case $code in 200|206) ;; *) die "the signature isn't served (HTTP $code)" ;; esac
 fi
-curl -fsS "$SITE/versions.json" | grep -q "\"$TAG\"" || die "versions.json doesn't list $TAG"
+# grep -c, not -q: -q stops at the match and leaves curl writing into a closed
+# pipe, which pipefail counts as a failure -- the v3.6.0 redeploy said
+# "versions.json doesn't list v3.6.0" while the site listed it.
+n=$(curl -fsS "$SITE/versions.json" | grep -c "\"$TAG\"" || true)
+[ "${n:-0}" -gt 0 ] || die "versions.json doesn't list $TAG"
 # Every board's firmware, as the site serves it, carries this tag's version
 # stamp (SQWVER:<tag>; ota_core.cpp) -- a bin left over from an older build
 # would carry another, or none.
