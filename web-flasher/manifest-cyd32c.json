@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (3.2\" capacitive, ESP32-2432S032C)",
-  "version": "3.6.0",
-  "release_name": "Two new boards",
-  "whats_new": ["3.5in capacitive CYD (BETA)", "Freenove S3 4.0in (BETA)", "Both from upstream SquachWatch"],
+  "version": "3.7.0",
+  "release_name": "Five more boards",
+  "whats_new": ["Marauder V8 and T-Deck Plus", "Freenove ESP32-S3 3.5in", "M5 StickS3 and Cardputer ADV", "Small-screen layouts"],
   "new_install_prompt_erase": true,
   "builds": [
     {
