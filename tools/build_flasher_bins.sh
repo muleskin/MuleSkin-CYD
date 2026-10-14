@@ -21,7 +21,10 @@
 # Built from a release tag (vX.Y.Z, exactly), the bins, signatures and
 # manifests are also kept in .pio/flasher-bins/vX.Y.Z/, and versions.json is
 # rewritten from those folders -- the flasher's "Firmware version" picker
-# reads it, so older releases stay one click away. The newest five are kept.
+# reads it, so older releases stay one click away. The newest five are kept,
+# and the one at the top level (root-tag) whatever its age. versions.json
+# points that one at the top level and every other at its own folder, so a
+# rollback to an older tag lists the newer ones correctly too.
 #
 # A LAB build -- a test build ahead of a release, for boards whose SYSTEM ->
 # UPDATES is set to LAB:
@@ -196,21 +199,39 @@ if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && [ -z "$failed" ]; then
   cp "$OUT"/*.sig "$OUT/$TAG/" 2>/dev/null || true
   cp web-flasher/manifest-*.json "$OUT/$TAG/"
   echo "archived $TAG"
-elif [ -n "$TAG" ]; then
-  echo "not archived: ${failed:+a board failed}${failed:-$TAG is not a vX.Y.Z tag}"
+  # Which release the top level now holds -- what boards update from and what
+  # the flasher installs by default. Only after a clean tagged build: a failed
+  # or untagged one has overwritten some of the top level with something that
+  # is no release, so it holds no tag at all until the next clean one.
+  echo "$TAG" > "$OUT/root-tag"
+else
+  rm -f "$OUT/root-tag"
+  [ -z "$TAG" ] || echo "not archived: ${failed:+a board failed}${failed:-$TAG is not a vX.Y.Z tag}"
 fi
 python3 - "$OUT" <<'PY'
 import json, os, re, shutil, sys
 out = sys.argv[1]
 key = lambda t: tuple(int(x) for x in t[1:].split("."))
+try:
+    root = open(os.path.join(out, "root-tag")).read().strip()
+except OSError:
+    root = ""
 tags = sorted((d for d in os.listdir(out)
                if re.fullmatch(r"v\d+\.\d+\.\d+", d) and os.path.isdir(os.path.join(out, d))),
               key=key, reverse=True)
-for old in tags[5:]:
-    shutil.rmtree(os.path.join(out, old))
-tags = tags[:5]
-# The newest is the one at the root, which is what boards update from.
-versions = [{"tag": t, "dir": "" if i == 0 else t + "/"} for i, t in enumerate(tags)]
+# The newest five, and the one at the top level whatever its age: a rollback
+# to an old release must not prune the release it rolled back to.
+keep = tags[:5] + ([root] if root in tags[5:] else [])
+for old in tags:
+    if old not in keep:
+        shutil.rmtree(os.path.join(out, old))
+tags = keep
+# Each release points at its own folder, except the one the top level holds,
+# which points there (""). That is not always the newest: redeploying an older
+# tag puts IT at the top level, and the newest stays in its folder -- before
+# 2026-10-14 the newest was always called "", which after a rollback offered
+# the old firmware under the new version's name.
+versions = [{"tag": t, "dir": "" if t == root else t + "/"} for t in tags]
 with open(os.path.join(out, "versions.json"), "w") as f:
     json.dump({"versions": versions}, f, indent=2)
 print("versions.json:", ", ".join(tags) or "(no releases archived)")

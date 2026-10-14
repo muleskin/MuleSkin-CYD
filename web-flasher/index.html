@@ -833,9 +833,11 @@
         });
     }
 
-    // Which release directory the manifest lives in. "" is the latest,
-    // which sits at the site root; older ones are in <tag>/ subdirectories
-    // laid down by the release workflow.
+    // Which release directory the manifest lives in. "" is the site root:
+    // the release the site is serving, which boards update from. Every other
+    // release is in its <tag>/ folder (tools/build_flasher_bins.sh). The root
+    // is usually the newest; after a rollback it is an older one, and the
+    // newest is listed with its folder.
     var verDir = '';
     var verSel = document.getElementById('versionSelect');
     var verRow = document.getElementById('versionRow');
@@ -845,12 +847,20 @@
       .then(function (v) {
         if (v && v.versions) showHistory(v.versions);
         if (!v || !v.versions || v.versions.length < 2) return;   // nothing to roll back to
+        var live = null;
         v.versions.forEach(function (e, i) {
           var o = document.createElement('option');
           o.value = e.dir;
-          o.textContent = e.tag + (i === 0 ? ' (latest)' : '');
+          o.textContent = e.tag + (i === 0 && e.dir === '' ? ' (latest)'
+                                   : e.dir === '' ? ' (on the site now)'
+                                   : i === 0 ? ' (newest)' : '');
+          if (e.dir === '') live = e.dir;
           verSel.appendChild(o);
         });
+        // Select what an install will actually write: the site root's release,
+        // or -- when the root holds no release (a failed build) -- the newest.
+        verSel.value = live !== null ? live : v.versions[0].dir;
+        if (verSel.value !== verDir) { verDir = verSel.value; applySelection(); }
         if (verRow) verRow.hidden = false;
       })
       .catch(function () { /* no picker; latest still works */ });

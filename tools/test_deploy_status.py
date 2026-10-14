@@ -81,6 +81,42 @@ text = open(os.path.join(ROOT, "deploy", "redeploy.sh"), encoding="utf-8").read(
 ck("no curl piped into grep -q (pipefail turns it into a false failure)",
    not re.search(r"curl[^\n|]*\|\s*grep -q", text))
 
+print("build_flasher_bins.sh's versions.json")
+bfb = open(os.path.join(ROOT, "tools", "build_flasher_bins.sh"), encoding="utf-8").read()
+m = re.search(r"python3 - \"\$OUT\" <<'PY'\n(.*?)\nPY\n", bfb, re.S)
+assert m, "build_flasher_bins.sh: no versions.json block"
+VBLOCK = m.group(1)
+
+
+def versions(folders, root):
+    """The block run over a fake flasher-bins: `folders` archived, `root` in
+    root-tag (None: no file). Returns ([(tag, dir)], folders left)."""
+    with tempfile.TemporaryDirectory() as d:
+        for t in folders:
+            os.makedirs(os.path.join(d, t))
+        if root is not None:
+            open(os.path.join(d, "root-tag"), "w").write(root + "\n")
+        subprocess.run([sys.executable, "-c", VBLOCK, d], check=True, capture_output=True)
+        v = json.load(open(os.path.join(d, "versions.json")))["versions"]
+        return [(e["tag"], e["dir"]) for e in v], sorted(x for x in os.listdir(d) if os.path.isdir(os.path.join(d, x)))
+
+
+v, _ = versions(["v3.4.0", "v3.5.0", "v3.6.0"], "v3.6.0")
+ck("the newest at the top level: it is \"\", the others their folders",
+   v == [("v3.6.0", ""), ("v3.5.0", "v3.5.0/"), ("v3.4.0", "v3.4.0/")])
+v, _ = versions(["v3.4.0", "v3.5.0", "v3.6.0"], "v3.4.0")
+ck("rolled back to v3.4.0: IT is \"\", v3.6.0 keeps its folder",
+   v == [("v3.6.0", "v3.6.0/"), ("v3.5.0", "v3.5.0/"), ("v3.4.0", "")])
+v, _ = versions(["v3.5.0", "v3.6.0"], None)
+ck("a failed build (no root-tag): nothing claims the top level",
+   all(d for _, d in v) and [t for t, _ in v] == ["v3.6.0", "v3.5.0"])
+tags = ["v3.%d.0" % i for i in range(1, 8)]
+v, left = versions(tags, "v3.1.0")
+ck("seven kept as five, plus the rolled-back-to v3.1.0",
+   left == sorted(["v3.7.0", "v3.6.0", "v3.5.0", "v3.4.0", "v3.3.0", "v3.1.0"]) and ("v3.1.0", "") in v)
+v, left = versions(tags, "v3.7.0")
+ck("...and the oldest go when the newest is live", "v3.2.0" not in left and "v3.1.0" not in left and len(v) == 5)
+
 print("quiet-check.py's flasher pushes")
 spec = importlib.util.spec_from_file_location("quiet_check", os.path.join(ROOT, "deploy", "ntfy", "quiet-check.py"))
 qc = importlib.util.module_from_spec(spec)
