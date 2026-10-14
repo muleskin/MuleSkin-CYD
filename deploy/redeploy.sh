@@ -59,6 +59,23 @@ fi
 cd "$REPO"
 stage fetch "fetching"
 git fetch -q --tags origin
+# The newest redeploy.sh does the deploy, whichever tag is being deployed.
+# The copy on disk is the one the LAST redeploy checked out, and bash keeps
+# running it after the checkout below -- so every run used the previous
+# release's logic: its board count ("13" while deploying 15), and its bugs
+# (the v3.6.0 deploy-status said "failed" on a good deploy, from a check
+# fixed after the tag). origin/main's copy, run from a temp file, replaces
+# this one once; REDEPLOY_NEWEST stops it doing so twice.
+if [ -z "${REDEPLOY_NEWEST:-}" ]; then
+  newest=$(mktemp /tmp/redeploy.XXXXXX)
+  if git show origin/main:deploy/redeploy.sh > "$newest" 2>/dev/null && [ -s "$newest" ] && ! cmp -s "$newest" "$0"; then
+    echo "== running the newest redeploy.sh (origin/main) instead of the copy on disk"
+    REDEPLOY_NEWEST="$newest" exec bash "$newest" "$@"
+  fi
+  rm -f "$newest"
+fi
+# Running from that temp copy: bash has it open, so it can go now.
+case "${REDEPLOY_NEWEST:-}" in /tmp/redeploy.*) rm -f -- "$REDEPLOY_NEWEST" ;; esac
 if [ -z "$TAG" ]; then
   TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -1)
 fi
@@ -69,7 +86,9 @@ git -c advice.detachedHead=false checkout -q "$TAG"
 grep -q "\"version\": *\"$VER\"" web-flasher/manifest-cyd-ili9341.json \
   || die "$TAG's manifests don't say $VER -- was it cut with tools/release.sh?"
 
-stage build "building the bins (all 15 boards, a few minutes)"
+# The count from the build script this tag builds with, not a number here.
+BOARDS=$(sed -n 's/^ENVS="\(.*\)"$/\1/p' tools/build_flasher_bins.sh | wc -w)
+stage build "building the bins (all $BOARDS boards, a few minutes)"
 BUILD_LOG="$REPO/.pio/redeploy-build.log"
 if [ $UNSIGNED = 1 ]; then OTA_SIGNING_KEY= tools/build_flasher_bins.sh 2>&1 | tee "$BUILD_LOG"
 else tools/build_flasher_bins.sh 2>&1 | tee "$BUILD_LOG"; fi
