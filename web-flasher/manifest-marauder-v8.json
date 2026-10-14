@@ -1,0 +1,30 @@
+{
+  "name": "MuleSkin-CYD (Marauder V8, 2.8\" on an ESP32-C5, BETA)",
+  "version": "3.6.0",
+  "release_name": "Two new boards",
+  "whats_new": ["3.5in capacitive CYD (BETA)", "Freenove S3 4.0in (BETA)", "Both from upstream SquachWatch"],
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-C5",
+      "parts": [
+        {
+          "path": "marauder-v8-bootloader.bin",
+          "offset": 8192
+        },
+        {
+          "path": "marauder-v8-partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "esp32c5-boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "marauder-v8-firmware.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}

@@ -32,7 +32,7 @@ jobs:
       matrix:
         env: [cyd, cyd-fast, cyd-ili9341, cyd-ili9341-fast, cyd32c, cyd35-fast,
               cyd35c-fast, freenove32, rlphantom-r, awok, twatch-s3, freenove-s3,
-              freenove-s3-40, crowpanel7, nm-cyd-c5]
+              freenove-s3-40, crowpanel7, nm-cyd-c5, marauder-v8]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -44,8 +44,8 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/.platformio
-          key: pio-${{ matrix.env == 'nm-cyd-c5' && 'c5' || 'esp32' }}-${{ hashFiles('platformio.ini') }}
-          restore-keys: pio-${{ matrix.env == 'nm-cyd-c5' && 'c5' || 'esp32' }}-
+          key: pio-${{ (matrix.env == 'nm-cyd-c5' || matrix.env == 'marauder-v8') && 'c5' || 'esp32' }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-${{ (matrix.env == 'nm-cyd-c5' || matrix.env == 'marauder-v8') && 'c5' || 'esp32' }}-
       - run: pip install -q platformio
       - run: pio run -e ${{ matrix.env }}
       - name: Name the files as the flasher does
@@ -55,13 +55,14 @@ jobs:
           case $e in
             twatch-s3|freenove-s3|freenove-s3-40|crowpanel7) cp "$B/bootloader.bin" out/esp32s3-bootloader.bin; cp "$B/partitions.bin" out/twatch-s3-partitions.bin ;;
             nm-cyd-c5) cp "$B/bootloader.bin" out/esp32c5-bootloader.bin; cp "$B/partitions.bin" out/nm-cyd-c5-partitions.bin ;;
+            marauder-v8) cp "$B/bootloader.bin" out/marauder-v8-bootloader.bin; cp "$B/partitions.bin" out/marauder-v8-partitions.bin ;;
             *)         cp "$B/bootloader.bin" out/esp32-bootloader.bin;  cp "$B/partitions.bin" out/esp32-partitions.bin ;;
           esac
           # The otadata image the flasher writes too (boot_app0.bin), from
           # whichever framework this board built with.
           a=$(find ~/.platformio/packages -path '*framework-arduinoespressif32*/tools/partitions/boot_app0.bin' | head -1)
           if [ -n "$a" ]; then
-            if [ "$e" = nm-cyd-c5 ]; then cp "$a" out/esp32c5-boot_app0.bin; else cp "$a" out/esp32-otadata.bin; fi
+            case $e in nm-cyd-c5|marauder-v8) cp "$a" out/esp32c5-boot_app0.bin ;; *) cp "$a" out/esp32-otadata.bin ;; esac
           fi
       - uses: actions/upload-artifact@v7
         with:

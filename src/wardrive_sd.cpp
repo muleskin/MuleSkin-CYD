@@ -24,6 +24,14 @@
 // from a task of its own (FramePush::busLock); here every frame is pushed from
 // the loop task, the same task this runs on, so there is nothing to lock.
 namespace { inline void busLock() {} inline void busUnlock() {} }
+// What the WiGLE file says made it.
+#if defined(MARAUDER_V8)
+#define WIGLE_MODEL "Marauder V8"
+#define WIGLE_BRAND "justcallmekoko"
+#else
+#define WIGLE_MODEL "ESP32-2432S028R"
+#define WIGLE_BRAND "Sunton"
+#endif
 #endif
 
 #ifndef FIRMWARE_VERSION
@@ -89,7 +97,7 @@ bool writeOut(const char* path, const char* buf, size_t len) {
     bool ok = true;
     if (fresh) {
         char h[512];
-        const size_t n = headerLines(h, sizeof h, FIRMWARE_VERSION, SQW_ENV, "ESP32-2432S028R", "Sunton");
+        const size_t n = headerLines(h, sizeof h, FIRMWARE_VERSION, SQW_ENV, WIGLE_MODEL, WIGLE_BRAND);
         ok = n && f.write((const uint8_t*)h, n) == n;
     }
     ok = ok && f.write((const uint8_t*)buf, len) == len;
@@ -115,7 +123,7 @@ bool writeOut(const char* path, const char* buf, size_t len) {
     fseek(f, 0, SEEK_END);
     if (ftell(f) == 0) {
         char h[512];
-        const size_t n = headerLines(h, sizeof h, FIRMWARE_VERSION, SQW_ENV, "ESP32-2432S028R", "Sunton");
+        const size_t n = headerLines(h, sizeof h, FIRMWARE_VERSION, SQW_ENV, WIGLE_MODEL, WIGLE_BRAND);
         ok = n && fwrite(h, 1, n, f) == n;
     }
     ok = ok && fwrite(buf, 1, len, f) == len;

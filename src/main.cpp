@@ -3148,6 +3148,55 @@ void boardBatteryLine(char* out, size_t n) {
 }
 #endif
 
+#if defined(MARAUDER_V8)
+// The Marauder V8's battery: a MAX17048 fuel gauge at 0x36 on SDA 5 / SCL 4
+// (Marauder's configs.h; its boot log says "Detected MAX17048"). Unlike the
+// Freenove's divider it knows the charge itself -- SOC, its own model of the
+// cell, not a voltage table -- and which way the charge is going (CRATE), so
+// "on the cable" is read, not guessed. (Upstream SquachWatch v1.36.0.)
+static const uint8_t GAUGE_ADDR = 0x36;
+static bool s_gaugeOk = false;
+static bool gaugeRead16(uint8_t reg, uint16_t& v) {
+    Wire.beginTransmission(GAUGE_ADDR);
+    Wire.write(reg);
+    if (Wire.endTransmission(false) != 0 || Wire.requestFrom(GAUGE_ADDR, (uint8_t)2) != 2) return false;
+    v = (uint16_t)(Wire.read() << 8);
+    v |= (uint16_t)Wire.read();
+    return true;
+}
+static void gaugeBegin() {
+    Wire.begin(5, 4, 400000);
+    uint16_t ver = 0;
+    s_gaugeOk = gaugeRead16(0x08, ver);
+    Serial.printf("[batt] MAX17048 %s (version 0x%04X)\n", s_gaugeOk ? "answered" : "DID NOT ANSWER", (unsigned)ver);
+}
+// The SYSTEM page's BATTERY row: "81% 4.12V", with "+" while it charges. One
+// reading every two seconds.
+void boardBatteryLine(char* out, size_t n) {
+    static uint32_t at = 0;
+    static char     line[20] = "";
+    const uint32_t now = millis();
+    if (!line[0] || now - at >= 2000) {
+        at = now ? now : 1;
+        uint16_t vcell = 0, soc = 0, crate = 0;
+        if (!s_gaugeOk || !gaugeRead16(0x02, vcell) || !gaugeRead16(0x04, soc)) {
+            snprintf(line, sizeof line, "NO GAUGE");
+        } else {
+            const uint16_t mv  = (uint16_t)((uint32_t)vcell * 78125u / 1000000u);   // 78.125 uV a step
+            const uint8_t  pct = (uint8_t)min<uint16_t>(soc >> 8, 100);             // whole percent in the high byte
+            // CRATE: signed, 0.208 %/hour a step. Charging when the charge
+            // climbs faster than about 1 %/hour, so the gauge's own jitter
+            // at rest is not read as a cable.
+            const bool charging = gaugeRead16(0x16, crate) && (int16_t)crate > 5;
+            if (mv < 2500) snprintf(line, sizeof line, "NONE");
+            else snprintf(line, sizeof line, "%u%% %u.%02uV%s", (unsigned)pct, (unsigned)(mv / 1000),
+                          (unsigned)(mv % 1000 / 10), charging ? "+" : "");
+        }
+    }
+    snprintf(out, n, "%s", line);
+}
+#endif
+
 #if defined(TWATCH_S3)
 // One battery sample into the black box. See BattRecord for what it holds
 // and why. Printed too, so a bench run shows the same line the ring keeps.
@@ -4264,6 +4313,10 @@ void setup() {
     }
 #endif
 
+#if defined(MARAUDER_V8)
+    gaugeBegin();
+    { char b[20]; boardBatteryLine(b, sizeof b); Serial.printf("[batt] %s\n", b); }
+#endif
     // Recovery escape hatch: hold touch ANYWHERE for ~1s right here to
     // wipe a saved calibration back to defaults. A bad calibration can
     // make touch too inaccurate to reliably re-tap a "recalibrate"

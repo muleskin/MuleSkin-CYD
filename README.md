@@ -112,6 +112,12 @@ flasher until they have run here:
   battery on the same pins. Its 480×320 frame lives in PSRAM. Contributed
   upstream by T0x0pl4sm4 (PR #51). If the picture tears or speckles, build
   with `-DSPI_FREQUENCY=40000000`.
+- **Marauder V8** (`[env:marauder-v8]`, from upstream v1.36.0):
+  justcallmekoko's ESP32-C5 board -- the NM-CYD-C5's SPI bus with an
+  ILI9341 at 40 MHz, resistive touch, an SD slot, a MAX17048 battery gauge
+  (BATTERY on the SYSTEM page, "+" while charging), a GPS on GPIO14 (the
+  CYD GPS code: WARDRIVE to a WiGLE file on the card), its activity LED as
+  the status light, and 5 GHz scanning. Its own 8 MB partition table.
 
 ## Web Flash
 
@@ -601,7 +607,8 @@ MuleSkin-CYD/
 - Ported from SquachWatch after the fork: **quietradio** (5 GHz on the
   NM-CYD-C5, PR #27), **jotra7** (GPS, wardriving and the dated SD log,
   PR #46), **VV-B0Y** (the 3.5" capacitive, PR #24) and **T0x0pl4sm4** (the
-  Freenove S3 4.0", PR #51).
+  Freenove S3 4.0", PR #51); the Marauder V8 bring-up is skizzophrenic's,
+  on justcallmekoko's board.
 - AWOK 2.4" board port (ESP32-Marauder V6.1 hardware): **bkbroiler**,
   who did the actual pin-mapping and shared-bus touch-calibration work
   that made this board possible.

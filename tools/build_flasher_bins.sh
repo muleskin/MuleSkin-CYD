@@ -70,7 +70,7 @@ if [ -n "$LAB" ]; then
   PFX="lab-"
   echo "LAB build: v$LAB-lab, publishing lab-* files only"
 fi
-ENVS="cyd cyd-fast cyd-ili9341 cyd-ili9341-fast cyd32c cyd35-fast cyd35c-fast freenove32 rlphantom-r awok twatch-s3 freenove-s3 freenove-s3-40 crowpanel7 nm-cyd-c5"
+ENVS="cyd cyd-fast cyd-ili9341 cyd-ili9341-fast cyd32c cyd35-fast cyd35c-fast freenove32 rlphantom-r awok twatch-s3 freenove-s3 freenove-s3-40 crowpanel7 nm-cyd-c5 marauder-v8"
 failed=""
 # Every platform and framework the boards need, installed BEFORE the first
 # build: on 2026-10-13 a framework went missing and was re-installed in the
@@ -111,6 +111,11 @@ for e in $ENVS; do
       nm-cyd-c5)
         cp "$B/bootloader.bin" "$OUT/esp32c5-bootloader.bin"
         cp "$B/partitions.bin" "$OUT/nm-cyd-c5-partitions.bin" ;;
+      marauder-v8)
+        # Its own bootloader and table (DIO, 8 MB, 3.5 MB slots), named for
+        # it so they never mix with the NM-CYD-C5's.
+        cp "$B/bootloader.bin" "$OUT/marauder-v8-bootloader.bin"
+        cp "$B/partitions.bin" "$OUT/marauder-v8-partitions.bin" ;;
       *)
         cp "$B/bootloader.bin" "$OUT/esp32-bootloader.bin"
         cp "$B/partitions.bin" "$OUT/esp32-partitions.bin" ;;

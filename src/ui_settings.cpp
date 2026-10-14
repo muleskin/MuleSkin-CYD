@@ -54,7 +54,7 @@ static uint8_t s_dexCaught = 0;
 // has turned off) are filtered out by visibleRows() below rather than
 // removed here, so their SettingsRow values stay stable regardless of
 // which mode is active.
-#if defined(FREENOVE_S3)
+#if defined(FREENOVE_S3) || defined(MARAUDER_V8)
 void boardBatteryLine(char* out, size_t n);    // main.cpp: the divider on GPIO9
 #endif
 #if defined(TWATCH_S3)
@@ -151,7 +151,7 @@ static const uint8_t WATCH_ROWS_N = sizeof(WATCH_ROWS) / sizeof(WATCH_ROWS[0]);
 // The SYSTEM page: the rarely-needed machinery, off the main list.
 static const SettingsRow SYSTEM_ROWS[] = {
     SettingsRow::PRIVACY,
-#if defined(FREENOVE_S3)
+#if defined(FREENOVE_S3) || defined(MARAUDER_V8)
     SettingsRow::BOARD_BATTERY,
 #endif
 #if defined(ESP32) && !defined(TWATCH_S3)
@@ -870,7 +870,7 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             snprintf(valBuf, valBufN, "%u", (unsigned)IgnoreList::count());
             value = valBuf;
             break;
-#if defined(FREENOVE_S3)
+#if defined(FREENOVE_S3) || defined(MARAUDER_V8)
         case SettingsRow::BOARD_BATTERY:
             label = "BATTERY"; boardBatteryLine(valBuf, valBufN); value = valBuf;
             break;

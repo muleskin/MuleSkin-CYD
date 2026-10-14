@@ -497,6 +497,7 @@
       </optgroup>
       <optgroup label="ESP32-C5 BOARDS">
       <option value="./manifest-nm-cyd-c5.json" data-ocnote="The C5 runs its panel at its own full speed; there is no slower build.">RockBase NM-CYD-C5 2.8&quot; &mdash; ESP32-C5, RISC-V (BETA)</option>
+      <option value="./manifest-marauder-v8.json" data-ocnote="The V8's ILI9341 runs at 40MHz, the fastest it draws clean; there is no other build.">Marauder V8 &mdash; ESP32-C5, GPS + battery (BETA)</option>
       </optgroup>
       <optgroup label="WATCHES">
       <option value="./manifest-twatch-s3.json">LilyGo T-Watch S3 / S3 Plus (BETA)</option>
@@ -781,7 +782,7 @@
          './manifest-lab-crowpanel7.json', './manifest-lab-cyd32c.json',
          './manifest-lab-cyd35-fast.json', './manifest-lab-awok.json',
          './manifest-lab-nm-cyd-c5.json', './manifest-lab-cyd35c-fast.json',
-         './manifest-lab-freenove-s3-40.json'].forEach(function (path) {
+         './manifest-lab-freenove-s3-40.json', './manifest-lab-marauder-v8.json'].forEach(function (path) {
           fetch(path, { cache: 'no-store' })
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (m) {
@@ -932,6 +933,7 @@
       { re: /3248S035/,             v: './manifest-cyd35-fast.json',  say: 'That’s the 3.5" (BETA). Selected below.' },
       { re: /2432S024R/,            v: './manifest-rlphantom-r.json', say: 'That’s the RL Phantom 2.4". Selected below.' },
       { re: /2432S024C/,            v: null,                          say: 'The capacitive 2.4" isn’t on the flasher yet.' },
+      { re: /MARAUDER ?V8|\bV8\b/,  v: './manifest-marauder-v8.json', say: 'That’s the Marauder V8 (BETA). Selected below.' },
       { re: /AWOK|MARAUDER/,        v: './manifest-awok.json',        say: 'That’s the AWOK 2.4". Selected below.' },
       { re: /FNK0?104S/,            v: './manifest-freenove-s3-40.json', say: 'That’s the Freenove ESP32-S3 4.0" (BETA). Selected below.' },
       { re: /FNK0?104/,             v: './manifest-freenove-s3.json', say: 'That’s the Freenove ESP32-S3 2.8" (BETA). Selected below.' },
