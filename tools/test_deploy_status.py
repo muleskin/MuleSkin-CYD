@@ -81,11 +81,8 @@ text = open(os.path.join(ROOT, "deploy", "redeploy.sh"), encoding="utf-8").read(
 ck("no curl piped into grep -q (pipefail turns it into a false failure)",
    not re.search(r"curl[^\n|]*\|\s*grep -q", text))
 
-print("build_flasher_bins.sh's versions.json")
-bfb = open(os.path.join(ROOT, "tools", "build_flasher_bins.sh"), encoding="utf-8").read()
-m = re.search(r"python3 - \"\$OUT\" <<'PY'\n(.*?)\nPY\n", bfb, re.S)
-assert m, "build_flasher_bins.sh: no versions.json block"
-VBLOCK = m.group(1)
+print("tools/flasher_versions.py's versions.json")
+VERSIONS_PY = os.path.join(ROOT, "tools", "flasher_versions.py")
 
 
 def versions(folders, root):
@@ -96,7 +93,7 @@ def versions(folders, root):
             os.makedirs(os.path.join(d, t))
         if root is not None:
             open(os.path.join(d, "root-tag"), "w").write(root + "\n")
-        subprocess.run([sys.executable, "-c", VBLOCK, d], check=True, capture_output=True)
+        subprocess.run([sys.executable, VERSIONS_PY, d], check=True, capture_output=True)
         v = json.load(open(os.path.join(d, "versions.json")))["versions"]
         return [(e["tag"], e["dir"]) for e in v], sorted(x for x in os.listdir(d) if os.path.isdir(os.path.join(d, x)))
 

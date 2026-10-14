@@ -32,7 +32,7 @@ jobs:
           pip install -q pyserial
           cd tools/bench
           for s in nvs_snapshot push_bench ota_e2e; do python $s.py --help >/dev/null; done
-          python -m py_compile ../../deploy/ntfy/quiet-check.py
+          python -m py_compile ../../deploy/ntfy/quiet-check.py ../flasher_versions.py
       # The web flasher's pages: every inline script has to parse (nothing
       # else builds them, and a broken one is a dead page after a deploy).
       - name: Flasher pages parse

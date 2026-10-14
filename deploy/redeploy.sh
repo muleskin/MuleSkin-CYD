@@ -105,6 +105,17 @@ FAILED_BOARDS=$(grep '^FAILED:' "$BUILD_LOG" | tail -1 | cut -d: -f2- | sed 's/^
 [ -z "$FAILED_BOARDS" ] || status running "built, but not:$FAILED_BOARDS"
 grep -q '"tag": *"'"$TAG"'"' .pio/flasher-bins/versions.json \
   || die "$TAG was not archived -- a board failed to build? (see .pio/build-*.log)"
+# The top level holds $TAG now, and versions.json is rewritten to say so by
+# origin/main's flasher_versions.py -- not whatever this tag's own build script
+# did: one from before 2026-10-14 called the HIGHEST release the top level, so
+# after a rollback the picker offered the old files under the new name.
+echo "$TAG" > .pio/flasher-bins/root-tag
+if command -v python3 >/dev/null && git show origin/main:tools/flasher_versions.py > /tmp/flasher_versions.py 2>/dev/null; then
+  python3 /tmp/flasher_versions.py .pio/flasher-bins
+  rm -f /tmp/flasher_versions.py
+else
+  echo "redeploy: no python3 or no tools/flasher_versions.py on main -- versions.json left as the build wrote it" >&2
+fi
 
 stage container "rebuilding the flasher container"
 (cd "$COMPOSE_DIR" && docker compose up -d --build)

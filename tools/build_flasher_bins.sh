@@ -208,33 +208,6 @@ else
   rm -f "$OUT/root-tag"
   [ -z "$TAG" ] || echo "not archived: ${failed:+a board failed}${failed:-$TAG is not a vX.Y.Z tag}"
 fi
-python3 - "$OUT" <<'PY'
-import json, os, re, shutil, sys
-out = sys.argv[1]
-key = lambda t: tuple(int(x) for x in t[1:].split("."))
-try:
-    root = open(os.path.join(out, "root-tag")).read().strip()
-except OSError:
-    root = ""
-tags = sorted((d for d in os.listdir(out)
-               if re.fullmatch(r"v\d+\.\d+\.\d+", d) and os.path.isdir(os.path.join(out, d))),
-              key=key, reverse=True)
-# The newest five, and the one at the top level whatever its age: a rollback
-# to an old release must not prune the release it rolled back to.
-keep = tags[:5] + ([root] if root in tags[5:] else [])
-for old in tags:
-    if old not in keep:
-        shutil.rmtree(os.path.join(out, old))
-tags = keep
-# Each release points at its own folder, except the one the top level holds,
-# which points there (""). That is not always the newest: redeploying an older
-# tag puts IT at the top level, and the newest stays in its folder -- before
-# 2026-10-14 the newest was always called "", which after a rollback offered
-# the old firmware under the new version's name.
-versions = [{"tag": t, "dir": "" if t == root else t + "/"} for t in tags]
-with open(os.path.join(out, "versions.json"), "w") as f:
-    json.dump({"versions": versions}, f, indent=2)
-print("versions.json:", ", ".join(tags) or "(no releases archived)")
-PY
+python3 tools/flasher_versions.py "$OUT"
 ls -la "$OUT"
 echo "FAILED:${failed:- none}"
