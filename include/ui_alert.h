@@ -29,6 +29,9 @@ void uiAlertSetFollow(uint16_t minutes);
 void uiAlertSetDays(uint8_t days);
 // SNOOZE (this device, until restart), bottom centre between HUNT and MORE INFO.
 bool uiAlertHitSnooze(int x, int y, int screenW, int screenH);
+// Where the buttons are, for the small boards' cursor: the plate, then
+// SNOOZE, HUNT, MORE INFO and IGNORE, each at its middle. Returns how many.
+uint8_t uiAlertStops(int screenW, int screenH, int16_t* xs, int16_t* ys, uint8_t cap);
 // While the device is locked with ALERTS WHEN LOCKED at TYPE ONLY: the type
 // and the signal still show, the device's name, label and address do not.
 void uiAlertSetRedacted(bool redacted);

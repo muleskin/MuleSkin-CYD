@@ -440,7 +440,7 @@ static void computeGeom(TFT_eSPI& t, int screenH, int& top, int& bodyBottom,
     // fit above the BACK strip in landscape. A wide panel draws the row a
     // size bigger, and this carries it: taller letters, taller row, bigger
     // thumb target, all off the one number.
-    rowH = t.fontHeight() + 10;
+    rowH = t.fontHeight() + Theme::listRowPad();
     const int big = t.fontHeight();
     t.setTextSize(Theme::uiTextSize(t, 1));
     headerH = t.fontHeight() + 6;
@@ -620,7 +620,7 @@ static void drawPinnedBack(TFT_eSPI& t, int screenW, int screenH) {
     t.fillRect(x, y, w, h, Theme::BG);
     t.drawFastHLine(x, y, w, Theme::PURPLE);
     t.setTextFont(1);
-    t.setTextSize(Theme::uiMenuTextSize(t));
+    t.setTextSize(Theme::compact() ? 1 : Theme::uiMenuTextSize(t));
     t.setTextColor(Theme::CYAN, Theme::BG);
     const char* lbl = (s_page == SettingsPage::MAIN) ? "[ BACK ]" : "[ UP ]";
     t.setCursor(x + (w - t.textWidth(lbl)) / 2, y + (h - t.fontHeight()) / 2);

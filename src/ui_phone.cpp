@@ -22,7 +22,11 @@ const uint16_t STEEL    = Theme::W95_FACE;
 const uint16_t STEEL_SH = Theme::W95_SHADOW;
 const uint16_t STEEL_DK = Theme::W95_DKSHADOW;
 
-const int UY = 8, UW = 164, UH = 224;
+// UY, UH and the key height follow the panel: a 240x135 screen (the StickS3,
+// the Cardputer) gets a handset as tall as it is, with shorter keys. Set by
+// each draw, which always comes before a touch can be tested against them.
+int UY = 8, UH = 224;
+const int UW = 164;
 // The panel size the handset was last DRAWN at. The tap handler is given a
 // point and nothing else, and the case is centred on the panel, so it learns
 // the width from the drawing. Safe because a screen is always drawn before it
@@ -31,13 +35,16 @@ int s_panelW = 320, s_panelH = 240;
 // 78 was (320 - 164) / 2 -- centred by hand for a 320-wide panel. The 3.5"
 // centres from its real width, by its long side, so it holds in both
 // rotations; the 2.8" stays where it always was.
+inline bool smallPad() { return s_panelH < 200 && s_panelW < 300; }
 inline int caseX() {
+    // Small: against the right edge, so BACK fits to its left.
+    if (smallPad()) return s_panelW - UW - 4;
     const bool bigPanel = (s_panelW >= 400 || s_panelH >= 400);
     return bigPanel ? (s_panelW - UW) / 2 : 78;
 }
-const int KW = 48, KH = 30, KGAP = 3;
+const int KW = 48, KGAP = 3;
+int KH = 30, KY = 8 + 60;
 inline int keysX() { return caseX() + (UW - (KW * 3 + KGAP * 2)) / 2; }
-const int KY = UY + 60;
 
 const char* const KEY_D[12] = { "1","2","3","4","5","6","7","8","9","*","0","#" };
 
@@ -76,7 +83,7 @@ inline void steel(TFT_eSPI& t, int x, int y, int w, int h, bool sunk = false) {
 // in this firmware puts BACK. Wider on a big panel, where the size-2 label
 // needs the room.
 static const int BX = 4;
-static inline int BW_() { return s_panelW >= 400 ? 132 : 68; }
+static inline int BW_() { return s_panelW >= 400 ? 132 : smallPad() ? 64 : 68; }
 static const int BH = 26;
 static int backY(int screenH) { return screenH - BH - 6; }
 
@@ -156,6 +163,8 @@ void uiPhoneTouch(int x, int y, uint32_t now, PhoneTouch phase) {
 void uiPhoneTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool advance) {
     const int w = t.width(), h = t.height();
     s_panelW = w; s_panelH = h;
+    if (smallPad()) { UY = 3; UH = h - 6; KH = 20; KY = UY + 36; }
+    else            { UY = 8; UH = 224;   KH = 30; KY = UY + 60; }
     Theme::Palette saved = Theme::dimPaletteForOverlay(120);
     Theme::drawActiveBackground(t, now, 0, h, eng, advance);
     Theme::restorePalette(saved);
@@ -171,12 +180,12 @@ void uiPhoneTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     const char* pr = armed ? "TAP AGAIN: WIPE + UNLOCK" : s_pinPrompt;
     t.setTextSize(1);
     t.setTextColor(armed ? Theme::RED : STEEL_LT);
-    t.setCursor(ux + (UW - t.textWidth(pr)) / 2, uy + 8);
+    t.setCursor(ux + (UW - t.textWidth(pr)) / 2, uy + (smallPad() ? 4 : 8));
     t.print(pr);
 
     // The dots, or the wait banner in their place. A shake nudges them for a
     // moment after a wrong PIN.
-    const int dY = uy + 22, dH = 26;
+    const int dY = uy + (smallPad() ? 15 : 22), dH = smallPad() ? 14 : 26;
     steel(t, ux + 9, dY - 3, UW - 18, dH + 6, true);
     t.fillRect(ux + 12, dY, UW - 24, dH, Theme::BLACK);
     if (s_pinWaitMsg) {

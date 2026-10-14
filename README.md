@@ -125,6 +125,15 @@ flasher until they have run here:
   that counts pulses, so it is stepped rather than PWM'd; landscape only,
   keyboard down. The trackball, the LoRa radio and the speaker sit this one
   out.
+- **M5Stack StickS3** (`[env:sticks3]`, BETA) and **Cardputer ADV**
+  (`[env:cardputer-adv]`, experimental), from upstream v1.31.0: 240x135
+  screens with no touch. The keys drive a cursor through each screen's stops
+  -- on the StickS3 the side button steps, the front one presses, the side
+  one held goes home; on the Cardputer the arrows or TAB step, ENTER or space
+  presses, ESC goes home. The screens have small layouts of their own: a
+  compact alert card, a one-line-a-row LOG, tighter lists, a paged
+  DIAGNOSTICS and MORE INFO, a shorter PIN pad. No SD on either yet; the
+  Cardputer's optional EXT SCREEN panel is not ported.
 - **Marauder V8** (`[env:marauder-v8]`, from upstream v1.36.0):
   justcallmekoko's ESP32-C5 board -- the NM-CYD-C5's SPI bus with an
   ILI9341 at 40 MHz, resistive touch, an SD slot, a MAX17048 battery gauge

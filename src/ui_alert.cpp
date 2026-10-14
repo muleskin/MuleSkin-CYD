@@ -278,8 +278,20 @@ void uiAlertInit(TFT_eSPI& t, const Detection& d) {
 // scale them together; the narrow case returns exactly what it always did.
 static inline bool wideAlert(int w) { return w >= 400; }
 static inline int  stripHOf(int w)  { return wideAlert(w) ? 56 : 42; }
+// A screen under 200 rows (the M5Stack StickS3's and Cardputer's 240x135)
+// gets a card of its own -- see drawTinyCard(). Its four buttons: IGNORE in
+// a slim header, HUNT / SNOOZE / INFO in a row along the bottom.
+static inline bool tinyAlert(int w, int h) { return h < 200 && w < 300; }
+static const int TINY_STRIP_H = 24, TINY_BTN_H = 20;
+static void tinyBtnRect(int i, int screenW, int screenH, int& bx, int& by, int& bw, int& bh) {
+    bw = (screenW - 16) / 3;
+    bh = TINY_BTN_H;
+    bx = 4 + i * (bw + 4);
+    by = screenH - bh - 4;
+}
 
 static void moreInfoBtnRect(int screenW, int screenH, int& bx, int& by, int& bw, int& bh) {
+    if (tinyAlert(screenW, screenH)) { tinyBtnRect(2, screenW, screenH, bx, by, bw, bh); return; }
     // Stacked "MORE"/"INFO" on two lines (see the draw call below)
     // instead of one wide "MORE INFO" row -- a size-2 attempt at a
     // bigger tap target that widened the button instead ate into the
@@ -306,6 +318,7 @@ static void moreInfoBtnRect(int screenW, int screenH, int& bx, int& by, int& bw,
 // "HUNT" is one short line and doesn't need the height -- matching the
 // neighbour matters more here than shrinking to fit the label.
 static void huntBtnRect(int screenW, int screenH, int& bx, int& by, int& bw, int& bh) {
+    if (tinyAlert(screenW, screenH)) { tinyBtnRect(0, screenW, screenH, bx, by, bw, bh); return; }
     bw = wideAlert(screenW) ? 104 : 70;
     bh = wideAlert(screenW) ?  64 : 48;
     bx = 4;
@@ -323,7 +336,11 @@ static void huntBtnRect(int screenW, int screenH, int& bx, int& by, int& bw, int
 // where the detection type is named, so this is the remaining spot that
 // stays clear on the narrow rotations as well as the wide ones.
 static void ignoreBtnRect(int screenW, int screenH, int& bx, int& by, int& bw, int& bh) {
-    (void)screenH;
+    if (tinyAlert(screenW, screenH)) {
+        bw = 54; bh = TINY_STRIP_H - 6;
+        bx = screenW - bw - 6; by = 3;
+        return;
+    }
     // Deliberately smaller than HUNT and MORE INFO, which are 70x48 down
     // in the corners where nothing else goes. Up here it shares the header
     // strip with the target label, and the label's budget is measured off
@@ -381,10 +398,23 @@ bool uiAlertHitIgnore(int x, int y, int screenW, int screenH) {
 // above the bottom row, so between HUNT and MORE INFO is the one strip
 // left clear on every rotation: 92 px on the narrow one, 84 used.
 static void snoozeBtnRect(int screenW, int screenH, int& bx, int& by, int& bw, int& bh) {
+    if (tinyAlert(screenW, screenH)) { tinyBtnRect(1, screenW, screenH, bx, by, bw, bh); return; }
     bw = wideAlert(screenW) ? 124 : 84;
     bh = wideAlert(screenW) ?  40 : 28;
     bx = (screenW - bw) / 2;
     by = screenH - bh - 4;
+}
+
+uint8_t uiAlertStops(int screenW, int screenH, int16_t* xs, int16_t* ys, uint8_t cap) {
+    uint8_t n = 0;
+    auto add = [&](int x, int y) { if (n < cap) { xs[n] = (int16_t)x; ys[n] = (int16_t)y; n++; } };
+    add(screenW / 3, screenH / 2);   // the plate: anywhere dismisses
+    int bx, by, bw, bh;
+    snoozeBtnRect(screenW, screenH, bx, by, bw, bh);   add(bx + bw / 2, by + bh / 2);
+    huntBtnRect(screenW, screenH, bx, by, bw, bh);     add(bx + bw / 2, by + bh / 2);
+    moreInfoBtnRect(screenW, screenH, bx, by, bw, bh); add(bx + bw / 2, by + bh / 2);
+    ignoreBtnRect(screenW, screenH, bx, by, bw, bh);   add(bx + bw / 2, by + bh / 2);
+    return n;
 }
 
 bool uiAlertHitSnooze(int x, int y, int screenW, int screenH) {
@@ -403,6 +433,115 @@ bool uiAlertHitMoreInfo(int x, int y, int screenW, int screenH) {
     int bx, by, bw, bh;
     moreInfoBtnRect(screenW, screenH, bx, by, bw, bh);
     return x >= bx && x <= bx + bw && y >= by && y <= by + bh;
+}
+
+// The card on a 240x135 screen: everything the big one says, in the order
+// it matters, and nothing that needs room -- no gauge, no QR code. The type
+// in a slim strip in its colour with IGNORE at its end; a banner line (WITH
+// YOU, NEAR YOU ON N DAYS, SPAM, FIRST...) when there is one; vendor, the
+// device's own name, its address; signal as a bar with the grade; the three
+// buttons along the bottom.
+static void drawTinyCard(TFT_eSPI& t, int w, int h) {
+    const uint16_t typeCol = Theme::colorFor(s_last.type);
+    t.fillRect(0, 0, w, TINY_STRIP_H, typeCol);
+    t.setTextWrap(false);
+    {
+        int ibx, iby, ibw, ibh;
+        ignoreBtnRect(w, h, ibx, iby, ibw, ibh);
+        const char* tgt = targetLabel(s_last.type);
+        t.setTextSize(2);
+        if (t.textWidth(tgt) > ibx - 10) t.setTextSize(1);
+        t.setTextColor(Theme::BG, typeCol);
+        t.setCursor(6, (TINY_STRIP_H - t.fontHeight()) / 2);
+        t.print(tgt);
+        Theme::drawWin95Button(t, ibx, iby, ibw, ibh, IgnoreList::contains(s_last.mac) ? "MUTED" : "IGNORE",
+                               IgnoreList::contains(s_last.mac));
+    }
+    // The plate: between the strip and the buttons.
+    const int py = TINY_STRIP_H + 3, ph = h - TINY_BTN_H - 8 - py;
+    t.fillRect(4, py, w - 8, ph, Theme::BG);
+    t.drawRect(4, py, w - 8, ph, typeCol);
+    int y = py + 4;
+    t.setTextSize(1);
+    char line[48];
+    const char* banner = nullptr;
+    uint16_t bannerCol = Theme::RED;
+    if (s_followMin)      { snprintf(line, sizeof line, "* WITH YOU %u MIN *", (unsigned)s_followMin); banner = line; }
+    else if (s_days)      { snprintf(line, sizeof line, "* NEAR YOU ON %u DAYS *", (unsigned)s_days); banner = line; }
+    else if (s_spam)      { snprintf(line, sizeof line, "* SPAM: %u FAKE TAGS *", (unsigned)s_spamFakes); banner = line; }
+    else if (s_first || s_night) {
+        banner = (s_first && s_night) ? "* FIRST, AND AT NIGHT *" : s_first ? "* FIRST OF ITS KIND *" : "* AT NIGHT *";
+        bannerCol = Theme::VAPOR_YELLOW;
+    }
+    if (banner) {
+        t.setTextColor(bannerCol, Theme::BG);
+        t.setCursor((w - t.textWidth(banner)) / 2, y);
+        t.print(banner);
+        y += 10;
+    }
+    // Vendor, upper-cased, the way the big card says it.
+    {
+        const char* vend = vendorText(s_last);
+        const char* src = s_redacted ? "LOCKED" : strcmp(vend, "Away-Owner") == 0 ? "AWAY FROM OWNER" : vend;
+        char up[24];
+        size_t i = 0;
+        for (; src[i] && i + 1 < sizeof up; i++) up[i] = (src[i] >= 'a' && src[i] <= 'z') ? (char)(src[i] - 32) : src[i];
+        up[i] = '\0';
+        t.setTextSize(up[0] && t.textWidth(up) * 2 <= w - 16 ? 2 : 1);
+        t.setTextColor(Theme::CYAN, Theme::BG);
+        t.setCursor((w - t.textWidth(up)) / 2, y);
+        t.print(up);
+        y += t.fontHeight() + 2;
+    }
+    t.setTextSize(1);
+    t.setTextColor(Theme::WHITE, Theme::BG);
+    if (s_last.name[0] && !s_redacted) {
+        char pv[40];
+        const char* nm = Privacy::name(s_last.name, pv, sizeof pv);
+        t.setCursor((w - t.textWidth(nm)) / 2, y);
+        t.print(nm);
+        y += 10;
+    }
+    char mac[24];
+    if (s_redacted) snprintf(mac, sizeof mac, "%s", "-- LOCKED --");
+    else            Privacy::mac(mac, sizeof mac, s_last.mac);
+    t.setCursor((w - t.textWidth(mac)) / 2, y);
+    t.print(mac);
+    // Signal along the plate's floor: the bar, the number, the grade.
+    {
+        const Confidence conf = s_last.conf;
+        const uint16_t confColor = (conf == Confidence::HIGH_CONF) ? Theme::GREEN
+                                 : (conf == Confidence::MED_CONF) ? Theme::AMBER : Theme::RED;
+        const int by = py + ph - 12;
+        snprintf(line, sizeof line, "%d dBm", (int)s_last.rssi);
+        t.setTextColor(confColor, Theme::BG);
+        t.setCursor(10, by + 1);
+        t.print(line);
+        const char* cl = confidenceLabel(conf);
+        t.setCursor(w - 10 - t.textWidth(cl), by + 1);
+        t.print(cl);
+        const int bx = 10 + t.textWidth("-100 dBm") + 6, bw = (w - 10 - t.textWidth(cl) - 6) - bx;
+        int v = s_last.rssi;
+        if (v < -90) v = -90;
+        if (v > -40) v = -40;
+        if (bw > 8) {
+            t.drawRect(bx, by, bw, 9, Theme::CYAN);
+            const int fill = (v + 90) * (bw - 2) / 50;
+            if (fill > 0) t.fillRect(bx + 1, by + 1, fill, 7, Theme::CYAN);
+        }
+    }
+    // HUNT / SNOOZE / INFO.
+    static const char* const LABELS[3] = { "HUNT", "SNOOZE", "INFO" };
+    for (int i = 0; i < 3; i++) {
+        int bx, by, bw, bh;
+        tinyBtnRect(i, w, h, bx, by, bw, bh);
+        t.fillRect(bx, by, bw, bh, Theme::BG);
+        t.drawRect(bx, by, bw, bh, Theme::PURPLE);
+        t.setTextSize(1);
+        t.setTextColor(i == 0 ? Theme::AMBER : Theme::CYAN, Theme::BG);
+        t.setCursor(bx + (bw - t.textWidth(LABELS[i])) / 2, by + (bh - t.fontHeight()) / 2);
+        t.print(LABELS[i]);
+    }
 }
 
 void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
@@ -441,6 +580,14 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
         Theme::dimRegion(t, 0, 0, w, h, ALERT_BACKGROUND_DIM);
     } else {
         t.fillRect(0, 0, w, h, Theme::BG);
+    }
+
+    if (tinyAlert(w, h)) {
+        drawTinyCard(t, w, h);
+        Theme::drawGlitchStatic(t, 0, 0, w, h);
+        drawRgbBorder(t, w, h, now);
+        if (infoPending) Theme::drawInfoPanel(t, w, h, now, infoTypeName, infoText);
+        return;
     }
 
     // ---- header strip ------------------------------------------------

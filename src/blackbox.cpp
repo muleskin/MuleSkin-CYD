@@ -20,7 +20,7 @@ static_assert(sizeof(BlackBox::BattRecord) == 64, "BattRecord must be one 64-byt
 namespace BlackBox {
 namespace {
 
-#if defined(SQW_S3) || defined(CROWPANEL7)
+#if (defined(SQW_S3) && !defined(SQW_FLASH_8MB)) || defined(CROWPANEL7)   // an 8 MB S3 takes the CYDs' table and address
 const uint32_t BASE    = 0x810000;   // the gap after app1; partitions_twatch.csv (both SQW_S3 boards) and partitions_crowpanel7.csv, the same 16 MB shape
 // The NM-CYD-C5 has a table of its own, and the CYDs' 0x3D0000 sits inside
 // its app0: regionFree() saw it and kept the black box off, so the board never

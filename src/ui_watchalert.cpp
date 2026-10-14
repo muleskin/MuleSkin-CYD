@@ -18,6 +18,7 @@ static void removeRect(TFT_eSPI& t, int& x, int& y, int& w, int& h) {
     h = REMOVE_H;
     x = (t.width() - w) / 2;
     y = t.height() - h - margin;
+    if (Theme::compact()) { h = 20; y = t.height() - h - 4; }
 }
 
 // The full label needs ~22 characters and the narrowest portrait rotation
@@ -219,6 +220,26 @@ void drawOperator(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, int hin
     t.fillRect(0, 0, w, h, g0);
     for (int x = 0; x < w; x += 20) t.drawFastVLine(x, 0, h, g1);
     for (int y = 0; y < h; y += 20) t.drawFastHLine(0, y, w, g1);
+    if (Theme::compact()) {
+        // 240x135: the scope on the left, the words in a column beside it,
+        // and the mascot small under them without his bubble.
+        const int bandBot = h - 30;
+        const int R = (bandBot - 6) / 2;
+        const int rcx = 6 + R, rcy = 4 + R;
+        scope(t, now, eng, v, rcx, rcy, R, false);
+        const int x0 = rcx + R + 8, cw = w - x0 - 4;
+        t.setTextSize(2);
+        t.setTextColor(g3);
+        t.setCursor(x0, 6);
+        t.print("LOCKED ON");
+        fitPrint(t, x0, 28, v.label, cw, 1, t.color565(182, 255, 170), false);
+        if (v.haveRssi) trendLine(t, x0, 40, v, g3, false, cw);
+        (void)advance; (void)hintY;
+        MuleSkin::setHeadset(true);
+        MuleSkin::drawWaving(t, x0 + cw / 2, bandBot - 2, now, 0.55f, nullptr, false, 0, false);
+        MuleSkin::setHeadset(false);
+        return;
+    }
     const bool wide = w >= 300;
 
     const int bandTop = 34, bandBot = hintY - 32;   // LOCKED ON is 24 rows, plus a gap over the hint
@@ -306,6 +327,12 @@ void uiWatchAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, boo
         s_lineFirst = false;
     }
     drawOperator(t, now, eng, hintY, advance);
+    if (Theme::compact()) {
+        int bx, by, bw, bh;
+        removeRect(t, bx, by, bw, bh);
+        Theme::drawButton(t, bx, by, bw, bh, removeLabel(t, bw), false, 1);
+        return;
+    }
     const char* tapMsg = "tap anywhere to dismiss";
     t.setTextSize(1);
     t.setTextColor(Theme::WHITE);

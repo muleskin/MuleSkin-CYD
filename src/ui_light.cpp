@@ -21,7 +21,7 @@ static void computeGeom(TFT_eSPI& t, int screenH, int& top, int& bodyBottom, int
     // Two pixels taller than the text strictly needs on each side: a 24 px
     // row was a near miss for a thumb, 26 is not, and seven of them still
     // fit above the BACK strip in landscape.
-    rowH = t.fontHeight() + 10;
+    rowH = t.fontHeight() + Theme::listRowPad();
 }
 
 void uiLightInit(TFT_eSPI& t) {

@@ -371,6 +371,9 @@ int main(int argc, char** argv) {
     TFT_eSPI tft(W, H);
     tft.init();
     tft.setRotation(portrait ? 0 : 1);
+    // A 240x135 panel (the StickS3, the Cardputer) is compact from the start,
+    // as those boards set it in setup().
+    if (H < 200 && W < 300) Theme::setCompact(true);
 
     if (screen == "touchcal") return renderTouchCal(tft, W, H, frames, sequence, rawPath, outPath);
 

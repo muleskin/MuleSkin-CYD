@@ -449,7 +449,9 @@ static void drawCrashCard(TFT_eSPI& t) {
 #define BL_PIN_ORIG 21
 #define BL_PIN_CAP  27
 #define BL_PIN_AWOK 32
-#if defined(FREENOVE_S3_35)
+#if defined(SQW_SMALL)
+#define BL_PIN_S3   38   // the StickS3's and the Cardputer ADV's
+#elif defined(FREENOVE_S3_35)
 #define BL_PIN_S3   41   // the Freenove 3.5"'s, through a BSS138 (HIGH is on)
 #elif defined(TDECK_PLUS)
 #define BL_PIN_S3   42   // the T-Deck's 16-step driver chip: HIGH is full, pulses step it (tdeckBacklight)
@@ -476,6 +478,10 @@ static void drawCrashCard(TFT_eSPI& t) {
 #if defined(TWATCH_S3)
 // Confirmed on the watch 2026-09-22: the ST7789 wants inversion on (as
 // LilyGo's own setup says); false showed every colour inverted.
+constexpr bool PANEL_NEEDS_INVERSION = true;
+#elif defined(SQW_SMALL)
+// M5GFX sets invert for the StickS3's ST7789P3 and the Cardputer's ST7789V2
+// (upstream confirmed it on the stick, 2026-10-04).
 constexpr bool PANEL_NEEDS_INVERSION = true;
 #elif defined(TDECK_PLUS)
 // LilyGo's T-Deck setup turns inversion on for its ST7789. UNCONFIRMED by
@@ -851,7 +857,13 @@ static bool readTouchRaw(int16_t& a, int16_t& b);
 // Raw touch -> screen, the same way on every board: the Fit gives a point
 // in the panel's native (rotation 0) frame, and the rotation step turns it
 // into this rotation's coordinates. No board has its own maths any more.
+#if defined(SQW_SMALL)
+static TouchPoint stickPoll();   // the buttons or keys stand in for a finger; below
+#endif
 static TouchPoint pollTouch() {
+#if defined(SQW_SMALL)
+    return stickPoll();
+#endif
     TouchPoint tp = { false, 0, 0 };
     int16_t a, b;
     if (!readTouchRaw(a, b)) return tp;
@@ -943,7 +955,10 @@ static bool rawReadFiltered(int16_t& a, int16_t& b) {
 // The one reader pollTouch(), the calibration and the diagnostics screen all
 // use, so what the calibration measures is exactly what touch then reads.
 static bool readTouchRaw(int16_t& a, int16_t& b) {
-#if defined(CROWPANEL7) || defined(CYD32C) || defined(CYD35C) || defined(TDECK_PLUS)
+#if defined(SQW_SMALL)
+    (void)a; (void)b;
+    return false;   // no touch panel at all: the buttons drive it
+#elif defined(CROWPANEL7) || defined(CYD32C) || defined(CYD35C) || defined(TDECK_PLUS)
     // The GT911 already reports panel pixels; TouchFit divides by the scale,
     // so nothing else differs.
     uint16_t x, y;
@@ -964,6 +979,41 @@ static bool readTouchRaw(int16_t& a, int16_t& b) {
 #endif
 #endif
 }
+
+#if defined(STICKS3)
+// The StickS3's M5PM1 power chip, on I2C SDA 47 / SCL 48 at 0x6E. Its GPIO2
+// switches the rail the panel runs from, off until asked for -- the same
+// writes M5GFX makes before it touches the screen. GPIO3 enables the
+// speaker's amplifier, which hisses if left on: driven low, as M5 does.
+// (Upstream SquachWatch v1.31.0.)
+static bool pm1Bit(uint8_t reg, uint8_t mask, bool on) {
+    Wire.beginTransmission(0x6E);
+    Wire.write(reg);
+    if (Wire.endTransmission(false) != 0 || Wire.requestFrom(0x6E, 1) != 1) return false;
+    uint8_t v = Wire.read();
+    v = on ? (uint8_t)(v | mask) : (uint8_t)(v & ~mask);
+    Wire.beginTransmission(0x6E);
+    Wire.write(reg); Wire.write(v);
+    return Wire.endTransmission() == 0;
+}
+static void sticksPowerUp() {
+    Wire.begin(47, 48, 100000);
+    bool ok = pm1Bit(0x16, 1 << 2, false);    // GPIO2: plain GPIO
+    ok = pm1Bit(0x10, 1 << 2, true)  && ok;   // an output
+    ok = pm1Bit(0x13, 1 << 2, false) && ok;   // push-pull
+    ok = pm1Bit(0x11, 1 << 2, true)  && ok;   // high: panel rail on
+    ok = pm1Bit(0x16, 1 << 3, false) && ok;   // GPIO3: plain GPIO
+    ok = pm1Bit(0x10, 1 << 3, true)  && ok;   // an output
+    ok = pm1Bit(0x13, 1 << 3, false) && ok;   // push-pull
+    ok = pm1Bit(0x11, 1 << 3, false) && ok;   // low: amplifier off
+    // No I2C idle sleep: one left asleep stops answering.
+    Wire.beginTransmission(0x6E);
+    Wire.write(0x09); Wire.write(0x00);
+    ok = Wire.endTransmission() == 0 && ok;
+    delay(100);
+    Serial.printf("[pmu] M5PM1 %s: panel rail on, speaker amp off\n", ok ? "answered" : "DID NOT ANSWER");
+}
+#endif
 
 #if defined(TDECK_PLUS)
 // ---- T-Deck Plus: power rail, bus tidying, the stepped backlight, keyboard --
@@ -1383,6 +1433,327 @@ static DetectionType s_confirmType = DetectionType::UNKNOWN;
 // primer first if it's never been shown (see Settings::infoPrimerShown()),
 // then s_confirmType's own explanation either way.
 static bool          s_infoPending       = false;
+
+#if defined(SQW_SMALL)
+// ---- the small M5 boards' keys, standing in for a finger ---------------------
+// From upstream SquachWatch v1.31.0, laid out for MuleSkin's own screens. No
+// touch panel, so the keys drive the same tap handling every screen already
+// has: one key (the StickS3's KEY2, the Cardputer's arrows or TAB) steps a
+// cursor through the screen's stops, another (KEY1; ENTER or space) presses
+// where it is, for as long as it is held; KEY2 held (ESC or DEL) goes home.
+// List screens get their stops by sweeping their own hit tests, plus two
+// arrows that scroll. A screen with no stops of its own gets BACK and a grid.
+static bool           s_stickKey2Was = false, s_stickKey2Long = false, s_stickKey1Was = false;
+static uint32_t       s_stickKey2At = 0;
+static const uint32_t STICK_HOLD_MS = 700, STICK_SHOW_MS = 5000;
+// kind 0 presses; 1 scrolls the list down, 2 up; 3 presses and holds for a
+// long press (a LOG row's WATCH/HUNT panel opens on a hold).
+struct StickPt { int16_t x, y; uint8_t kind; };
+static uint32_t       s_stickHoldUntil = 0;
+static StickPt        s_stickHoldPt;
+static const int      STICK_KEY1 = 11, STICK_KEY2 = 12;
+struct SmallKeys { bool press, next, prev, home; };
+#if defined(CARDPUTER_ADV)
+// The Cardputer ADV's keyboard: a TCA8418 at 0x34 on SDA 8 / SCL 9, scanning
+// a 7x8 matrix that M5 lays out as four rows of fourteen (their remap, from
+// M5Cardputer's TCA8418 reader). Polled: the chip keeps a ten-event FIFO.
+static bool s_cardKeysOk = false, s_cardEnter = false;
+static bool cardReg(uint8_t reg, uint8_t v) {
+    Wire.beginTransmission(0x34);
+    Wire.write(reg); Wire.write(v);
+    return Wire.endTransmission() == 0;
+}
+static int cardRead(uint8_t reg) {
+    Wire.beginTransmission(0x34);
+    Wire.write(reg);
+    if (Wire.endTransmission(false) != 0 || Wire.requestFrom(0x34, 1) != 1) return -1;
+    return Wire.read();
+}
+static bool cardKeysBegin() {
+    Wire.begin(8, 9, 400000);
+    bool ok = cardReg(0x1D, 0x7F);      // rows 0-6 are keypad rows
+    ok = cardReg(0x1E, 0xFF) && ok;     // columns 0-7
+    ok = cardReg(0x1F, 0x00) && ok;
+    ok = cardReg(0x01, 0x01) && ok;     // key events into the FIFO
+    for (int i = 0; i < 12 && (cardRead(0x03) & 0x0F) > 0; i++) cardRead(0x04);   // whatever was held at boot
+    cardReg(0x02, 0x0F);
+    s_cardKeysOk = ok;
+    return ok;
+}
+static SmallKeys smallKeysRead() {
+    SmallKeys k = { false, false, false, false };
+    if (!s_cardKeysOk) return k;
+    for (int i = 0; i < 10; i++) {
+        const int cnt = cardRead(0x03);
+        if (cnt < 0 || (cnt & 0x0F) == 0) break;
+        const int ev = cardRead(0x04);
+        if (ev <= 0) break;
+        const bool down = (ev & 0x80) != 0;
+        const int  code = (ev & 0x7F) - 1;
+        const int  row = (code % 10) % 4, col = (code / 10) * 2 + ((code % 10) > 3 ? 1 : 0);
+        const bool enter = (row == 2 && col == 13) || (row == 3 && col == 13);     // ENTER, or the space bar
+        if (enter) { s_cardEnter = down; continue; }
+        if (!down) continue;
+        if ((row == 3 && (col == 11 || col == 12)) || (row == 1 && col == 0)) k.next = true;   // down, right, TAB
+        else if ((row == 2 && col == 11) || (row == 3 && col == 10))          k.prev = true;   // up, left
+        else if ((row == 0 && col == 0) || (row == 0 && col == 13))           k.home = true;   // ESC, or DEL
+    }
+    cardReg(0x02, 0x0F);
+    k.press = s_cardEnter;
+    return k;
+}
+#else
+// The StickS3: KEY1 presses, KEY2 steps on a short press and goes home on a
+// held one. Nothing steps backwards; there are two buttons.
+static SmallKeys smallKeysRead() {
+    SmallKeys k = { false, false, false, false };
+    const uint32_t now = millis();
+    const bool k2 = digitalRead(STICK_KEY2) == LOW;
+    if (k2 && !s_stickKey2Was) { s_stickKey2At = now; s_stickKey2Long = false; }
+    if (k2 && !s_stickKey2Long && now - s_stickKey2At > STICK_HOLD_MS) { s_stickKey2Long = true; k.home = true; }
+    if (!k2 && s_stickKey2Was && !s_stickKey2Long && now - s_stickKey2At > 25) k.next = true;
+    s_stickKey2Was = k2;
+    k.press = digitalRead(STICK_KEY1) == LOW;
+    return k;
+}
+#endif
+static uint8_t        s_stickStop = 0;
+static AppState       s_stickStopState = AppState::BOOT;
+static uint32_t       s_stickShownAt = 0;       // the cursor shows for a while after a press
+static bool           s_stickHome = false;      // home asked for: loop() goes there
+static int8_t         s_stickDrag = 0;          // a scripted drag under way: +1 down the list, -1 up
+static uint8_t        s_stickDragStep = 0;
+static const uint8_t  STICK_STOPS_MAX = 24;
+
+// What is under a point on a list screen, as that screen's own hit test sees
+// it, or -1. The stops are found by sweeping this over the screen, so they
+// are wherever the rows really are, scrolled or not.
+static int stickListId(int x, int y) {
+    const int w = tft.width(), h = tft.height();
+    switch (state) {
+        case AppState::SETTINGS: {
+            if (uiSettingsConfirmRow() != SettingsRow::NONE) {
+                const SettingsConfirmTap c = uiSettingsHitConfirm(x, y, w, h);
+                return c == SettingsConfirmTap::NONE ? -1 : 1000 + (int)c;
+            }
+            const SettingsRow r = uiSettingsHitTest(*canvas, x, y, w, h);
+            if (r == SettingsRow::NONE) return -1;
+            // BRIGHT answers only on its two buttons, each its own stop.
+            if (r == SettingsRow::BRIGHTNESS) {
+                const int d = uiSettingsStepHit(*canvas, x, y, w, h);
+                return d ? 3000 + (d > 0 ? 1 : 0) : -1;
+            }
+            return (int)r;
+        }
+        case AppState::POWER_SAVER: {
+            const PowerRow r = uiPowerHitTest(*canvas, x, y, w, h);
+            return r == PowerRow::NONE ? -1 : (int)r;
+        }
+        case AppState::SECURITY: {
+            const SecurityRow r = uiSecurityHitTest(*canvas, x, y, w, h);
+            return r == SecurityRow::NONE ? -1 : (int)r;
+        }
+        case AppState::STATUS_LIGHT: {
+            const LightRow r = uiLightHitTest(*canvas, x, y, w, h);
+            return r == LightRow::NONE ? -1 : (int)r;
+        }
+        case AppState::LOG: {
+            if (s_confirmPending) {
+                const LogConfirmTap c = uiLogHitConfirm(x, y, w, h);
+                return c == LogConfirmTap::NONE ? -1 : 2000 + (int)c;
+            }
+            const int r = uiLogRowAt(*canvas, x, y, w, h);
+            return (r >= 0 && r < (int)uiLogRowCount(engine)) ? r : -1;
+        }
+        case AppState::DETECTION_FILTER: {
+            const DetectionType r = uiDetFilterHitTest(*canvas, x, y, w, h);
+            return r == DetectionType::COUNT ? -1 : (int)r;
+        }
+        default: return -1;
+    }
+}
+static bool stickIsList() {
+    return state == AppState::SETTINGS || state == AppState::POWER_SAVER ||
+           state == AppState::SECURITY || state == AppState::DETECTION_FILTER ||
+           state == AppState::STATUS_LIGHT || state == AppState::LOG;
+}
+
+static uint8_t stickStopsBuild(StickPt* out, uint8_t cap) {
+    const int16_t w = (int16_t)tft.width(), h = (int16_t)tft.height();
+    uint8_t n = 0;
+    auto add = [&](int x, int y, uint8_t kind = 0) { if (n < cap) out[n++] = { (int16_t)x, (int16_t)y, kind }; };
+    if (s_infoPending && (state == AppState::LOG || state == AppState::ALERT)) {
+        add(w / 2, h - 17);             // MORE / GOT IT
+        return n;
+    }
+    if (state == AppState::CLEAR) {
+        const Theme::ButtonBarGeom bar = Theme::computeButtonBar(w, h);
+        for (int b = 0; b < 3; b++) add(bar.x[b] + bar.w[b] / 2, bar.y + bar.h / 2);   // WIFI TIME, LOG, IN MEETING
+        add(w / 2, 14);                 // the clock: TODAY
+        add(13, 11);                    // the menu
+        add(w / 2, (bar.y + 28) / 2);   // the radar: a blip near the middle
+        return n;
+    }
+    if (state == AppState::ALERT) {
+        int16_t xs[6], ys[6];
+        const uint8_t k = uiAlertStops(w, h, xs, ys, 6);
+        for (uint8_t i = 0; i < k; i++) add(xs[i], ys[i]);
+        return n;
+    }
+    if (stickIsList()) {
+        // Each thing the hit test names gets one stop, at the middle of
+        // everywhere it answered. In reading order, which for rows is down.
+        struct Acc { int id; int32_t sx, sy; uint16_t c; } acc[12];
+        uint8_t an = 0;
+        for (int y = 2; y < h; y += 4)
+            for (int x = 6; x < w; x += 12) {
+                const int id = stickListId(x, y);
+                if (id < 0) continue;
+                uint8_t a = 0;
+                while (a < an && acc[a].id != id) a++;
+                if (a == an) { if (an == 12) continue; acc[an++] = { id, 0, 0, 0 }; }
+                acc[a].sx += x; acc[a].sy += y; acc[a].c++;
+            }
+        const bool logRows = state == AppState::LOG && !s_confirmPending;
+        for (uint8_t a = 0; a < an; a++) add(acc[a].sx / acc[a].c, acc[a].sy / acc[a].c, logRows ? 3 : 0);
+        const bool panel = (state == AppState::SETTINGS && uiSettingsConfirmRow() != SettingsRow::NONE) ||
+                           (state == AppState::LOG && s_confirmPending);
+        if (logRows) {
+            const Theme::ButtonBarGeom bar = Theme::computeButtonBar(w, h);
+            add(w - 9, bar.y - 12, 1);
+            add(w - 9, Theme::LIST_TOP + 9, 2);
+            for (int b = 0; b < 3; b++) if (bar.w[b] > 0) add(bar.x[b] + bar.w[b] / 2, bar.y + bar.h / 2);
+        } else if (!panel) {
+            const int backH = Theme::pinnedBackH(w);
+            add(w - 9, h - backH - 9, 1);                                   // more, below
+            add(w - 9, Theme::LIST_TOP + Theme::LIST_HEADING_H + 7, 2);     // and above
+            add(w / 2, h - backH / 2);                                      // BACK
+        }
+        return n;
+    }
+    if (state == AppState::HUNT || state == AppState::DIAGNOSTICS) {
+        const Theme::ButtonBarGeom bar = Theme::computeButtonBar(w, h);
+        if (state == AppState::DIAGNOSTICS) add(w / 2, h / 2 - 10);   // the next page
+        for (int b = 0; b < 3; b++) if (bar.w[b] > 0) add(bar.x[b] + bar.w[b] / 2, bar.y + bar.h / 2);
+        return n;
+    }
+    if (state == AppState::WATCH_ALERT) {
+        add(w / 2, h / 3);              // anywhere dismisses
+        add(w / 2, h - 14);             // REMOVE FROM WATCH LIST
+        return n;
+    }
+    add(w / 2, h - 12);                 // BACK, pinned to the bottom edge
+    for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 4; c++) add(w * (2 * c + 1) / 8, h * (2 * r + 1) / 6);
+    return n;
+}
+// The sweep is a few hundred hit tests, so it is not run twice a frame: the
+// answer is kept for a moment, and thrown away when the screen or a key moves.
+static StickPt  s_stickPts[STICK_STOPS_MAX];
+static uint8_t  s_stickPtsN = 0;
+static uint32_t s_stickPtsAt = 0;
+static AppState s_stickPtsState = AppState::BOOT;
+static uint8_t stickStops(StickPt* out, bool fresh = false) {
+    const uint32_t now = millis();
+    if (fresh || !s_stickPtsAt || state != s_stickPtsState || now - s_stickPtsAt > 200) {
+        s_stickPtsN = stickStopsBuild(s_stickPts, STICK_STOPS_MAX);
+        s_stickPtsAt = now ? now : 1;
+        s_stickPtsState = state;
+    }
+    memcpy(out, s_stickPts, sizeof(StickPt) * s_stickPtsN);
+    return s_stickPtsN;
+}
+
+static TouchPoint stickPoll() {
+    TouchPoint tp = { false, 0, 0 };
+    const uint32_t now = millis();
+    const int w = tft.width(), h = tft.height();
+    // A scripted drag: down in the middle, then a row's worth a frame, then up.
+    if (s_stickDrag) {
+        if (s_stickDragStep > 3) { s_stickDrag = 0; s_stickPtsAt = 0; return tp; }
+        tp.valid = true;
+        tp.x = w / 2;
+        tp.y = h / 2 - s_stickDrag * 12 * s_stickDragStep;
+        s_stickDragStep++;
+        return tp;
+    }
+    if (state != s_stickStopState) { s_stickStopState = state; s_stickStop = 0; }
+    StickPt pts[STICK_STOPS_MAX];
+    const uint8_t n = stickStops(pts);
+    if (!n) return tp;
+    if (s_stickStop >= n) s_stickStop = 0;
+    const SmallKeys keys = smallKeysRead();
+    const bool k1 = keys.press;
+    if (keys.home) { s_stickHome = true; Serial.println("[keys] home"); }
+    if (keys.next || keys.prev) {
+        // The first press only shows where the cursor is; the next ones move it.
+        if (now - s_stickShownAt < STICK_SHOW_MS)
+            s_stickStop = (uint8_t)((s_stickStop + (keys.next ? 1 : n - 1)) % n);
+        s_stickShownAt = now ? now : 1;
+        lastTouch = now;
+    }
+    if (s_stickHoldUntil) {
+        if ((int32_t)(now - s_stickHoldUntil) < 0) {
+            tp.valid = true; tp.x = s_stickHoldPt.x; tp.y = s_stickHoldPt.y;
+            s_stickKey1Was = k1;
+            return tp;
+        }
+        s_stickHoldUntil = 0;
+        s_stickPtsAt = 0;
+    }
+    if (k1 && !s_stickKey1Was && pts[s_stickStop].kind == 3) {
+        s_stickHoldPt = pts[s_stickStop];
+        s_stickHoldUntil = now + 650;
+        s_stickShownAt = now ? now : 1;
+        s_stickKey1Was = k1;
+        tp.valid = true; tp.x = s_stickHoldPt.x; tp.y = s_stickHoldPt.y;
+        return tp;
+    }
+    if (k1 && (pts[s_stickStop].kind == 1 || pts[s_stickStop].kind == 2)) {
+        if (!s_stickKey1Was) {
+            lastTouch = now;
+            s_stickDrag = pts[s_stickStop].kind == 1 ? 1 : -1;
+            s_stickDragStep = 0;
+        }
+    } else if (k1) {
+        tp.valid = true;
+        tp.x = pts[s_stickStop].x;
+        tp.y = pts[s_stickStop].y;
+    }
+    if (k1) s_stickShownAt = now ? now : 1;
+    s_stickKey1Was = k1;
+    return tp;
+}
+
+// The cursor: amber brackets round the stop, or an arrow on the two that
+// scroll, drawn last, over the frame.
+static void stickDrawCursor(TFT_eSPI& t, uint32_t now) {
+    if (!s_stickShownAt || now - s_stickShownAt > STICK_SHOW_MS) return;
+    StickPt pts[STICK_STOPS_MAX];
+    const uint8_t n = stickStops(pts);
+    if (s_stickStop >= n) return;
+    const int x = pts[s_stickStop].x, y = pts[s_stickStop].y, r = 9, a = 5;
+    if (pts[s_stickStop].kind == 1 || pts[s_stickStop].kind == 2) {
+        const bool down = pts[s_stickStop].kind == 1;
+        t.fillRect(x - 8, y - 7, 17, 15, Theme::BG);
+        t.drawRect(x - 8, y - 7, 17, 15, Theme::AMBER);
+        for (int i = 0; i < 6; i++) {
+            const int half = down ? 5 - i : i;
+            t.drawFastHLine(x - half, y - 3 + i, 2 * half + 1, Theme::AMBER);
+        }
+        return;
+    }
+    for (int k = 0; k < 2; k++) {
+        const int q = r - k;
+        const uint16_t c = k ? Theme::BG : Theme::AMBER;
+        t.drawFastHLine(x - q, y - q, a, c); t.drawFastVLine(x - q, y - q, a, c);
+        t.drawFastHLine(x + q - a + 1, y - q, a, c); t.drawFastVLine(x + q, y - q, a, c);
+        t.drawFastHLine(x - q, y + q, a, c); t.drawFastVLine(x - q, y + q - a + 1, a, c);
+        t.drawFastHLine(x + q - a + 1, y + q, a, c); t.drawFastVLine(x + q, y + q - a + 1, a, c);
+    }
+    t.fillRect(x - 1, y - 1, 3, 3, Theme::AMBER);
+}
+#endif
 static uint8_t       s_tappedBlip[6];          // radarBlipAt()'s answer
 static bool          s_infoShowingPrimer = false;
 // Same "ignore the touch that opened this" gate s_confirmArmed uses,
@@ -4033,6 +4404,9 @@ void setup() {
 #if defined(TDECK_PLUS)
     tdeckPowerUp();
 #endif
+#if defined(STICKS3)
+    sticksPowerUp();
+#endif
 #if defined(CYD35) || defined(NM_CYD_C5)
     // On the NM-CYD-C5 this answers a specific open question rather than a
     // general one. Its bootloader prints
@@ -4154,7 +4528,7 @@ void setup() {
     // Which version lives in this slot, and whether this boot is a fresh
     // update on probation or the aftermath of one that was rolled back.
     OtaCore::boot();
-#if !defined(AWOK)
+#if !defined(AWOK) && !defined(SQW_SMALL)   // the small M5 boards are landscape only
     // AWOK has no rotate button and stays fixed at its one physical
     // orientation (see screenRotation's own comment above) -- only
     // boards that can actually rotate restore a saved orientation.
@@ -4165,6 +4539,17 @@ void setup() {
     // ST7796U and will lock up an ST7789 panel; do not re-add it unless
     // we confirm the panel is actually ST7796.
     tft.setRotation(screenRotation);
+#if defined(SQW_SMALL)
+    Theme::setRotateIconVisible(false);
+    Theme::setCompact(true);
+#if defined(STICKS3)
+    pinMode(STICK_KEY1, INPUT_PULLUP);
+    pinMode(STICK_KEY2, INPUT_PULLUP);
+#endif
+    // The colour check's own buttons sit below the bottom of a 135-row
+    // screen; upstream looked at the colours on the bench.
+    if (!Settings::colorChecked()) Settings::markColorChecked();
+#endif
 #if defined(AWOK)
     // No rotate button on this board (see the rotate handler in
     // loop(), not even compiled in on AWOK) -- hide the icon too so
@@ -4199,7 +4584,12 @@ void setup() {
 #elif defined(SQW_S3)
     // One backlight, GPIO45, on the first channel. The CYD pins below are
     // flash/PSRAM lines and the power chip's interrupt on an S3.
+#if defined(STICKS3)
+    // 256 Hz, as M5's own library runs it: at 5 kHz the StickS3 whined.
+    ledcSetup(BL_CH_ORIG, 256, 8);
+#else
     ledcSetup(BL_CH_ORIG, 5000, 8);
+#endif
     ledcAttachPin(BL_PIN_S3, BL_CH_ORIG);
 #elif defined(NM_CYD_C5)
     // Backlight is TFT_BL (GPIO25) on this board and nothing else is a
@@ -4425,6 +4815,13 @@ void setup() {
     Serial.println(usingCapTouch ? "Freenove S3 3.5 -- ST77922 touch answered."
                                  : "Freenove S3 3.5 -- ST77922 touch did not answer; no touch.");
     { char b[16]; boardBatteryLine(b, sizeof b); Serial.printf("[batt] %s (raw GPIO%d %u mV)\n", b, BOARD_BAT_ADC, (unsigned)analogReadMilliVolts(BOARD_BAT_ADC)); }
+#elif defined(SQW_SMALL)
+    usingCapTouch = false;
+#if defined(CARDPUTER_ADV)
+    Serial.printf("Cardputer ADV -- no touch panel; keyboard %s.\n", cardKeysBegin() ? "answered" : "DID NOT ANSWER");
+#else
+    Serial.println("StickS3 -- no touch panel; buttons on GPIO11 and GPIO12.");
+#endif
 #elif defined(TDECK_PLUS)
     // The T-Deck's GT911, on I2C SDA 18 / SCL 8 (the keyboard's bus too), INT
     // on 16, no reset line. Raw panel pixels in the panel's own frame, so the
@@ -4507,7 +4904,7 @@ void setup() {
         uint32_t windowStart = millis();
         while (millis() - windowStart < 1200) {
             int16_t a, b;
-#if defined(CROWPANEL7) || defined(CYD32C) || defined(CYD35C) || defined(FREENOVE_S3_35) || defined(TDECK_PLUS)
+#if defined(CROWPANEL7) || defined(CYD32C) || defined(CYD35C) || defined(FREENOVE_S3_35) || defined(TDECK_PLUS) || defined(SQW_SMALL)
             // The GT911 (and the ST77922's touch) is neither of the two
             // below; the two-way dispatch polled a capacitive controller that
             // is not on this bus.
@@ -4559,7 +4956,7 @@ void setup() {
     // injected against the compiled-in ranges -- a calibration screen would
     // just sit there waiting for a finger.
     initTouchFit();
-#if defined(ESP32) && !defined(CROWPANEL7) && !defined(FREENOVE_S3_35)
+#if defined(ESP32) && !defined(CROWPANEL7) && !defined(FREENOVE_S3_35) && !defined(SQW_SMALL)   // nothing to calibrate with no touch
     if (s_calSource != CalSource::SAVED) {
         Serial.println("Touch: no five-target calibration yet -- running it now.");
         runTouchCalibration();
@@ -5557,6 +5954,12 @@ void loop() {
     Regulars::tick(now);
 
     TouchPoint tp = pollTouch();
+#if defined(SQW_SMALL)
+    if (s_stickHome) {
+        s_stickHome = false;
+        if (state != AppState::CLEAR && state != AppState::BOOT) enterClear();
+    }
+#endif
     // True only on the exact frame a touch begins/ends -- unlike
     // TOUCH_DEBOUNCE_MS below (a cooldown timer that still re-fires on a
     // long-held finger once the cooldown elapses), these compare this
@@ -5854,6 +6257,9 @@ void loop() {
                           (int)pick->rssi, pick->restored ? ", from before this boot" : "");
         }
     }
+#if defined(SQW_SMALL)
+    g_consoleRotate = false;   // landscape only
+#endif
     if (g_consoleRotate || (tp.valid && !Settings::rotationLocked() && !MuleSkin::isHeld() &&
         (state == AppState::CLEAR || state == AppState::LOG ||
                       state == AppState::SETTINGS || state == AppState::OUTFIT ||
@@ -7880,6 +8286,10 @@ void loop() {
             info.boardName = "freenove-s3-35 BETA";
 #elif defined(TDECK_PLUS)
             info.boardName = "tdeck-plus BETA";
+#elif defined(STICKS3)
+            info.boardName = "StickS3 BETA";
+#elif defined(CARDPUTER_ADV)
+            info.boardName = "Cardputer ADV LAB";
 #elif defined(CYD35C)
             info.boardName = "cyd35c BETA";
 #elif defined(CYD35)
@@ -7953,6 +8363,8 @@ void loop() {
                 uiDiagnosticsHitBack(tp.x, tp.y, tft.width(), tft.height())) {
                 lastTouch = now;
                 enterSettings();
+            } else if (Theme::compact() && touchJustDown) {
+                uiDiagnosticsNextPage();   // a 240x135 screen shows it a page at a time
             }
             break;
         }
@@ -8041,6 +8453,9 @@ void loop() {
         if (now - transitionStart < TRANSITION_MS) {
             Theme::drawTransitionGlitch(frame, now - transitionStart, TRANSITION_MS);
         }
+#if defined(SQW_SMALL)
+        stickDrawCursor(frame, now);
+#endif
         FrameProf::lap(FrameProf::POST);
         pushFrame(0, 0);
         FrameProf::lap(FrameProf::PUSH);

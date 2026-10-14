@@ -644,7 +644,9 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     //
     // Nothing needs erasing: the background repaints this whole band every
     // frame, so a headline that stops being drawn is simply gone next frame.
-    if (anyActive) {
+    // Not on a 240x135 screen (the StickS3, the Cardputer): no room for a
+    // headline over the radar and the counters both (upstream v1.31.0).
+    if (anyActive && !(h < 200 && w < 300)) {
         // The rainbow ALL CLEAR used to own. It was the good part and it was
         // wasted on the state you see least; now it runs on the state that
         // actually matters. Same hue-wash as MuleSkin's party-mode confetti.
@@ -755,7 +757,15 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     // similarly-sized rows does, and this still never exceeds the
     // per-orientation cap on any row.
     DetectionType counterTypes[MAX_COUNTER_TYPES];
-    const uint8_t counterN = activeCounterTypes(counterTypes);
+    uint8_t counterN = activeCounterTypes(counterTypes);
+    // A 240x135 screen shows only what is in range: the zeroes are what ran
+    // off its edges, and the radar already says "nothing" by being empty.
+    if (h < 200 && w < 300) {
+        uint8_t k = 0;
+        for (uint8_t i = 0; i < counterN; i++)
+            if (counterCount(eng, counterTypes[i])) counterTypes[k++] = counterTypes[i];
+        counterN = k;
+    }
     uint8_t base      = counterN / counterRows;
     uint8_t remainder = counterN % counterRows;
     uint8_t start = 0;
