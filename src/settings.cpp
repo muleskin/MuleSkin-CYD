@@ -166,6 +166,7 @@ static uint8_t s_lightBright = 4;    // of 7
 static bool    s_updateCheck  = true;
 static bool    s_autoTime     = true;
 static uint8_t s_nightMode    = 0;
+static uint8_t s_nightPower   = 0;
 static bool    s_labChannel   = false;
 static uint8_t s_autoUpdate   = 0;     // 0 OFF, 1 AFTER 3 DAYS, 2 EARLY
 static bool    s_pushOn       = false;
@@ -523,6 +524,8 @@ void load() {
     s_updateCheck  = s_prefs.getBool("updChk", true);
     s_autoTime     = s_prefs.getBool("autoTime", true);
     s_nightMode    = s_prefs.getUChar("night", 0);
+    s_nightPower   = s_prefs.getUChar("nightPwr", 0);
+    if (s_nightPower >= NightMode::POWER_N) s_nightPower = 0;
     s_labChannel   = s_prefs.getBool("lab", false);
     // A board set ON before the waiting mode existed keeps updating, and
     // gets the wait: an on/off was all the old key could say.
@@ -725,6 +728,16 @@ void toggleUpdateCheck()    { s_updateCheck = !s_updateCheck; s_prefs.putBool("u
 bool autoTime()             { return s_autoTime; }
 void toggleAutoTime()       { s_autoTime = !s_autoTime; s_prefs.putBool("autoTime", s_autoTime); }
 uint8_t nightMode()         { return s_nightMode; }
+uint8_t nightPower()        { return s_nightPower; }
+void cycleNightPower() {
+#if defined(TWATCH_S3)
+    // The watch rests its radios on its own duty cycle (RADIOS): DARK only.
+    s_nightPower = s_nightPower ? 0 : 1;
+#else
+    s_nightPower = (uint8_t)((s_nightPower + 1) % NightMode::POWER_N);
+#endif
+    s_prefs.putUChar("nightPwr", s_nightPower);
+}
 bool labChannel()           { return s_labChannel; }
 bool    autoUpdate()        { return s_autoUpdate != 0; }
 uint8_t autoUpdateMode()    { return s_autoUpdate; }

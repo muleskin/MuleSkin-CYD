@@ -73,6 +73,7 @@ enum class SettingsRow : uint8_t {
     PUSH_NIGHT,      // ...through the night: ALL AS SET / WITH YOU
     PUSH_HOME,       // ...while the home network is in view: AS SET / IMPORTANT / WITH YOU
     PUSH_DAILY,      // ...and the 8 PM summary: ON / OFF
+    NIGHT_POWER,     // on the APPEARANCE page: NIGHT POWER OFF / DARK / DARK+WIFI
     BACK,
     COUNT,
     NONE = 255

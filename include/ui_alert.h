@@ -27,8 +27,13 @@ void uiAlertSetFollow(uint16_t minutes);
 // A tracker away from its owner seen on this many different days (the
 // regulars, regulars.h): "* NEAR YOU ON N DAYS *" in red. 0 = not one.
 void uiAlertSetDays(uint8_t days);
-// SNOOZE (this device, until restart), bottom centre between HUNT and MORE INFO.
+// SNOOZE (this device, for a while), bottom centre between HUNT and MORE INFO.
 bool uiAlertHitSnooze(int x, int y, int screenW, int screenH);
+// While SNOOZE is being tapped through its steps: the button shows the step
+// ("30 MIN"), held down, with a bar that runs out when the pick locks in.
+// left is that bar, 0..1000. nullptr puts the plain SNOOZE button back;
+// uiAlertInit does that too.
+void uiAlertSetSnoozePick(const char* label, uint16_t left);
 // Where the buttons are, for the small boards' cursor: the plate, then
 // SNOOZE, HUNT, MORE INFO and IGNORE, each at its middle. Returns how many.
 uint8_t uiAlertStops(int screenW, int screenH, int16_t* xs, int16_t* ys, uint8_t cap);

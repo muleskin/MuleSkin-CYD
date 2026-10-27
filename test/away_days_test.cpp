@@ -85,5 +85,26 @@ int main() {
         t.clear();
         ck("cleared", t.count() == 0 && t.takeDirty());
     }
+
+    suite("a tag that changed its address (relink)");
+    {
+        const uint8_t next[6] = { 0xD0, 0x01, 0x02, 0x03, 0x04, 0x07 };
+        Table t;
+        t.note(tag, 10, true);
+        t.note(tag, 11, true);
+        t.takeDirty();
+        ck("moved to the new address", t.relink(tag, next) && t.days(next) == 2 && t.days(tag) == 0);
+        ck("...and saved", t.takeDirty());
+        t.note(next, 12, true);
+        ck("its third day counts", t.days(next) == 3 && t.due(next, 12));
+        ck("an address not here: nothing", !t.relink(other, tag));
+    }
+    {
+        const uint8_t next[6] = { 0xD0, 0x01, 0x02, 0x03, 0x04, 0x07 };
+        Table t;
+        t.note(tag, 10, true); t.note(tag, 11, true);
+        t.note(next, 11, true);
+        ck("both there: the larger count is kept", t.relink(tag, next) && t.days(next) == 2 && t.count() == 1);
+    }
     return report();
 }

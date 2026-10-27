@@ -364,6 +364,10 @@ namespace Settings {
     // 0 = OFF. Needs the clock set to do anything.
     uint8_t     nightMode();
     void        cycleNightMode();
+    // NIGHT POWER: 0 OFF, 1 DARK, 2 DARK+WIFI (night_mode.h). The watch
+    // offers OFF and DARK only.
+    uint8_t     nightPower();
+    void        cycleNightPower();
 
     // UPDATES: STABLE (the releases everyone gets) or LAB (test builds
     // published ahead of a release; see ota_wifi.cpp manifestName()).

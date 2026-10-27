@@ -236,6 +236,12 @@ void uiAlertSetLastFree(bool lastFree) { s_lastFree = lastFree; }
 static bool     s_spam      = false;
 static uint16_t s_spamFakes = 0;
 void uiAlertSetSpam(bool spam, uint16_t fakes) { s_spam = spam; s_spamFakes = fakes; }
+static const char* s_snzLabel = nullptr;
+static uint16_t    s_snzLeft  = 0;
+void uiAlertSetSnoozePick(const char* label, uint16_t left) {
+    s_snzLabel = label;
+    s_snzLeft  = left > 1000 ? 1000 : left;
+}
 #if defined(CYD_GPS)
 static bool    s_place = false, s_placeFake = false;
 static int32_t s_placeLat7 = 0, s_placeLon7 = 0;
@@ -254,6 +260,7 @@ void uiAlertInit(TFT_eSPI& t, const Detection& d) {
     s_night = false;
     s_lastFree = false;
     s_spam     = false;
+    s_snzLabel = nullptr;
     s_followMin = 0;
     s_days = 0;
 #if defined(CYD_GPS)
@@ -535,12 +542,18 @@ static void drawTinyCard(TFT_eSPI& t, int w, int h) {
     for (int i = 0; i < 3; i++) {
         int bx, by, bw, bh;
         tinyBtnRect(i, w, h, bx, by, bw, bh);
+        const bool picking = (i == 1 && s_snzLabel);
+        const char* label = picking ? s_snzLabel : LABELS[i];
         t.fillRect(bx, by, bw, bh, Theme::BG);
-        t.drawRect(bx, by, bw, bh, Theme::PURPLE);
+        t.drawRect(bx, by, bw, bh, picking ? Theme::AMBER : Theme::PURPLE);
         t.setTextSize(1);
-        t.setTextColor(i == 0 ? Theme::AMBER : Theme::CYAN, Theme::BG);
-        t.setCursor(bx + (bw - t.textWidth(LABELS[i])) / 2, by + (bh - t.fontHeight()) / 2);
-        t.print(LABELS[i]);
+        t.setTextColor(i == 0 || picking ? Theme::AMBER : Theme::CYAN, Theme::BG);
+        t.setCursor(bx + (bw - t.textWidth(label)) / 2, by + (bh - t.fontHeight()) / 2);
+        t.print(label);
+        if (picking) {
+            const int barW = (int)((int32_t)(bw - 4) * s_snzLeft / 1000);
+            if (barW > 0) t.fillRect(bx + 2, by + bh - 3, barW, 1, Theme::AMBER);
+        }
     }
 }
 
@@ -970,11 +983,35 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
         t.setCursor(bx + (bw - hw) / 2, by + (bh - t.fontHeight()) / 2);
         t.print("HUNT");
     }
-    // SNOOZE between the two: this device, quiet until the board restarts.
+    // SNOOZE between the two: this device, quiet for a while. Each tap
+    // steps the time up (main.cpp owns the steps); while one is being
+    // picked the button stays pushed in and wears it, and a line along its
+    // foot runs out as the pick locks in. (Upstream SquachWatch v1.40.0.)
     {
         int bx, by, bw, bh;
         snoozeBtnRect(w, h, bx, by, bw, bh);
-        Theme::drawButton(t, bx, by, bw, bh, "SNOOZE", false);
+        Theme::drawButton(t, bx, by, bw, bh, s_snzLabel ? s_snzLabel : "SNOOZE",
+                          s_snzLabel != nullptr);
+        if (s_snzLabel) {
+            const int barW = (int)((int32_t)(bw - 6) * s_snzLeft / 1000);
+            t.fillRect(bx + 3, by + bh - 4, bw - 6, 2, Theme::BG);
+            if (barW > 0) t.fillRect(bx + 3, by + bh - 4, barW, 2, Theme::AMBER);
+            // Nothing else on the card says the button counts taps, so once
+            // the first one has landed it says so itself, just above.
+            static const char* HINT = "TAP AGAIN: LONGER";
+            t.setTextFont(wideAlert(w) ? 2 : 1);
+            t.setTextSize(1);
+            t.setTextWrap(false);
+            const int hw = t.textWidth(HINT);
+            const int fh = t.fontHeight();
+            const int hx = (w - hw) / 2;
+            const int hy = by - fh - (wideAlert(w) ? 1 : 5);
+            t.fillRect(hx - 3, hy - 1, hw + 6, fh + 1, Theme::BG);
+            t.setTextColor(Theme::AMBER, Theme::BG);
+            t.setCursor(hx, hy);
+            t.print(HINT);
+            t.setTextFont(1);
+        }
     }
 
     // TV-static snow over the whole screen during the same random burst

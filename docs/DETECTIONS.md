@@ -580,3 +580,15 @@ them for their own offline finding), the circulating "Meta glasses" OUIs
 WatchGuard Technologies' `00:01:21` / `00:90:7F` (a firewall maker), and
 Axon's `D8:1F:65`, which field captures support but the registry lists as
 "Private".
+
+## 2026-10-27: the downloadable rules built in
+
+Every rule of sets 2-4 in `web-flasher/signatures.txt` moved into the
+firmware's own tables (`src/signatures.cpp`), with the same grades: 40
+address prefixes (BodyWorn, Safety Vision, Motorola Solutions, Neology,
+Kapsch, Axis, Vivotek, Mobotix, Hanwha and Samsung Techwin, Lorex, Amcrest,
+Reolink, Bosch, Milesight, Uniview, Dahua, Hikvision), five network names
+(`davinci`, `HAP_`, `DAP-`, `TELLO-`, `RMTT-`) and two skimmer module names
+(`HC-08`, `FCD_1608`, now exact names like the HC-05's). Each has a MORE
+INFO page. The rules file keeps the notes on where each came from; its set
+6 is empty, and new rules go there until the next release builds them in.

@@ -81,6 +81,61 @@ int main() {
         ck("...in the slot heard longest ago", !hasOldest);
     }
 
+    suite("a new address, linked");
+    {
+        const uint8_t AT = 1, GT = 2;   // two DetectionType values, any two
+        const uint8_t next[6] = { 0xD0, 0x01, 0x02, 0x03, 0x04, 0x07 };
+        uint8_t from[6] = {};
+        Table t;
+        t.heard(tag, 1 * MIN, 12 * MIN, 100, AT, -60);
+        // It goes quiet at 12 min and a new address of the same type turns up
+        // 40 s later, a few dB off: the same tag.
+        ck("linked", t.heard(next, 12 * MIN + 40000, 12 * MIN + 40000, 110, AT, -64, from));
+        ck("...and says from which", memcmp(from, tag, 6) == 0);
+        ck("the old address is gone, the new one known", !t.known(tag) && t.known(next));
+        t.heard(next, 12 * MIN + 40000, 22 * MIN, 130, AT, -62);
+        ck("21 minutes across the change: due", t.due(22 * MIN, 130) == 0 && t.minutes(0) == 21);
+    }
+    {
+        const uint8_t next[6] = { 0xD0, 0x01, 0x02, 0x03, 0x04, 0x07 };
+        Table t;
+        t.heard(tag, 1 * MIN, 12 * MIN, 100, 1, -60);
+        ck("another type: not linked", !t.heard(next, 12 * MIN + 30000, 12 * MIN + 30000, 110, 2, -60));
+    }
+    {
+        const uint8_t next[6] = { 0xD0, 0x01, 0x02, 0x03, 0x04, 0x07 };
+        Table t;
+        t.heard(tag, 1 * MIN, 12 * MIN, 100, 1, -60);
+        ck("five minutes later: not linked", !t.heard(next, 17 * MIN, 17 * MIN, 110, 1, -60));
+    }
+    {
+        const uint8_t next[6] = { 0xD0, 0x01, 0x02, 0x03, 0x04, 0x07 };
+        Table t;
+        t.heard(tag, 1 * MIN, 12 * MIN, 100, 1, -50);
+        ck("20 dB apart: not linked", !t.heard(next, 12 * MIN + 30000, 12 * MIN + 30000, 110, 1, -70));
+    }
+    {
+        const uint8_t next[6] = { 0xD0, 0x01, 0x02, 0x03, 0x04, 0x07 };
+        Table t;
+        t.heard(tag, 1 * MIN, 12 * MIN, 100, 1, -60);
+        t.heard(other, 2 * MIN, 12 * MIN, 100, 1, -62);
+        ck("two that could be it: not linked", !t.heard(next, 12 * MIN + 30000, 12 * MIN + 30000, 110, 1, -61));
+    }
+    {
+        const uint8_t next[6] = { 0xD0, 0x01, 0x02, 0x03, 0x04, 0x07 };
+        Table t;
+        t.heard(tag, 1 * MIN, 13 * MIN, 100, 1, -60);
+        ck("still on air when the new one began: not linked",
+           !t.heard(next, 12 * MIN, 12 * MIN + 30000, 110, 1, -60));
+        ck("...the old one stays", t.known(tag));
+    }
+    {
+        const uint8_t next[6] = { 0xD0, 0x01, 0x02, 0x03, 0x04, 0x07 };
+        Table t;
+        t.heard(tag, 1 * MIN, 12 * MIN, 100);           // no type: the old way
+        ck("no type given: never linked", !t.heard(next, 12 * MIN + 30000, 12 * MIN + 30000, 110));
+    }
+
     suite("millis() wrapping");
     {
         Table t;

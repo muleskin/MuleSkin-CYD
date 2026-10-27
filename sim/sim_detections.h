@@ -76,6 +76,7 @@ inline const SimDetectionProfile kSimProfiles[] = {
     { DetectionType::SKIMMER,     {0x02, 0xB7, 0x04}, "BLE",         "BT04-A",         -55, false, "BT04-A module" },
     { DetectionType::SKIMMER,     {0x20, 0x13, 0x00}, "Skim-Linvor", "linvor",         -51, false, "Linvor HC-06" },
     { DetectionType::SKIMMER,     {0x02, 0x11, 0x01}, "Skim-SPP",    "",               -53, false, "Bluetooth serial port" },
+    { DetectionType::SKIMMER,     {0x02, 0x16, 0x08}, "BLE",         "FCD_1608",       -54, false, "FCD_1608 module" },
     // RAVEN, AIRTAG, DRONE
     { DetectionType::RAVEN,       {0x02, 0x31, 0x00}, "Raven",       "Gunshot Sensor", -79, false, "Raven gunshot sensor" },
     { DetectionType::AIRTAG,      {0x02, 0x00, 0x4C}, "Apple",       "AirTag",         -42, false, "Apple AirTag" },
@@ -83,6 +84,8 @@ inline const SimDetectionProfile kSimProfiles[] = {
     // ALPR -- Motorola Solutions, which absorbed Vigilant, and Genetec AutoVu
     { DetectionType::ALPR,        {0x00, 0x04, 0x7D}, "ALPR-Mtrla",  "",               -76, true,  "Motorola plate reader" },
     { DetectionType::ALPR,        {0x00, 0xBF, 0x15}, "ALPR-Gentec", "",               -75, true,  "Genetec AutoVu" },
+    { DetectionType::ALPR,        {0x00, 0x17, 0x3D}, "Neology",     "",               -74, true,  "Neology reader" },
+    { DetectionType::ALPR,        {0x00, 0xE0, 0x6A}, "Kapsch",      "",               -77, true,  "Kapsch reader" },
     // CAMERA -- each maker's own prefix from the OUI table
     { DetectionType::CAMERA,      {0x2C, 0xAA, 0x8E}, "Wyze",        "",               -63, true,  "Wyze camera" },
     { DetectionType::CAMERA,      {0xB8, 0xD7, 0xAF}, "Wyze-Mod",    "",               -66, true,  "Wyze module" },
@@ -96,6 +99,19 @@ inline const SimDetectionProfile kSimProfiles[] = {
     { DetectionType::CAMERA,      {0x70, 0x1A, 0xD5}, "Avigilon",    "",               -71, true,  "Avigilon camera" },
     { DetectionType::CAMERA,      {0x00, 0x40, 0x8C}, "Axis",        "",               -69, true,  "Axis camera" },
     { DetectionType::CAMERA,      {0xD4, 0x2D, 0xC5}, "i-PRO",       "",               -70, true,  "i-PRO camera" },
+    { DetectionType::CAMERA,      {0x00, 0x09, 0xBC}, "BodyWorn",    "",               -66, true,  "BodyWorn body cam" },
+    { DetectionType::CAMERA,      {0x00, 0x22, 0xAF}, "SafetyVisn",  "",               -72, true,  "Safety Vision in-car" },
+    { DetectionType::CAMERA,      {0x10, 0x74, 0x6F}, "MotorolaSol", "",               -73, true,  "Motorola video" },
+    { DetectionType::CAMERA,      {0x00, 0x02, 0xD1}, "Vivotek",     "",               -70, true,  "Vivotek camera" },
+    { DetectionType::CAMERA,      {0x00, 0x03, 0xC5}, "Mobotix",     "",               -71, true,  "Mobotix camera" },
+    { DetectionType::CAMERA,      {0x44, 0xB4, 0x23}, "Hanwha",      "",               -69, true,  "Hanwha camera" },
+    { DetectionType::CAMERA,      {0x00, 0x1F, 0x54}, "Lorex",       "",               -64, true,  "Lorex camera" },
+    { DetectionType::CAMERA,      {0x9C, 0x8E, 0xCD}, "Amcrest",     "",               -63, true,  "Amcrest camera" },
+    { DetectionType::CAMERA,      {0xEC, 0x71, 0xDB}, "Reolink",     "",               -62, true,  "Reolink camera" },
+    { DetectionType::CAMERA,      {0x00, 0x01, 0x31}, "Bosch",       "",               -72, true,  "Bosch security" },
+    { DetectionType::CAMERA,      {0x1C, 0xC3, 0x16}, "Milesight",   "",               -71, true,  "Milesight camera" },
+    { DetectionType::CAMERA,      {0x14, 0xBA, 0x88}, "Uniview",     "",               -70, true,  "Uniview camera" },
+    { DetectionType::CAMERA,      {0x08, 0xED, 0xED}, "Dahua",       "",               -68, true,  "Dahua camera" },
     // The tag networks, Ring, and the rogue-radio behaviours
     { DetectionType::SAMSUNG_TAG, {0x02, 0xFD, 0x5A}, "Samsung",     "Galaxy SmartTag",-58, false, "Samsung SmartTag" },
     { DetectionType::GOOGLE_TAG,  {0x02, 0xFE, 0xAA}, "Google",      "Find My Device", -61, false, "Google Find My tracker" },

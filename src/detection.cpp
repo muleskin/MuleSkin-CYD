@@ -1670,6 +1670,9 @@ static void updScanStartOnHost(struct ble_npl_event*) {
 }
 
 void DetectionEngine::startUpdateRadio() {
+    // Out of a duty-cycle rest first: the join needs the WiFi started, and
+    // the rest's own wake would never come once the mode is UPDATE.
+    if (g_rawMode == RawScanMode::REST) wakeRadios();
     if (!s_updEvReady) {
         ble_npl_event_init(&s_updStopEv,  updScanStopOnHost,  nullptr);
         ble_npl_event_init(&s_updStartEv, updScanStartOnHost, nullptr);

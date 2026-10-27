@@ -72,11 +72,14 @@ The table above is what is built in. On top of it, a board with a saved WiFi
 network fetches a **signed rule set** from flasher.oillie.cloud at every boot
 check (`web-flasher/signatures.txt`): extra address prefixes and WiFi
 network names, used only when the signature checks out. Rules only ever add:
-a prefix the firmware already knows keeps its built-in meaning. Rule set 2
-adds 44 prefixes read out of the IEEE registry -- WatchGuard, Digital Ally
-and BodyWorn body cams, ShotSpotter, Neology and Kapsch plate readers, and
-Axis, Hanwha, Hikvision, Dahua, Uniview, Reolink, Amcrest and other camera
-makers -- and three camera setup hotspots (`davinci`, `HAP_`, `DAP-`).
+a prefix the firmware already knows keeps its built-in meaning. The rule
+set is how new signatures reach boards between releases; at the next
+release they move into the firmware. Since v3.9.0 every rule of sets 2-4
+is built in -- the body cams, ShotSpotter, the Neology and Kapsch plate
+readers, Axis, Hanwha, Hikvision, Dahua, Uniview, Reolink, Amcrest and the
+other camera makers, the camera setup hotspots (`davinci`, `HAP_`, `DAP-`),
+the Tello drones and the HC-08 / FCD_1608 skimmer modules -- and set 6 is
+empty.
 
 ## Hardware
 
@@ -258,7 +261,11 @@ A full beginner-friendly walkthrough is in [docs/BUILD.md](docs/BUILD.md).
    it is not being left behind -- raises the alert card with **WITH YOU
    N MIN** across the top, once per tag. A tag near its owner changes its
    address every quarter of an hour, so it never gets that far; one planted
-   on you keeps its address for about a day. Ignore a tag to stop it.
+   on you keeps its address for about a day. When it does change it while
+   in range -- one tag of that kind goes quiet and one new one turns up
+   within 90 seconds at much the same signal, and no other tag fits --
+   the new address carries on its minutes, and its days for NEAR YOU ON N
+   DAYS. Ignore a tag to stop it.
 
 If a microSD card is present, every detection is also appended to
 `MuleSkin-<day>.log` (CSV: `ts,type,rssi,mac,channel,vendor,ssid`).
@@ -297,7 +304,13 @@ one from another day), and the alert card says **AT NIGHT** for anything
 caught between eleven and five. **NIGHT DIM** on the APPEARANCE page
 (10PM-6AM, 11PM-7AM or 12AM-7AM) runs the screen at a quarter of its
 brightness through those hours, full again for half a minute after a touch
-or an alert; scanning carries on at full rate.
+or an alert; scanning carries on at full rate. **NIGHT POWER** beside it
+saves more through the same hours (11 PM-5 AM with NIGHT DIM off): **DARK**
+turns the screen off half a minute after the last touch (a tap wakes it
+and is not taken as a press; an alert lights it), and **DARK+WIFI** also
+rests the WiFi sniffer 25 s of every 30 while it is dark on the main
+screen. Bluetooth never rests, so a tracker is still caught at 3 AM. The
+watch offers DARK only: its RADIOS setting already cycles its radios.
 
 ### Detection pauses while it's on WiFi
 
@@ -512,9 +525,11 @@ none of the saved networks is in range. REMOVE takes one off the list.
   under four dB of change shows nothing, which is what a still device does.
 - **First of its kind.** The first time this board ever catches a type, the
   card says so.
-- **SNOOZE on an alert.** Quiets that one device until the board restarts. It
-  is still scanned, counted and logged; only the alert stops. IGNORE is the
-  same thing kept for good.
+- **SNOOZE on an alert.** Quiets that one device for 10 minutes; tap again
+  for 30 minutes, 1 hour or 4 hours (the button shows the pick, which locks
+  in three seconds after the last tap). A restart ends it too. It is still
+  scanned, counted and logged; only the alert stops. IGNORE is the same
+  thing kept for good.
 
 ### Brought over from upstream SquachWatch (v1.31-v1.36)
 

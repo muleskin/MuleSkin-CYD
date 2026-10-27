@@ -1133,10 +1133,14 @@ static void pocketPress(uint32_t now) {
 static void applyCpuClock();
 // NIGHT DIM in force right now (see nightDimNow()); applyBrightness() reads it.
 static bool s_nightDim = false;
+// NIGHT POWER's dark: the saver has the screen dimmed for the night, and it
+// goes all the way off, whatever DIM LEVEL says (see the power saver).
+static bool s_nightDark = false;
 static void applyBrightness() {
     uint8_t duty = s_screenDimmed ? Settings::dimLevel()
                  : s_nightDim    ? NightMode::duty(Settings::brightness())
                  :                 Settings::brightness();
+    if (s_screenDimmed && s_nightDark) duty = 0;
 #if defined(TWATCH_S3)
     if (s_screenDimmed) {
         if (!s_panelAsleep) {
@@ -1920,8 +1924,24 @@ static void muleskinCatch(DetectionType type, const uint8_t* mac, uint32_t hits,
 enum class Buzz : uint8_t { ALERT, WATCH, SAMPLE, MESSAGE };
 static void twatchBuzz(Buzz kind);
 #endif
+// SNOOZE on the alert card: each tap steps through these, and the pick
+// locks in SNOOZE_PICK_MS after the last tap (upstream SquachWatch v1.40.0).
+// 0 = not picking.
+struct SnoozeStep { uint32_t ms; const char* label; const char* toast; };
+static const SnoozeStep SNOOZE_STEP[] = {
+    {  10u * 60u * 1000u, "10 MIN",  "for 10 min"  },
+    {  30u * 60u * 1000u, "30 MIN",  "for 30 min"  },
+    {  60u * 60u * 1000u, "1 HOUR",  "for an hour" },
+    { 240u * 60u * 1000u, "4 HOURS", "for 4 hours" },
+};
+static const uint8_t  SNOOZE_STEPS   = sizeof SNOOZE_STEP / sizeof SNOOZE_STEP[0];
+static const uint32_t SNOOZE_PICK_MS = 3000;
+static uint8_t  s_snoozeStep  = 0;
+static uint32_t s_snoozeTapAt = 0;
+
 static void enterAlert(const Detection& d) {
     state = AppState::ALERT;
+    s_snoozeStep = 0;
 #if defined(TWATCH_S3)
     twatchBuzz(Buzz::ALERT);
 #endif
@@ -2839,6 +2859,32 @@ static bool nightDimNow(uint32_t now) {
     if (now - lastTouch < 30000) return false;
     return NightMode::active(Settings::nightMode(), Clock::hour());
 }
+#if !defined(TWATCH_S3)
+// NIGHT POWER's DARK+WIFI: while the screen is dark for the night on the main
+// screen, the WiFi sniffer listens 5 s of every 30 and rests the rest, with
+// Bluetooth on throughout (restRadios(false), the watch's BLE-always rest).
+// Anything else -- a touch, an alert, another screen, an update or a join
+// (startUpdateRadio wakes them first) -- has the radios awake at once.
+static void serviceNightWifi(uint32_t now) {
+    static uint32_t phaseAt = 0;
+    const bool want = Settings::nightPower() == 2 && s_nightDark && state == AppState::CLEAR &&
+                      OtaWifi::state() == OtaWifi::State::OFF;
+    if (!want) {
+        if (engine.radiosResting()) { engine.wakeRadios(); Serial.println("[night] WiFi awake"); }
+        phaseAt = now;
+        return;
+    }
+    if (!engine.radiosResting()) {
+        if (now - phaseAt < NightMode::WIFI_ON_MS) return;
+        if (engine.restRadios(false)) Serial.println("[night] WiFi resting, Bluetooth on");
+        phaseAt = now;   // a refused rest tries again after another on-window
+    } else if (now - phaseAt >= NightMode::WIFI_REST_MS) {
+        engine.wakeRadios();
+        phaseAt = now;
+    }
+}
+#endif
+
 static void serviceNightDim(uint32_t now) {
     const bool want = nightDimNow(now);
     if (want != s_nightDim) {
@@ -3052,9 +3098,13 @@ static void serviceFollowing(uint32_t now) {
     lastScan = now;
     if (!s_follow && !(s_follow = new (std::nothrow) TrackerFollow::Table())) return;
     const uint32_t seq = engine.newRows();
+    // Twice: the addresses already followed first, then the new ones, which
+    // may be one of those after an address change (TrackerFollow::heard).
+    for (int pass = 0; pass < 2; pass++)
     for (uint8_t i = 0; i < engine.logCount(); i++) {
         const Detection* d = engine.logAt(i);
         if (!d || d->restored || !d->lastSeen) continue;
+        if (s_follow->known(d->mac) != (pass == 0)) continue;
         switch (d->type) {
             // An Apple advert counts only as the Find My beacon a tag sends
             // away from its owner (HIGH, "Away-Owner"): your own AirPods case
@@ -3069,7 +3119,14 @@ static void serviceFollowing(uint32_t now) {
             default: continue;
         }
         if (IgnoreList::contains(d->mac)) continue;
-        s_follow->heard(d->mac, d->firstSeen, d->lastSeen, seq);
+        uint8_t from[6];
+        if (s_follow->heard(d->mac, d->firstSeen, d->lastSeen, seq,
+                            (uint8_t)d->type, d->rssi, from)) {
+            Serial.printf("[follow] %s %02x:%02x:%02x:%02x:%02x:%02x is %02x:%02x:%02x:%02x:%02x:%02x with a new address\n",
+                          detectionTypeName(d->type), from[0], from[1], from[2], from[3], from[4], from[5],
+                          d->mac[0], d->mac[1], d->mac[2], d->mac[3], d->mac[4], d->mac[5]);
+            s_awayDays.relink(from, d->mac);
+        }
     }
     s_follow->expire(now);
     if (state != AppState::CLEAR && state != AppState::LOG) return;
@@ -5645,8 +5702,7 @@ static void cydGpsBaudTick(uint32_t now) {
     if (Gnss::good() + Gnss::bad() || now - s_cydGpsBaudAt < 20000) return;
     const uint8_t n = sizeof kCydGpsBauds / sizeof kCydGpsBauds[0];
     // The next one, skipping the board's own where it repeats a later entry.
-    do { s_cydGpsBaudIdx = (s_cydGpsBaudIdx + 1) % n; }
-    while (s_cydGpsBaudIdx && kCydGpsBauds[s_cydGpsBaudIdx] == kCydGpsBauds[0]);
+    s_cydGpsBaudIdx = Gnss::nextBaud(kCydGpsBauds, n, s_cydGpsBaudIdx);
     s_cydGpsBaudAt = now;
     CYD_GPS_SERIAL.updateBaudRate(kCydGpsBauds[s_cydGpsBaudIdx]);
     Serial.printf("[gps] nothing heard: trying %lu baud\n", (unsigned long)kCydGpsBauds[s_cydGpsBaudIdx]);
@@ -6038,6 +6094,9 @@ void loop() {
     serviceTimeSyncRadio();
     serviceAutoTime(now);
     serviceNightDim(now);
+#if !defined(TWATCH_S3)
+    serviceNightWifi(now);
+#endif
     serviceFollowing(now);
     serviceTrackerDays(now);
     serviceLive(now);
@@ -7012,6 +7071,38 @@ void loop() {
                 }
                 break;
             }
+            // A SNOOZE time being tapped through. Once picking has started
+            // the whole card is the SNOOZE button: a tap anywhere is the next
+            // step (a second tap a few pixels off the button used to close
+            // the card, upstream 2026-10-22). It locks in only when the taps
+            // stop: whatever the button shows then is what you get.
+            if (s_snoozeStep) {
+                const uint32_t since = now - s_snoozeTapAt;
+                if (tp.valid && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
+                    lastTouch     = now;
+                    s_snoozeStep  = (uint8_t)(s_snoozeStep % SNOOZE_STEPS + 1);
+                    s_snoozeTapAt = now;
+                    s_alertArmed  = false;
+                    Serial.printf("[snooze] tap -> step %u\n", (unsigned)s_snoozeStep);
+                    uiAlertSetSnoozePick(SNOOZE_STEP[s_snoozeStep - 1].label, 1000);
+                    break;
+                }
+                if (since >= SNOOZE_PICK_MS) {
+                    const SnoozeStep& st = SNOOZE_STEP[s_snoozeStep - 1];
+                    Serial.printf("[snooze] locked: %s\n", st.label);
+                    IgnoreList::snoozeFor(s_alertMac, st.ms);
+                    char sub[28];
+                    snprintf(sub, sizeof sub, "This one, %s", st.toast);
+                    s_snoozeStep = 0;
+                    lastTouch = now;
+                    Theme::showToast("SNOOZED", sub, Theme::AMBER);
+                    muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
+                    enterClear();
+                    break;
+                }
+                uiAlertSetSnoozePick(SNOOZE_STEP[s_snoozeStep - 1].label,
+                                     (uint16_t)(1000 - since * 1000 / SNOOZE_PICK_MS));
+            }
             if (tp.valid && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
                 lastTouch = now;
                 if (uiAlertHitMoreInfo(tp.x, tp.y, tft.width(), tft.height())) {
@@ -7033,16 +7124,19 @@ void loop() {
                     muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
                     enterClear();
                 } else if (uiAlertHitSnooze(tp.x, tp.y, tft.width(), tft.height())) {
-                    // This device, until the board restarts: no more alerts
-                    // from it, while it goes on being scanned, counted and
-                    // logged like anything IGNOREd. Acknowledges the alert
-                    // like IGNORE does. See IgnoreList::snooze for why it
-                    // is no longer the whole type for an hour.
+                    // This device, for a while: no more alerts from it,
+                    // while it goes on being scanned, counted and logged like
+                    // anything IGNOREd. Each tap steps the time up (10 MIN,
+                    // 30 MIN, 1 HOUR, 4 HOURS, round again) and the card
+                    // stays up; SNOOZE_PICK_MS after the last tap the pick
+                    // locks in (above). No ALWAYS step: IGNORE is the forever
+                    // button, and it can be seen and undone from its list.
                     lastTouch = now;
-                    IgnoreList::snooze(s_alertMac);
-                    Theme::showToast("SNOOZED", "This one, until restart", Theme::AMBER);
-                    muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
-                    enterClear();
+                    s_snoozeStep  = 1;
+                    s_snoozeTapAt = now;
+                    s_alertArmed  = false;   // the next step needs a fresh tap, not a held finger
+                    Serial.println("[snooze] first tap -> step 1");
+                    uiAlertSetSnoozePick(SNOOZE_STEP[0].label, 1000);
                 } else if (uiAlertHitHunt(tp.x, tp.y, tft.width(), tft.height())) {
                     // Same call pair LOG's confirm panel makes. The
                     // DETECTION trigger fires here too: leaving via HUNT
@@ -7059,7 +7153,7 @@ void loop() {
                     muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
                     enterClear();
                 }
-            } else if ((now - alertStart) > ALERT_AUTO_DISMISS_MS) {
+            } else if ((now - alertStart) > ALERT_AUTO_DISMISS_MS && !s_snoozeStep) {
                 muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
                 enterClear();
             }
@@ -7454,6 +7548,7 @@ void loop() {
                         case SettingsRow::UPDATE_CHECK:    Settings::toggleUpdateCheck();     break;
                         case SettingsRow::AUTO_TIME:       Settings::toggleAutoTime();        break;
                         case SettingsRow::NIGHT_MODE:      Settings::cycleNightMode();        break;
+                        case SettingsRow::NIGHT_POWER:     Settings::cycleNightPower();       break;
                         case SettingsRow::AUTO_UPDATE:     Settings::cycleAutoUpdate();       break;
                         case SettingsRow::PUSH_ALERTS:
                             // Set up from the flasher page, where a URL and
@@ -8546,6 +8641,23 @@ void loop() {
         // The meeting sign is there to be read; it never dims.
         bool wantDim = timeoutSec && idleMs > (uint32_t)timeoutSec * 1000UL &&
                        !(Settings::wakeOnAlert() && alerting) && state != AppState::MEETING;
+        // NIGHT POWER (night_mode.h): through the night hours, the screen
+        // goes dark half a minute after the last touch, whatever SCREEN
+        // TIMEOUT says -- and dark is off, not DIM LEVEL. A tap wakes it the
+        // way it wakes the saver (swallowed, not a press); an alert moves
+        // lastTouch, so it lights the card.
+        {
+            const bool nightDark = Settings::nightPower() && Clock::trusted() &&
+                                   NightMode::nightHours(Settings::nightMode(), Clock::hour()) &&
+                                   idleMs > NightMode::POWER_IDLE_MS && !alerting &&
+                                   state != AppState::MEETING;
+            if (nightDark != s_nightDark) {
+                s_nightDark = nightDark;
+                Serial.printf("[night] %s\n", nightDark ? "screen off for the night" : "screen back on");
+                if (s_screenDimmed) applyBrightness();   // already dimmed: the level changes now
+            }
+            if (nightDark) wantDim = true;
+        }
 #if defined(TWATCH_S3)
         // On the cable the watch stays lit; on battery the timeout always runs
         // (see Settings::screenTimeoutSec), unless it is set to NEVER.

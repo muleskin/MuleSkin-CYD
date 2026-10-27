@@ -211,6 +211,54 @@ const OuiEntry kOuiTable[] = {
     {{0x00, 0x12, 0x1C}, "Parrot",       DetectionType::DRONE,      Confidence::LOW_CONF},
     {{0x00, 0x26, 0x7E}, "Parrot",       DetectionType::DRONE,      Confidence::LOW_CONF},
 
+    // ---- From the downloadable rules, sets 2-4 (built in 2026-10-27) ----
+    // Body cams, in-car video, plate readers and camera makers, each read
+    // out of the IEEE registry and cross-checked against Wireshark's manuf
+    // file (web-flasher/signatures.txt keeps the registered names). MED
+    // where the company also makes other things: Motorola Solutions,
+    // Neology, Kapsch, Samsung Techwin, Bosch (alarm panels), Milesight
+    // (IoT sensors).
+    {{0x00, 0x09, 0xBC}, "BodyWorn",    DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x00, 0x16, 0xED}, "BodyWorn",    DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x00, 0x22, 0xAF}, "SafetyVisn",  DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x10, 0x74, 0x6F}, "MotorolaSol", DetectionType::CAMERA,    Confidence::MED_CONF},
+    {{0x9C, 0x86, 0x2B}, "MotorolaSol", DetectionType::CAMERA,    Confidence::MED_CONF},
+    {{0x00, 0x17, 0x3D}, "Neology",     DetectionType::ALPR,      Confidence::MED_CONF},
+    {{0x00, 0xE0, 0x6A}, "Kapsch",      DetectionType::ALPR,      Confidence::MED_CONF},
+    {{0xAC, 0xCC, 0x8E}, "Axis",        DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0xE8, 0x27, 0x25}, "Axis",        DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x00, 0x02, 0xD1}, "Vivotek",     DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x00, 0x03, 0xC5}, "Mobotix",     DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x44, 0xB4, 0x23}, "Hanwha",      DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0xE4, 0x30, 0x22}, "Hanwha",      DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x00, 0x09, 0x18}, "SamsungTW",   DetectionType::CAMERA,    Confidence::MED_CONF},
+    {{0x00, 0x1F, 0x54}, "Lorex",       DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x00, 0x65, 0x1E}, "Amcrest",     DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x9C, 0x8E, 0xCD}, "Amcrest",     DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0xA0, 0x60, 0x32}, "Amcrest",     DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0xEC, 0x71, 0xDB}, "Reolink",     DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x00, 0x01, 0x31}, "Bosch",       DetectionType::CAMERA,    Confidence::MED_CONF},
+    {{0x00, 0x04, 0x63}, "Bosch",       DetectionType::CAMERA,    Confidence::MED_CONF},
+    {{0x1C, 0xC3, 0x16}, "Milesight",   DetectionType::CAMERA,    Confidence::MED_CONF},
+    {{0xC0, 0xBA, 0x1F}, "Milesight",   DetectionType::CAMERA,    Confidence::MED_CONF},
+    {{0x14, 0xBA, 0x88}, "Uniview",     DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x48, 0xEA, 0x63}, "Uniview",     DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x88, 0x26, 0x3F}, "Uniview",     DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x08, 0xED, 0xED}, "Dahua",       DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x14, 0xA7, 0x8B}, "Dahua",       DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x3C, 0xEF, 0x8C}, "Dahua",       DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x4C, 0x11, 0xBF}, "Dahua",       DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x9C, 0x14, 0x63}, "Dahua",       DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0xE0, 0x50, 0x8B}, "Dahua",       DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x00, 0xBC, 0x99}, "Hikvision",   DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x04, 0x03, 0x12}, "Hikvision",   DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x08, 0x54, 0x11}, "Hikvision",   DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x18, 0x68, 0xCB}, "Hikvision",   DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x24, 0x0F, 0x9B}, "Hikvision",   DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0x4C, 0xBD, 0x8F}, "Hikvision",   DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0xA4, 0x14, 0x37}, "Hikvision",   DetectionType::CAMERA,    Confidence::HIGH_CONF},
+    {{0xBC, 0xAD, 0x28}, "Hikvision",   DetectionType::CAMERA,    Confidence::HIGH_CONF},
+
     // ---- Pentest hardware ------------------------------------------
     // No Flipper prefix here. Flipper Devices' own IEEE block, 0C:FA:22,
     // sat here as HACKER until 2026-10-14, and this table is only ever
@@ -297,6 +345,11 @@ const NameEntry kBtClassicNames[] = {
     {"HC-06",       DetectionType::SKIMMER},
     {"RN42",        DetectionType::SKIMMER},
     {"BT04-A",      DetectionType::SKIMMER},
+    // HC-08 (a Bluetooth Low Energy module, so one this board can actually
+    // hear) and FCD_1608: pump-skimmer modules named by Bhaskar et al.,
+    // USENIX Security 2019. From the downloadable rules, set 4.
+    {"HC-08",       DetectionType::SKIMMER},
+    {"FCD_1608",    DetectionType::SKIMMER},
     {"Flock_Setup", DetectionType::FLOCK},
     {"FS Ext Battery", DetectionType::FLOCK},
 };
@@ -325,6 +378,18 @@ const SsidEntry kSsidPrefixes[] = {
     // suffix; MED at best, since somebody can also just name their home
     // network this as a joke.
     {"pwned",   "Deauther",     DetectionType::HACKER},
+
+    // Camera setup hotspots, from the downloadable rules (sets 2 and 4, built
+    // in 2026-10-27). Hikvision's open default network (CVE-2017-14953) and
+    // its setup AP (HAP_ and the label's verification code); Dahua's setup
+    // hotspot (DAP- and the serial).
+    {"davinci", "Hikvision",    DetectionType::CAMERA},
+    {"HAP_",    "Hikvision",    DetectionType::CAMERA},
+    {"DAP-",    "Dahua",        DetectionType::CAMERA},
+    // The Ryze/DJI Tello's own open network, or RMTT- under the RoboMaster
+    // TT controller.
+    {"TELLO-",  "Tello",        DetectionType::DRONE},
+    {"RMTT-",   "Tello",        DetectionType::DRONE},
 };
 const uint16_t kSsidCount = sizeof(kSsidPrefixes) / sizeof(kSsidPrefixes[0]);
 

@@ -1,6 +1,7 @@
 // MuleSkin-CYD — NIGHT DIM's hours, the ones across midnight above all.
 #include "test_util.h"
 #include "night_mode.h"
+#include <string.h>
 
 using namespace NightMode;
 
@@ -24,6 +25,16 @@ int main() {
     ck("midnight is night", active(3, 0));
     ck("6 AM is night", active(3, 6));
     ck("7 AM is day", !active(3, 7));
+
+    suite("NIGHT POWER's hours: NIGHT DIM's, else 11 PM-5 AM");
+    ck("with 10PM-6AM set, 10 PM is night", nightHours(1, 22));
+    ck("...and 5 AM", nightHours(1, 5));
+    ck("with NIGHT DIM off, 11 PM is night", nightHours(0, 23));
+    ck("...4 AM too", nightHours(0, 4));
+    ck("...but not 5 AM", !nightHours(0, 5));
+    ck("...nor 10 PM", !nightHours(0, 22));
+    ck("the three labels", !strcmp(powerLabel(0), "OFF") && !strcmp(powerLabel(2), "DARK+WIFI") &&
+                           !strcmp(powerLabel(9), "OFF"));
 
     suite("every preset is eight hours or so, and labelled");
     bool sane = true;

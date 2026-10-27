@@ -53,6 +53,25 @@ bool Table::remove(const uint8_t mac[6]) {
     return true;
 }
 
+bool Table::relink(const uint8_t from[6], const uint8_t to[6]) {
+    if (!from || !to || memcmp(from, to, 6) == 0) return false;
+    const int i = find(from);
+    if (i < 0) return false;
+    const int j = find(to);
+    if (j >= 0) {
+        Slot& n = _s[j];
+        const Slot& o = _s[i];
+        if (o.days > n.days) n.days = o.days;
+        if (o.lastDay > n.lastDay) n.lastDay = o.lastDay;
+        if (o.toldDay > n.toldDay) n.toldDay = o.toldDay;
+        _s[i] = _s[--_n];
+    } else {
+        memcpy(_s[i].mac, to, 6);
+    }
+    _dirty = true;
+    return true;
+}
+
 size_t Table::save(uint8_t* out, size_t cap) const {
     const size_t n = 1 + (size_t)_n * sizeof(Slot);
     if (!out || cap < n) return 0;

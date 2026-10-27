@@ -128,6 +128,7 @@ static const SettingsRow APPEARANCE_ROWS[] = {
     // No LOCK BACKGROUND: with RADAR the only background there is nothing to
     // cycle away from by accident.
     SettingsRow::THEME, SettingsRow::BACKGROUND, SettingsRow::BRIGHTNESS, SettingsRow::NIGHT_MODE,
+    SettingsRow::NIGHT_POWER,
     SettingsRow::INVERT, SettingsRow::RGB_SWAP, SettingsRow::ROTATION_LOCK,
     // And the one light that is not on the screen at all.
     SettingsRow::STATUS_LIGHT,
@@ -228,6 +229,7 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::BACKGROUND_LOCK:
         case SettingsRow::BRIGHTNESS:
         case SettingsRow::NIGHT_MODE:
+        case SettingsRow::NIGHT_POWER:
         case SettingsRow::INVERT:
         case SettingsRow::RGB_SWAP:
         case SettingsRow::ROTATION_LOCK:
@@ -815,6 +817,9 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             break;
         case SettingsRow::NIGHT_MODE:
             label = "NIGHT DIM"; value = NightMode::label(Settings::nightMode());
+            break;
+        case SettingsRow::NIGHT_POWER:
+            label = "NIGHT POWER"; value = NightMode::powerLabel(Settings::nightPower());
             break;
         case SettingsRow::INVERT:
             label = "INVERT COLORS"; value = Settings::inverted() ? "ON" : "OFF";

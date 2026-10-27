@@ -803,6 +803,8 @@ int main(int argc, char** argv) {
         if (alertLastFree) uiAlertSetLastFree(true);
         // MULESKINSIM_FOLLOW=N: the card for a tag that has travelled with you N minutes.
         if (const char* f = getenv("MULESKINSIM_FOLLOW")) uiAlertSetFollow((uint16_t)atoi(f));
+        // MULESKINSIM_SNOOZE=label: SNOOZE mid-pick, its bar half run out.
+        if (const char* z = getenv("MULESKINSIM_SNOOZE")) uiAlertSetSnoozePick(z, 500);
     }
 
     // After uiSettingsInit(), which clears any pending question.

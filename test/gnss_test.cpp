@@ -95,5 +95,25 @@ int main() {
     Gnss::sentence(nmea("GNGGA,000000.00,4042.76800,N,07400.36000,W,1,06,1.0,5.0,M,0.0,M,,"), 200);
     ck("a real fix ends the fake", !Gnss::faked() && Gnss::fix().valid);
 
+    suite("the baud tried next while nothing parses");
+    {
+        // The CYD: its own 9600 first, then 38400, 115200, back to 9600.
+        const uint32_t cyd[] = { 9600, 9600, 38400, 115200 };
+        uint8_t i = 0, seen[6];
+        for (int k = 0; k < 6; k++) seen[k] = (uint8_t)(i = Gnss::nextBaud(cyd, 4, i));
+        ck("9600 is not tried twice in a row", cyd[seen[0]] == 38400 && cyd[seen[1]] == 115200 && seen[2] == 0);
+        ck("...and round again", cyd[seen[3]] == 38400 && seen[5] == 0);
+        // The T-Deck Plus: 38400 first, then 9600 and 115200.
+        const uint32_t td[] = { 38400, 9600, 38400, 115200 };
+        i = 0;
+        const uint8_t a = Gnss::nextBaud(td, 4, i), b = Gnss::nextBaud(td, 4, a), c = Gnss::nextBaud(td, 4, b);
+        ck("T-Deck: 9600, then 115200, then its own", td[a] == 9600 && td[b] == 115200 && c == 0);
+        // The Marauder V8: 115200 first; every other one gets a turn.
+        const uint32_t v8[] = { 115200, 9600, 38400, 115200 };
+        const uint8_t x = Gnss::nextBaud(v8, 4, 0), y = Gnss::nextBaud(v8, 4, x), z = Gnss::nextBaud(v8, 4, y);
+        ck("V8: 9600, 38400, then its own", v8[x] == 9600 && v8[y] == 38400 && z == 0);
+        ck("a list of one stays put", Gnss::nextBaud(v8, 1, 0) == 0);
+    }
+
     return report();
 }

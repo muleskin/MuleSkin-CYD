@@ -61,4 +61,13 @@ uint32_t toEpoch(int year, int month, int day, int h, int m, int s);
 void fake(int32_t lat7, int32_t lon7, uint32_t epoch, uint32_t nowMs);
 bool faked();
 
+// The baud to try next while nothing has parsed (main.cpp cydGpsBaudTick):
+// bauds[0] is the board's own and the rest the usual ones; the step after
+// `idx`, round and round, skipping a later entry that repeats the board's.
+inline uint8_t nextBaud(const uint32_t* bauds, uint8_t n, uint8_t idx) {
+    if (!bauds || n < 2) return 0;
+    do { idx = (uint8_t)((idx + 1) % n); } while (idx && bauds[idx] == bauds[0]);
+    return idx;
+}
+
 }  // namespace Gnss

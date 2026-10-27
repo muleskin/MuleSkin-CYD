@@ -33,7 +33,10 @@
 
 # Set 5 (v3.8.0): WatchGuard, DigitalAlly, ShotSpotter, i-PRO, the DJI
 # blocks and Tile's FD84 left this list -- they are built in now.
-SERIAL 5
+# Set 6 (v3.9.0): every other rule of sets 2-4 is built in as well, so the
+# set is empty: the notes below say where each one came from. New rules go
+# here again, and move into src/signatures.cpp at the next release.
+SERIAL 6
 
 # ---- Set 2 (2026-10-09) ----------------------------------------------------
 # Every prefix below was read out of the IEEE registry itself
@@ -45,77 +48,34 @@ SERIAL 5
 # WatchGuard Video (Plano TX, now Motorola Solutions) -- built in since set 5
 # Digital Ally, Inc. -- built in since set 5
 # Utility, Inc (Decatur GA: BodyWorn)
-OUI 00:09:bc CAMERA HIGH BodyWorn
-OUI 00:16:ed CAMERA HIGH BodyWorn
 # Safety Vision, LLC (in-car and transit video)
-OUI 00:22:af CAMERA HIGH SafetyVision
 # ShotSpotter, Inc. -- built in since set 5
 # MOTOROLA SOLUTIONS MALAYSIA SDN. BHD. -- a broad company, so MED
-OUI 10:74:6f CAMERA MED MotorolaSol
-OUI 9c:86:2b CAMERA MED MotorolaSol
 
 # Plate readers and tolling
 # Neology (Poway CA)
-OUI 00:17:3d ALPR MED Neology
 # KAPSCH AG
-OUI 00:e0:6a ALPR MED Kapsch
 
 # Camera makers
 # Axis Communications AB
-OUI ac:cc:8e CAMERA HIGH Axis
-OUI e8:27:25 CAMERA HIGH Axis
 # Vivotek, Inc.
-OUI 00:02:d1 CAMERA HIGH Vivotek
 # Mobotix AG
-OUI 00:03:c5 CAMERA HIGH Mobotix
 # HANWHA VISION VIETNAM COMPANY LIMITED / Hanwha Vision VietNam
-OUI 44:b4:23 CAMERA HIGH Hanwha
-OUI e4:30:22 CAMERA HIGH Hanwha
 # SAMSUNG TECHWIN CO.,LTD (Hanwha's predecessor)
-OUI 00:09:18 CAMERA MED SamsungTechwin
 # i-PRO Co., Ltd. (formerly Panasonic security) -- built in since set 5
 # Lorex Technology Inc.
-OUI 00:1f:54 CAMERA HIGH Lorex
 # Amcrest Technologies
-OUI 00:65:1e CAMERA HIGH Amcrest
-OUI 9c:8e:cd CAMERA HIGH Amcrest
-OUI a0:60:32 CAMERA HIGH Amcrest
 # Reolink Innovation Limited
-OUI ec:71:db CAMERA HIGH Reolink
 # Bosch Security Systems -- also alarm panels, so MED
-OUI 00:01:31 CAMERA MED Bosch
-OUI 00:04:63 CAMERA MED Bosch
 # Xiamen Milesight IoT Co., Ltd. -- also IoT sensors, so MED
-OUI 1c:c3:16 CAMERA MED Milesight
-OUI c0:ba:1f CAMERA MED Milesight
 # Zhejiang Uniview Technologies Co., Ltd.
-OUI 14:ba:88 CAMERA HIGH Uniview
-OUI 48:ea:63 CAMERA HIGH Uniview
-OUI 88:26:3f CAMERA HIGH Uniview
 # Zhejiang Dahua Technology Co., Ltd.
-OUI 08:ed:ed CAMERA HIGH Dahua
-OUI 14:a7:8b CAMERA HIGH Dahua
-OUI 3c:ef:8c CAMERA HIGH Dahua
-OUI 4c:11:bf CAMERA HIGH Dahua
-OUI 9c:14:63 CAMERA HIGH Dahua
-OUI e0:50:8b CAMERA HIGH Dahua
 # Hangzhou Hikvision Digital Technology Co.,Ltd.
-OUI 00:bc:99 CAMERA HIGH Hikvision
-OUI 04:03:12 CAMERA HIGH Hikvision
-OUI 08:54:11 CAMERA HIGH Hikvision
-OUI 18:68:cb CAMERA HIGH Hikvision
-OUI 24:0f:9b CAMERA HIGH Hikvision
-OUI 4c:bd:8f CAMERA HIGH Hikvision
-OUI a4:14:37 CAMERA HIGH Hikvision
-OUI bc:ad:28 CAMERA HIGH Hikvision
 
 # Camera setup hotspots: the SSID a camera puts up before it is configured
 # Hikvision WiFi cameras' open default network (CVE-2017-14953)
-SSID davinci CAMERA Hikvision
 # Hikvision WiFi camera setup AP, HAP_ plus the label's verification code
-SSID HAP_ CAMERA Hikvision
 # Dahua WiFi camera setup hotspot, DAP- plus serial (IPC-HDBW1230DE-SW guide)
-SSID DAP- CAMERA Dahua
 
 # ---- Set 3 (2026-10-09) ----------------------------------------------------
 # Tile, Inc.'s third SIG-assigned UUID, 0xFD84 -- built in since set 5
@@ -135,15 +95,11 @@ SSID DAP- CAMERA Dahua
 # aircraft) and DJI Baiwang (not shown to be drones).
 # The Ryze/DJI Tello's own open network: always TELLO- (the firmware puts
 # it in front of any name set), or RMTT- under the RoboMaster TT controller.
-SSID TELLO- DRONE Tello
-SSID RMTT- DRONE Tello
 
 # Skimmer radios beside the built-in HC-03/05/06: HC-08 (a Bluetooth Low
 # Energy module, so one this board can actually hear) and FCD_1608, both
 # named among pump-skimmer modules by Bhaskar et al., USENIX Security 2019.
 # Considered and left out: "RNBT-" and "linvor" (not confirmed by a source).
-NAME HC-08 SKIMMER HC-08
-NAME FCD_1608 SKIMMER FCD_1608
 
 # Also considered on 2026-10-11 and left out: Even Realities (registered, but
 # their G1 glasses carry no camera); spy-camera setup-network names (no

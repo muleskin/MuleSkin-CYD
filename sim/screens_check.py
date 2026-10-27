@@ -57,6 +57,15 @@ SCREENS = [
     ("settings-800",  "settings",   ["--size", "800x480"], {}),
     ("alert-800",     "alert",      ["--alert", "1", "--size", "800x480"], {}),
     ("log-800",       "log",        ["--size", "800x480"], {}),
+    # The StickS3 and the Cardputer (240x135): the compact layouts, and the
+    # small alert card with its own HUNT / SNOOZE / INFO row.
+    ("settings-240",  "settings",   ["--size", "240x135"], {}),
+    ("alert-240",     "alert",      ["--alert", "1", "--size", "240x135"], {}),
+    ("log-240",       "log",        ["--size", "240x135"], {}),
+    # SNOOZE being tapped through its times: the button wears the pick and
+    # the TAP AGAIN line sits above it -- on the CYD and on the small card.
+    ("alert-snooze",  "alert",      ["--alert", "1"], {"MULESKINSIM_SNOOZE": "30 MIN"}),
+    ("alert-snooze-240", "alert",   ["--alert", "1", "--size", "240x135"], {"MULESKINSIM_SNOOZE": "30 MIN"}),
 ]
 
 

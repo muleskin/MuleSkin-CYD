@@ -42,6 +42,10 @@ public:
     uint8_t     count() const { return _n; }
     const Slot* at(uint8_t i) const { return i < _n ? &_s[i] : nullptr; }
     bool        remove(const uint8_t mac[6]);
+    // A tag that changed its address (TrackerFollow linked the two): its
+    // days go on under the new one. If the new one has days of its own
+    // already, the larger count is kept. False when `from` is not here.
+    bool        relink(const uint8_t from[6], const uint8_t to[6]);
 private:
     int  find(const uint8_t mac[6]) const;
     Slot _s[SLOTS];

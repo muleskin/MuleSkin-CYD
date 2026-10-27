@@ -162,7 +162,8 @@ int main() {
         }
         if (f) fclose(f);
         ck("under the boards' 2000 bytes", body.size() <= 2000);
-        ck("every rule parses", setExtraRules(body.c_str()) == rules && rules > 0);
+        // Empty is allowed (set 6: everything built in); then nothing to parse.
+        ck("every rule parses", setExtraRules(body.c_str()) == rules);
         const uint8_t dji[6] = { 0x60, 0x60, 0x1F, 1, 2, 3 };
         ck("a DJI address is a drone", lookupOui(dji) == DetectionType::DRONE);
         ck("TELLO- is a drone", lookupSsid("TELLO-C48BF0") == DetectionType::DRONE);
@@ -207,7 +208,7 @@ int main() {
             seen.push_back(id);
         }
         for (auto& d : dupes) printf("    repeated: %s\n", d.c_str());
-        ck("no rule repeats a built-in one or another rule", dupes.empty() && !seen.empty());
+        ck("no rule repeats a built-in one or another rule", dupes.empty());
     }
     return report();
 }
