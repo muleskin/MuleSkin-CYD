@@ -31,7 +31,9 @@
 #   SSID Spycam- CAMERA SpyCamInc
 #   DROP OUI 00:0e:58
 
-SERIAL 4
+# Set 5 (v3.8.0): WatchGuard, DigitalAlly, ShotSpotter, i-PRO, the DJI
+# blocks and Tile's FD84 left this list -- they are built in now.
+SERIAL 5
 
 # ---- Set 2 (2026-10-09) ----------------------------------------------------
 # Every prefix below was read out of the IEEE registry itself
@@ -40,17 +42,14 @@ SERIAL 4
 # each group. None of them is a prefix the firmware already knows.
 
 # Body cams, in-car video, gunshot sensors
-# WatchGuard Video (Plano TX, now Motorola Solutions)
-OUI 00:1d:96 CAMERA HIGH WatchGuard
-# Digital Ally, Inc.
-OUI 00:23:bd CAMERA HIGH DigitalAlly
+# WatchGuard Video (Plano TX, now Motorola Solutions) -- built in since set 5
+# Digital Ally, Inc. -- built in since set 5
 # Utility, Inc (Decatur GA: BodyWorn)
 OUI 00:09:bc CAMERA HIGH BodyWorn
 OUI 00:16:ed CAMERA HIGH BodyWorn
 # Safety Vision, LLC (in-car and transit video)
 OUI 00:22:af CAMERA HIGH SafetyVision
-# ShotSpotter, Inc. -- CAMERA because there is no gunshot type
-OUI d4:11:d6 CAMERA HIGH ShotSpotter
+# ShotSpotter, Inc. -- built in since set 5
 # MOTOROLA SOLUTIONS MALAYSIA SDN. BHD. -- a broad company, so MED
 OUI 10:74:6f CAMERA MED MotorolaSol
 OUI 9c:86:2b CAMERA MED MotorolaSol
@@ -74,8 +73,7 @@ OUI 44:b4:23 CAMERA HIGH Hanwha
 OUI e4:30:22 CAMERA HIGH Hanwha
 # SAMSUNG TECHWIN CO.,LTD (Hanwha's predecessor)
 OUI 00:09:18 CAMERA MED SamsungTechwin
-# i-PRO Co., Ltd. (formerly Panasonic security)
-OUI d4:2d:c5 CAMERA HIGH i-PRO
+# i-PRO Co., Ltd. (formerly Panasonic security) -- built in since set 5
 # Lorex Technology Inc.
 OUI 00:1f:54 CAMERA HIGH Lorex
 # Amcrest Technologies
@@ -120,9 +118,8 @@ SSID HAP_ CAMERA Hikvision
 SSID DAP- CAMERA Dahua
 
 # ---- Set 3 (2026-10-09) ----------------------------------------------------
-# Tile, Inc.'s third SIG-assigned UUID (Bluetooth SIG member UUIDs list),
-# beside the 0xFEED/0xFEEC the firmware has built in. Read by v3.1.6 and later.
-UUID 0xFD84 TILE Tile
+# Tile, Inc.'s third SIG-assigned UUID, 0xFD84 -- built in since set 5
+# (it was here for v3.1.6 to v3.7.x).
 
 # Considered and left out: Cradlepoint and Sierra Wireless (police cars use
 # them, but so do buses, shops and ambulances -- a router is not a camera);
@@ -132,20 +129,10 @@ UUID 0xFD84 TILE Tile
 # ---- Set 4 (2026-10-11) ----------------------------------------------------
 # Drones that do not send Remote ID over WiFi. Every prefix read out of the
 # IEEE registry (standards-oui.ieee.org/oui/oui.txt) on 2026-10-11: the ten
-# registered to "SZ DJI TECHNOLOGY CO.,LTD". MED, not HIGH: DJI's own block
-# also covers its handheld cameras and gimbals now and then. Left out: the
+# registered to "SZ DJI TECHNOLOGY CO.,LTD" -- built in since set 5, so
+# only the Tello lines below are left here. Left out: the
 # blocks of DJI Osmo Technology and SZ DJI Ronin (cameras and gimbals, not
 # aircraft) and DJI Baiwang (not shown to be drones).
-OUI 04:a8:5a DRONE MED DJI
-OUI 0c:9a:e6 DRONE MED DJI
-OUI 34:d2:62 DRONE MED DJI
-OUI 48:1c:b9 DRONE MED DJI
-OUI 4c:43:f6 DRONE MED DJI
-OUI 58:b8:58 DRONE MED DJI
-OUI 60:60:1f DRONE MED DJI
-OUI 88:29:85 DRONE MED DJI
-OUI 8c:58:23 DRONE MED DJI
-OUI e4:7a:2c DRONE MED DJI
 # The Ryze/DJI Tello's own open network: always TELLO- (the firmware puts
 # it in front of any name set), or RMTT- under the RoboMaster TT controller.
 SSID TELLO- DRONE Tello

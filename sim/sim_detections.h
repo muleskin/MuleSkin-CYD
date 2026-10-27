@@ -43,8 +43,8 @@ struct SimDetectionProfile {
 // to be a real registration.
 inline const SimDetectionProfile kSimProfiles[] = {
     // FLOCK -- the first is what `T FLOCK` gets
-    { DetectionType::FLOCK,       {0x24, 0x0A, 0xC4}, "Flock-ESP32", "",               -68, true,  "ESP32 module (maybe Flock)" },
     { DetectionType::FLOCK,       {0xB4, 0x1E, 0x52}, "Flock-MA-L",  "",               -70, true,  "Flock camera (registered)" },
+    { DetectionType::FLOCK,       {0x02, 0xF1, 0x0D}, "Flock-Cam",   "",               -66, true,  "Flock camera hotspot" },
     { DetectionType::FLOCK,       {0x24, 0xB2, 0xB9}, "Flock-Liteo", "",               -72, true,  "Liteon chip (maybe Flock)" },
     { DetectionType::FLOCK,       {0xD0, 0x39, 0x57}, "Flock",       "",               -74, true,  "Unverified Flock address" },
     { DetectionType::FLOCK,       {0x58, 0x8E, 0x81}, "Flock-SiLab", "",               -73, true,  "WiFi module (maybe Flock)" },
@@ -60,13 +60,18 @@ inline const SimDetectionProfile kSimProfiles[] = {
     { DetectionType::AXON,        {0x00, 0x25, 0xDF}, "Axon",        "",               -74, true,  "Axon / TASER hardware" },
     { DetectionType::AXON,        {0xE4, 0x05, 0x40}, "Axon-Body",   "",               -73, true,  "Axon body cam address" },
     { DetectionType::AXON,        {0x28, 0x24, 0xFF}, "Axon-Signal", "",               -70, true,  "Axon Signal sensor" },
+    { DetectionType::AXON,        {0x02, 0xB3, 0xC0}, "Axon-BWC",    "",               -68, false, "Axon body cam (BWC tag)" },
+    { DetectionType::AXON,        {0x00, 0x09, 0xBC}, "BodyWorn",    "BodyWorn Remote",-71, false, "BodyWorn remote" },
+    { DetectionType::AXON,        {0x00, 0x1D, 0x96}, "WatchGuard",  "",               -73, true,  "WatchGuard Video" },
+    { DetectionType::AXON,        {0x00, 0x23, 0xBD}, "DigitalAlly", "",               -74, true,  "Digital Ally" },
     // META
     { DetectionType::META,        {0x02, 0xFD, 0x5F}, "RayBanMeta",  "",               -66, false, "Ray-Ban Meta glasses" },
     { DetectionType::META,        {0x02, 0x01, 0xAB}, "Meta",        "",               -64, false, "Meta radio (glasses or Quest)" },
     { DetectionType::META,        {0x02, 0x0D, 0x53}, "Luxottica",   "",               -67, false, "Luxottica frames" },
     { DetectionType::META,        {0x02, 0x03, 0xC2}, "Snap",        "",               -65, false, "Snap Spectacles" },
+    { DetectionType::META,        {0x02, 0x06, 0x0C}, "Vuzix",       "",               -66, false, "Vuzix glasses" },
     // SKIMMER -- over Bluetooth a name match is labelled just "BLE"
-    { DetectionType::SKIMMER,     {0x98, 0xD3, 0x00}, "BLE",         "HC-05",          -49, false, "HC-05 module" },
+    { DetectionType::SKIMMER,     {0x98, 0xD3, 0x31}, "BLE",         "HC-05",          -49, false, "HC-05 module" },
     { DetectionType::SKIMMER,     {0x02, 0x42, 0x04}, "BLE",         "RN42",           -52, false, "RN42 module" },
     { DetectionType::SKIMMER,     {0x02, 0xB7, 0x04}, "BLE",         "BT04-A",         -55, false, "BT04-A module" },
     { DetectionType::SKIMMER,     {0x20, 0x13, 0x00}, "Skim-Linvor", "linvor",         -51, false, "Linvor HC-06" },
@@ -90,6 +95,7 @@ inline const SimDetectionProfile kSimProfiles[] = {
     { DetectionType::CAMERA,      {0xE0, 0xA7, 0x00}, "Verkada",     "",               -70, true,  "Verkada camera" },
     { DetectionType::CAMERA,      {0x70, 0x1A, 0xD5}, "Avigilon",    "",               -71, true,  "Avigilon camera" },
     { DetectionType::CAMERA,      {0x00, 0x40, 0x8C}, "Axis",        "",               -69, true,  "Axis camera" },
+    { DetectionType::CAMERA,      {0xD4, 0x2D, 0xC5}, "i-PRO",       "",               -70, true,  "i-PRO camera" },
     // The tag networks, Ring, and the rogue-radio behaviours
     { DetectionType::SAMSUNG_TAG, {0x02, 0xFD, 0x5A}, "Samsung",     "Galaxy SmartTag",-58, false, "Samsung SmartTag" },
     { DetectionType::GOOGLE_TAG,  {0x02, 0xFE, 0xAA}, "Google",      "Find My Device", -61, false, "Google Find My tracker" },
@@ -100,8 +106,8 @@ inline const SimDetectionProfile kSimProfiles[] = {
     { DetectionType::EVILTWIN,    {0x02, 0xE7, 0x11}, "EvilTwin",    "HomeNet-5G",     -52, true,  "Evil twin AP" },
     // Six hex of the proximity UUID, then major.minor -- as the detector does.
     { DetectionType::IBEACON,     {0x02, 0x00, 0x4C}, "iBeacon",     "B9407F 10.42",   -59, false, "iBeacon" },
-    // HACKER -- Flipper Devices' own block, and the name a Flipper advertises
-    { DetectionType::HACKER,      {0x0C, 0xFA, 0x22}, "Flipper",     "Flipper Ozzyx",  -49, false, "Flipper Zero" },
+    // HACKER -- the prefix real Zeros advertise from, and the name they use
+    { DetectionType::HACKER,      {0x80, 0xE1, 0x26}, "Flipper",     "Flipper Ozzyx",  -49, false, "Flipper Zero" },
     { DetectionType::HACKER,      {0x02, 0x50, 0x57}, "Pwnagotchi",  "rikki",          -62, true,  "Pwnagotchi" },
     { DetectionType::HACKER,      {0x06, 0x50, 0x49}, "Pineapple",   "",               -60, true,  "WiFi Pineapple" },
     { DetectionType::HACKER,      {0x06, 0xDE, 0xA7}, "Deauther",    "",               -57, true,  "ESP deauther" },

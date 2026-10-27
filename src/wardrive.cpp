@@ -242,7 +242,10 @@ void tick(uint32_t nowMs) {
     // turn into rows stamped with the first fix that arrives later.
     const bool fix = s_on && s_ready && Gnss::fresh(nowMs);
     const Gnss::Fix& f = Gnss::fix();
-    const uint32_t epoch = f.epoch ? f.epoch + (nowMs - f.atMs) / 1000u : 0;
+    // The fix's age, never negative: one that landed after nowMs was read
+    // would otherwise wrap and date the row 49 days ahead.
+    const int32_t age = (int32_t)(nowMs - f.atMs);
+    const uint32_t epoch = f.epoch ? f.epoch + (age > 0 ? (uint32_t)age / 1000u : 0u) : 0;
     for (int n = 0; n < 2 * QN; n++) {
         const bool got = s_wifiQ->pop(p) || s_bleQ->pop(p);
         if (!got) break;

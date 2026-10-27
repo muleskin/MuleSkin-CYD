@@ -5621,13 +5621,35 @@ static void wardriveBegin() {
 static bool     s_cydGpsClockSet = false;   // set from GPS once this boot
 static uint32_t s_cydGpsFirstFixMs = 0;     // millis() of the first real fix, 0 until then
 
+// The module's baud is a guess until a sentence arrives. The CYD's ATGM336H
+// talks at 9600, the T-Deck Plus's u-blox MIA-M10Q at 38400 out of the box
+// (upstream SquachWatch v1.39.0: a two-hour walk logged no sentences at
+// all), the Marauder V8's at 115200. So: the board's own first, and if
+// nothing parses in twenty seconds, the next of the usual ones, round and
+// round until one does.
+static const uint32_t kCydGpsBauds[] = { CYD_GPS_BAUD, 9600, 38400, 115200 };
+static uint8_t  s_cydGpsBaudIdx = 0;
+static uint32_t s_cydGpsBaudAt = 0;
+
 static void cydGpsStart() {
     Gnss::reset();
     // TX -1: the module's RX is not wired. The core fills in its default
     // pins only when both are negative, so TX stays unassigned here; the
     // default TX2 is GPIO17, the status light.
-    CYD_GPS_SERIAL.begin(CYD_GPS_BAUD, SERIAL_8N1, CYD_GPS_RX, -1);
+    CYD_GPS_SERIAL.begin(kCydGpsBauds[s_cydGpsBaudIdx], SERIAL_8N1, CYD_GPS_RX, -1);
+    s_cydGpsBaudAt = millis();
     Wardrive::sdBegin();
+}
+
+static void cydGpsBaudTick(uint32_t now) {
+    if (Gnss::good() + Gnss::bad() || now - s_cydGpsBaudAt < 20000) return;
+    const uint8_t n = sizeof kCydGpsBauds / sizeof kCydGpsBauds[0];
+    // The next one, skipping the board's own where it repeats a later entry.
+    do { s_cydGpsBaudIdx = (s_cydGpsBaudIdx + 1) % n; }
+    while (s_cydGpsBaudIdx && kCydGpsBauds[s_cydGpsBaudIdx] == kCydGpsBauds[0]);
+    s_cydGpsBaudAt = now;
+    CYD_GPS_SERIAL.updateBaudRate(kCydGpsBauds[s_cydGpsBaudIdx]);
+    Serial.printf("[gps] nothing heard: trying %lu baud\n", (unsigned long)kCydGpsBauds[s_cydGpsBaudIdx]);
 }
 
 static const char* cydWardriveStateName(Wardrive::SdState st) {
@@ -5642,13 +5664,15 @@ static const char* cydWardriveStateName(Wardrive::SdState st) {
 }
 
 static void cydGpsTick(uint32_t now) {
+    cydGpsBaudTick(now);
     const uint8_t cmd = g_consoleGps;
     if (cmd) g_consoleGps = 0;
     if (cmd == 2) { Gnss::reset(); Serial.println("[gps] reset: any bench fix is gone"); }
     else if (cmd == 3) {
         const Gnss::Sky k = Gnss::sky();
         const Gnss::Fix& f = Gnss::fix();
-        Serial.printf("[gps] status: sentences %lu good, %lu bad; in view %u, heard %u, used %u; ",
+        Serial.printf("[gps] status: %lu baud; sentences %lu good, %lu bad; in view %u, heard %u, used %u; ",
+                      (unsigned long)kCydGpsBauds[s_cydGpsBaudIdx],
                       (unsigned long)Gnss::good(), (unsigned long)Gnss::bad(), k.view, k.heard, f.used);
         if (s_cydGpsFirstFixMs) Serial.printf("first fix %lu s after boot; ", (unsigned long)(s_cydGpsFirstFixMs / 1000));
         else                    Serial.print(Gnss::faked() ? "no real fix yet; " : "no fix yet; ");
@@ -8317,7 +8341,7 @@ void loop() {
                 info.gpsGood = Gnss::good(); info.gpsBad = Gnss::bad();
                 info.view = k.view; info.heard = k.heard; info.used = f.used;
                 info.accM = f.accM; info.lat7 = f.lat7; info.lon7 = f.lon7;
-                info.fixAgeMs = f.atMs ? nowMs - f.atMs : UINT32_MAX;
+                info.fixAgeMs = !f.atMs ? UINT32_MAX : (int32_t)(nowMs - f.atMs) > 0 ? nowMs - f.atMs : 0;
                 info.fresh = Gnss::fresh(nowMs); info.faked = Gnss::faked();
                 info.wdOn = Wardrive::enabled();
                 info.wdState = (uint8_t)Wardrive::sdState(nowMs);

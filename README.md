@@ -39,20 +39,22 @@ headlines in Orbitron.
 | `GOOGLE_TAG` | Google Find My Device trackers (Chipolo, Pebblebee, Moto Tag), and any tracker on the DULT standard | Service data under `0xFEAA` with the tracker frame type `0x40`/`0x41` -- not the plain Eddystone beacons that share the UUID. `0x41` (Google's unwanted-tracking mode = DULT's separated state) is **away from its owner**, HIGH; `0x40` MED. And DULT's own `0xFCB2` service data with the near-owner bit clear: a separated tracker of any brand |
 | `TILE` | Tile BLE trackers | BLE service UUID `0xFEED` / `0xFEEC` |
 | `RING` | Ring doorbells / cameras | 15 WiFi OUI (Ring LLC's registered block + Amazon's) |
-| `DEAUTH` | WiFi deauthentication floods | Rate-detected burst, not a signature |
+| `DEAUTH` | WiFi deauthentication floods | Rate-detected burst, not a signature: 12 from one sender in 3 s, or 6 sent to everyone |
 | `EVILTWIN` | Rogue / spoofed access points | One SSID beaconing from two BSSIDs that disagree about encryption |
 | `IBEACON` | Retail proximity beacons | Exact Apple header `4C 00 02 15` — **off by default**, see below |
-| `HACKER` | Flipper Zero, Pwnagotchi, WiFi Pineapple, ESP deauthers, karma APs | Flipper's service UUIDs `0x3080`–`0x3083`, company ID `0x0E29` and OUI `0C:FA:22`; the Pwnagotchi's own beacon payload; `Pineapple_` and `pwned` SSIDs; and any access point answering to five network names in five minutes from one address (beacons and probe responses) -- a karma AP, `Karma-AP` |
+| `HACKER` | Flipper Zero, Pwnagotchi, WiFi Pineapple, ESP deauthers, karma APs | Flipper's service UUIDs `0x3080`–`0x3083` (not its company ID or OUI, which are its BUSY Bar's); the Pwnagotchi's own beacon payload; `Pineapple_` and `pwned` SSIDs; and any access point answering to five network names in five minutes from one address (beacons and probe responses) -- a karma AP, `Karma-AP` |
 
 ### Confidence is per signature, not per type
 
 Every hardware prefix in the firmware was checked against the IEEE registry
-rather than against other detectors. Of 76 rows: **32 High, 4 Medium, 40
+rather than against other detectors. Of 110 rows: **35 High, 26 Medium, 49
 Low**.
 
-That grading matters most on `FLOCK`, where exactly **one** of 29 prefixes is
-registered to Flock Safety and the rest are the generic Espressif and Liteon
-parts they build on — real evidence, shared with every dev board on earth.
+That grading matters most on `FLOCK`, where exactly **one** of 32 prefixes is
+registered to Flock Safety and the rest are the generic Liteon, Silicon Labs
+and other parts they build on — real evidence, shared with plenty of other
+gear. Espressif's blocks are not among them: every ESP32 has one, this board
+included.
 `ALERT FILTER` is a minimum-confidence gate, so setting it to High keeps a
 passing ESP32 in the log without taking over the screen.
 

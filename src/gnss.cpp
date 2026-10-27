@@ -181,7 +181,11 @@ uint32_t utcEpoch() { return s_rmcEpoch; }
 uint32_t good() { return s_good; }
 uint32_t bad()  { return s_bad; }
 
-bool fresh(uint32_t nowMs) { return s_fix.valid && nowMs - s_fix.atMs < FRESH_MS; }
+// Signed, because `nowMs` is often a frame's start and the fix can land later
+// in the same frame: unsigned, a fix 3 ms "in the future" wrapped to an age of
+// 49 days and read as stale -- once a second, on the second the GPS spoke
+// (upstream SquachWatch v1.39.0, 2026-10-16).
+bool fresh(uint32_t nowMs) { return s_fix.valid && (int32_t)(nowMs - s_fix.atMs) < (int32_t)FRESH_MS; }
 
 void reset() {
     s_fix = Fix();

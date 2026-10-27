@@ -19,6 +19,10 @@ available networks. The `addr1` (receiver) trick catches "sleeper"
 cameras that aren't actively transmitting — they still leak their MAC
 when the promiscuous listener sends them a frame.
 
+*(2026-10: the Espressif blocks below have since been removed -- see "Fixed"
+under the upstream v1.38.0 signatures further down. The audit is kept as it
+was written.)*
+
 **What the audit found.** Every prefix in this table was checked against
 the IEEE registry. Of 29 entries, exactly **one** is registered to Flock
 Safety: `B4:1E:52`. The rest break down as sixteen Espressif blocks, nine
@@ -397,14 +401,22 @@ Everything else this device finds is equipment that *watches*. This is
 equipment that transmits at other radios, which is why it shares the red
 of `DEAUTH` and `EVILTWIN` rather than the cyan of the cameras.
 
-### Flipper Zero — four signatures, three of them exact
+### Flipper Zero — two signatures, one of them exact
 
 | Signature | Value | Grade |
 |---|---|---|
 | BLE service UUID | `0x3081` / `0x3082` / `0x3083` — one per case colour | **High** |
-| BLE company ID | `0x0E29`, Flipper Devices Inc. | **High** |
-| MAC OUI | `0C:FA:22`, FLIPPER DEVICES INC | **High** |
 | Advertised name | begins `Flipper ` | **Medium** — the owner can change it |
+
+**Flipper's own company ID and address block are not a Flipper Zero.**
+Both used to be on this list. A Zero never sends Flipper's Bluetooth
+company ID `0x0E29`, and it has no WiFi, so Flipper's IEEE block
+`0C:FA:22` (which only WiFi frames are checked against) can never be one.
+The thing both actually caught was the **BUSY Bar**, Flipper's desk sign:
+its WiFi uses `0C:FA:22`, and until it is paired its Bluetooth advert
+carries `0x0E29` beside its own UUID `0x308A`. Bench, 2026-10-14: a BUSY
+Bar flagged as a hacker tool, three real Zeros beside it advertising
+`0x3082`/`0x3083` from `80:E1:26` addresses and no company ID at all.
 
 **Two constants the ecosystem gets wrong, and we do not.**
 
@@ -415,7 +427,8 @@ project that copied that constant inherited the error.
 
 Wall-of-Flippers checks MAC prefixes `80:E1:26` and `80:E1:27`. Neither
 appears anywhere in the IEEE registry — not under Flipper, not under
-anybody. Only `0C:FA:22` is really theirs.
+anybody. Real Zeros do advertise from `80:E1:26`, but an unregistered
+prefix is anybody's to use, and the service UUIDs already catch every Zero.
 
 Both are the same failure as the `00:0E:58` entry that sat here for eleven
 releases labelled "Vigilant" while belonging to Sonos: a plausible constant
@@ -510,6 +523,60 @@ plenty of things that are not a Pineapple produce one.
 | maclookup.app (IEEE MA-L registry) | public data | Verkada / Avigilon / Axis / Ring OUIs |
 | netify.ai (IEEE MA-L registry) | public data | Ring OUI cross-check |
 | Bluetooth SIG assigned numbers registry | public | Tile service UUIDs |
+| OUI-SPY AXEOFF (colonelpanichacks) | MIT | Axon company ID `0x034D` and service UUIDs `0xFC81` / `0xFE6B` / `0xFE6C` |
+| all-cameras-are-beacons (soyboi1312) | Apache-2.0 | Axon `BWCDEVICE` tag, `FS-` Flock names, BodyWorn name, the false-positive work that retired the Espressif Flock rows |
+| AirGuard (seemoo-lab) | Apache-2.0 | Tracker service-data matching, DULT, Chipolo |
+| Google Fast Pair FMDN spec | public | Find Hub frame types `0x40` / `0x41` |
 
 We use signature *data* (OUIs, UUIDs, names) as facts; we don't
 copy GPL code into this project.
+
+---
+
+## 2026-10-14 additions and fixes
+
+Every value below was checked against the IEEE MA-L registry or the Bluetooth
+SIG's assigned numbers, except where a row says it comes from field captures.
+
+**Added**
+
+| Type | Signature | Value | Grade | Source |
+|---|---|---|---|---|
+| `AXON` | BLE company ID | `0x034D` (TASER International) | High | SIG; OUI-SPY AXEOFF |
+| `AXON` | BLE service UUIDs | `0xFC81`, `0xFE6B`, `0xFE6C` (Axon / TASER) | High | SIG; OUI-SPY AXEOFF |
+| `AXON` | Advert payload | ASCII `BWCDEVICE`, either byte order | High | Field captures, five owner-confirmed (all-cameras-are-beacons) |
+| `AXON` | BLE name | contains `BodyWorn` (Utility's body cam remote) | High | Field capture (nite-oui-collection) |
+| `AXON` | WiFi OUI | `00:1D:96` WatchGuard Video, `00:23:BD` Digital Ally | Medium | IEEE |
+| `RAVEN` | WiFi OUI | `D4:11:D6` ShotSpotter, Inc. | High | IEEE |
+| `FLOCK` | SSID prefix | `Flock Camera` (a camera's own hotspot, "Flock Camera net.") | High | Flock-You issue #43 |
+| `FLOCK` | BLE name | `FS-` and 4-12 hex digits | High | Field capture at Flock sites |
+| `META` | WiFi OUI | `98:59:49` Luxottica Group | Medium | IEEE |
+| `META` | BLE UUIDs / company ID | `0xFEB7`, `0xFEB8` (Meta), `0xFE45` (Snap), `0x060C` (Vuzix) | Medium | SIG |
+| `GOOGLE_TAG` | Find Hub | service data `0xFEAA` with frame `0x40` or `0x41` | Medium | Google FMDN spec |
+| `GOOGLE_TAG` | DULT | UUID `0xFCB2`, the cross-maker unwanted-tracker standard | Medium | SIG; AirGuard |
+| `GOOGLE_TAG` | Chipolo | UUIDs `0xFE33`, `0xFE65`; company ID `0x08C3` | Medium | SIG |
+| `TILE` | BLE UUID | `0xFD84` | High | SIG |
+| `CAMERA` | WiFi OUI | Blink: `3C:A0:70`, `70:AD:43`, `74:13:48`, `74:AB:93`, `C8:19:D8`, `F0:74:C1` (Medium); i-PRO `D4:2D:C5` (High) | | IEEE |
+| `DRONE` | WiFi OUI | DJI (10 blocks, Medium; 4 Baiwang blocks, Low), Skydio `38:1D:14` (High), Parrot (3 Medium, 2 Low) | | IEEE |
+
+Service UUIDs now also match when they arrive as **service data** (AD `0x16`),
+which is how most trackers advertise, not only in the UUID list.
+
+**Fixed**
+
+- The seventeen Espressif blocks filed as "Flock-ESP32" are gone. They named
+  every ESP32 a Flock camera, every MuleSkin included; field-tested projects
+  no longer trust them.
+- `0xFEAA` on its own was any Eddystone shop beacon. Google trackers are now
+  matched on Find Hub's own frame types instead.
+- Skimmer prefix `98:D3:00` (held by nobody) is now `98:D3:31`, Shenzhen
+  Bolutek, the HC-05 module's maker.
+- Company ID `0x058E` (Meta Platforms Technologies) is gone: it is what Quest
+  headsets send, and real Ray-Ban Meta glasses send `0x01AB` with `0xFD5F`.
+
+**Considered and left out:** Samsung `0xFD59` / `0xFD69` (Galaxy phones send
+them for their own offline finding), the circulating "Meta glasses" OUIs
+`7C:2A:9E` / `CC:66:0A` / `F4:03:43` / `5C:E9:1E` (Apple, HPE and nobody),
+WatchGuard Technologies' `00:01:21` / `00:90:7F` (a firewall maker), and
+Axon's `D8:1F:65`, which field captures support but the registry lists as
+"Private".

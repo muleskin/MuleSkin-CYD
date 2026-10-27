@@ -73,7 +73,9 @@ int line(char* out, size_t n, const Detection& d, uint32_t utcEpoch, uint32_t ms
 
     if (fix) {
         char lat[16] = "", lon[16] = "", acc[8] = "";
-        if (fix->valid && (uint32_t)(nowMs - fix->atMs) <= Gnss::FRESH_MS) {
+        // Signed: a fix that landed later in the same frame is fresh, not 49
+        // days old (the Gnss::fresh() fix, upstream v1.39.0).
+        if (fix->valid && (int32_t)(nowMs - fix->atMs) <= (int32_t)Gnss::FRESH_MS) {
             degreesText(lat, sizeof lat, fix->lat7, 7);
             degreesText(lon, sizeof lon, fix->lon7, 7);
             if (fake) snprintf(acc, sizeof acc, "FAKE");

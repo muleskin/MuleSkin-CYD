@@ -218,7 +218,10 @@ void drain(uint32_t nowMs) {
     // let go uncounted, as on the watch, so a queue filled before the fix is
     // never stamped with it.
     const bool fix = realFix(nowMs);
-    const uint32_t epoch = f.epoch ? f.epoch + (nowMs - f.atMs) / 1000u : 0;
+    // The fix's age, never negative: one that landed after nowMs was read
+    // would otherwise wrap and date the row 49 days ahead.
+    const int32_t age = (int32_t)(nowMs - f.atMs);
+    const uint32_t epoch = f.epoch ? f.epoch + (age > 0 ? (uint32_t)age / 1000u : 0u) : 0;
     Pending p;
     for (int n = 0; n < 2 * QN; n++) {
         const bool got = s_wifiQ->pop(p) || s_bleQ->pop(p);

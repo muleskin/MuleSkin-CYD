@@ -56,7 +56,7 @@ int main() {
     suite("Bluetooth rules");
     {
         const uint16_t got = setExtraRules(
-            "UUID 0xFD84 TILE TileFD84;"           // a value the built-in table lacks
+            "UUID 0xFDAB TILE TileFDAB;"           // a value the built-in table lacks
             "CID 0x0FAB CAMERA SomeCamCo;"
             "NAME Spyglass- META Spyglass;"
             "UUID 0xFEED CAMERA Nope;"             // built in already: Tile keeps it
@@ -64,8 +64,8 @@ int main() {
             "CID 0x12345 TILE;"                    // five digits
             "NAME ThisNameIsFarTooLongToKeep TILE"); // over 15
         ck("four good of seven", got == 4);
-        ck("an extra UUID matches", lookupUuid(0xFD84) == DetectionType::TILE);
-        ck("...with its vendor", uuidName(0xFD84) && strcmp(uuidName(0xFD84), "TileFD84") == 0);
+        ck("an extra UUID matches", lookupUuid(0xFDAB) == DetectionType::TILE);
+        ck("...with its vendor", uuidName(0xFDAB) && strcmp(uuidName(0xFDAB), "TileFDAB") == 0);
         ck("an extra company ID matches", lookupMfgId(0x0FAB) == DetectionType::CAMERA);
         ck("...with its vendor", mfgIdName(0x0FAB) && strcmp(mfgIdName(0x0FAB), "SomeCamCo") == 0);
         ck("an extra name prefix matches, any case", lookupBtName("SPYGLASS-0042") == DetectionType::META);
