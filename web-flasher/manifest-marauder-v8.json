@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Marauder V8, 2.8\" on an ESP32-C5, BETA)",
-  "version": "3.9.0",
-  "release_name": "Night power",
-  "whats_new": ["Tap SNOOZE again for a longer snooze", "NIGHT POWER: screen off, WiFi rests", "Trackers followed across new address", "Downloaded rules now built in"],
+  "version": "3.10.0",
+  "release_name": "Snooze till morning",
+  "whats_new": ["SNOOZE until morning (clock set)", "Ignore and snooze follow new address", "Small screens: labels no longer overlap"],
   "new_install_prompt_erase": true,
   "builds": [
     {
