@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (3.5\" capacitive BETA)",
-  "version": "3.7.0",
-  "release_name": "Five more boards",
-  "whats_new": ["Marauder V8 and T-Deck Plus", "Freenove ESP32-S3 3.5in", "M5 StickS3 and Cardputer ADV", "Small-screen layouts"],
+  "version": "3.8.0",
+  "release_name": "New detections",
+  "whats_new": ["Axon, body cam, glasses, tracker sigs", "No Espressif-as-Flock false alarms", "GPS baud autodetect, 49-day fix", "Deauth and Flipper detection fixes"],
   "new_install_prompt_erase": true,
   "builds": [
     {
