@@ -62,6 +62,9 @@ SCREENS = [
     ("settings-240",  "settings",   ["--size", "240x135"], {}),
     ("alert-240",     "alert",      ["--alert", "1", "--size", "240x135"], {}),
     ("log-240",       "log",        ["--size", "240x135"], {}),
+    # A long label beside a long value: PUSH ALERTS / NOT SET, the label cut
+    # short so the two never overlap.
+    ("settings-240-push", "settings", ["--scroll", "4", "--size", "240x135"], {"MULESKINSIM_PAGE": "3"}),
     # SNOOZE being tapped through its times: the button wears the pick and
     # the TAP AGAIN line sits above it -- on the CYD and on the small card.
     ("alert-snooze",  "alert",      ["--alert", "1"], {"MULESKINSIM_SNOOZE": "30 MIN"}),

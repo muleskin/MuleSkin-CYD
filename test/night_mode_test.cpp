@@ -36,6 +36,14 @@ int main() {
     ck("the three labels", !strcmp(powerLabel(0), "OFF") && !strcmp(powerLabel(2), "DARK+WIFI") &&
                            !strcmp(powerLabel(9), "OFF"));
 
+    suite("SNOOZE until morning");
+    ck("NIGHT DIM 10PM-6AM: the morning is 6", morningHour(1) == 6);
+    ck("NIGHT DIM off: 7", morningHour(0) == 7);
+    ck("11:30 PM to 7 AM is 7 h 30 min", msUntilHour(23, 30, 7) == 450u * 60000u);
+    ck("2:15 AM to 7 AM is 4 h 45 min", msUntilHour(2, 15, 7) == 285u * 60000u);
+    ck("7:00 AM: the next morning, a day off", msUntilHour(7, 0, 7) == 1440u * 60000u);
+    ck("9 AM: tomorrow's, 22 h", msUntilHour(9, 0, 7) == 1320u * 60000u);
+
     suite("every preset is eight hours or so, and labelled");
     bool sane = true;
     for (uint8_t p = 1; p < PRESET_N; p++) {

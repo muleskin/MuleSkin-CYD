@@ -191,4 +191,22 @@ void snooze(const uint8_t* mac) {
 
 bool silenced(const uint8_t* mac) { return contains(mac) || snoozed(mac); }
 
+bool carryOver(const uint8_t* from, const uint8_t* to) {
+    if (!from || !to || memcmp(from, to, 6) == 0) return false;
+    bool carried = false;
+    if (contains(from)) {
+        DetectionType type = DetectionType::UNKNOWN;
+        for (uint8_t i = 0; i < count(); i++)
+            if (memcmp(macAt(i), from, 6) == 0) { type = typeAt(i); break; }
+        remove(from);
+        add(to, type);
+        carried = true;
+    }
+    if (snoozed(from)) {
+        snoozeUntil(to, s_snzUntil[snoozeSlot(from)]);
+        carried = true;
+    }
+    return carried;
+}
+
 }  // namespace IgnoreList

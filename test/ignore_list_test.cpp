@@ -102,6 +102,30 @@ int main() {
         ck("Undo ends it", !IgnoreList::snoozed(a));
         IgnoreList::snoozeFor(a, 60000);
         ck("and it can start again after", IgnoreList::snoozed(a));
+    }
+
+    suite("a tag with a new address keeps its IGNORE and SNOOZE");
+    {
+        const uint8_t own[6]  = { 0x61, 0x62, 0x63, 0x64, 0x65, 0x66 };
+        const uint8_t own2[6] = { 0x61, 0x62, 0x63, 0x64, 0x65, 0x67 };
+        IgnoreList::add(own, DetectionType::AIRTAG);
+        ck("ignored moves over", IgnoreList::carryOver(own, own2) && IgnoreList::contains(own2));
+        ck("...with its type", IgnoreList::typeAt(IgnoreList::count() - 1) == DetectionType::AIRTAG);
+        ck("...and the old address is off the list", !IgnoreList::contains(own));
+        IgnoreList::remove(own2);
+
+        const uint8_t snz[6]  = { 0x71, 0x72, 0x73, 0x74, 0x75, 0x76 };
+        const uint8_t snz2[6] = { 0x71, 0x72, 0x73, 0x74, 0x75, 0x77 };
+        SimClock::nowMs = 1000000;
+        IgnoreList::snoozeFor(snz, 600000);
+        SimClock::nowMs += 100000;
+        ck("a snooze carries on", IgnoreList::carryOver(snz, snz2) && IgnoreList::snoozed(snz2));
+        SimClock::nowMs += 499999;
+        ck("...for the time it had left", IgnoreList::snoozed(snz2));
+        SimClock::nowMs += 1;
+        ck("...and no longer", !IgnoreList::snoozed(snz2));
+        const uint8_t none[6] = { 0x81, 0x82, 0x83, 0x84, 0x85, 0x86 };
+        ck("nothing to carry: false", !IgnoreList::carryOver(none, own));
         SimClock::virtualTime = false;
     }
 

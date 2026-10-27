@@ -1933,8 +1933,14 @@ static const SnoozeStep SNOOZE_STEP[] = {
     {  30u * 60u * 1000u, "30 MIN",  "for 30 min"  },
     {  60u * 60u * 1000u, "1 HOUR",  "for an hour" },
     { 240u * 60u * 1000u, "4 HOURS", "for 4 hours" },
+    // Until the night ends (NightMode::morningHour), worked out when the pick
+    // locks in. Only with the clock set: without it there is no morning.
+    { 0,                  "MORNING", nullptr       },
 };
-static const uint8_t  SNOOZE_STEPS   = sizeof SNOOZE_STEP / sizeof SNOOZE_STEP[0];
+static uint8_t snoozeSteps() {
+    const uint8_t all = sizeof SNOOZE_STEP / sizeof SNOOZE_STEP[0];
+    return Clock::trusted() ? all : (uint8_t)(all - 1);
+}
 static const uint32_t SNOOZE_PICK_MS = 3000;
 static uint8_t  s_snoozeStep  = 0;
 static uint32_t s_snoozeTapAt = 0;
@@ -3118,7 +3124,9 @@ static void serviceFollowing(uint32_t now) {
             case DetectionType::TILE: break;
             default: continue;
         }
-        if (IgnoreList::contains(d->mac)) continue;
+        // Ignored and snoozed tags are followed too -- never announced (see
+        // below) -- so that when one changes its address the IGNORE or
+        // SNOOZE can go with it.
         uint8_t from[6];
         if (s_follow->heard(d->mac, d->firstSeen, d->lastSeen, seq,
                             (uint8_t)d->type, d->rssi, from)) {
@@ -3126,12 +3134,16 @@ static void serviceFollowing(uint32_t now) {
                           detectionTypeName(d->type), from[0], from[1], from[2], from[3], from[4], from[5],
                           d->mac[0], d->mac[1], d->mac[2], d->mac[3], d->mac[4], d->mac[5]);
             s_awayDays.relink(from, d->mac);
+            if (IgnoreList::carryOver(from, d->mac))
+                Serial.println("[follow] ...its IGNORE / SNOOZE goes with it");
         }
     }
     s_follow->expire(now);
     if (state != AppState::CLEAR && state != AppState::LOG) return;
     const int k = s_follow->due(now, seq);
     if (k < 0) return;
+    // Followed only so its IGNORE or SNOOZE can follow it: never announced.
+    if (IgnoreList::silenced(s_follow->e[k].mac)) { s_follow->e[k].alerted = true; return; }
     for (uint8_t i = 0; i < engine.logCount(); i++) {
         const Detection* d = engine.logAt(i);
         if (!d || memcmp(d->mac, s_follow->e[k].mac, 6) != 0) continue;
@@ -7080,7 +7092,7 @@ void loop() {
                 const uint32_t since = now - s_snoozeTapAt;
                 if (tp.valid && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
                     lastTouch     = now;
-                    s_snoozeStep  = (uint8_t)(s_snoozeStep % SNOOZE_STEPS + 1);
+                    s_snoozeStep  = (uint8_t)(s_snoozeStep % snoozeSteps() + 1);
                     s_snoozeTapAt = now;
                     s_alertArmed  = false;
                     Serial.printf("[snooze] tap -> step %u\n", (unsigned)s_snoozeStep);
@@ -7089,10 +7101,17 @@ void loop() {
                 }
                 if (since >= SNOOZE_PICK_MS) {
                     const SnoozeStep& st = SNOOZE_STEP[s_snoozeStep - 1];
-                    Serial.printf("[snooze] locked: %s\n", st.label);
-                    IgnoreList::snoozeFor(s_alertMac, st.ms);
                     char sub[28];
-                    snprintf(sub, sizeof sub, "This one, %s", st.toast);
+                    if (st.ms) {
+                        IgnoreList::snoozeFor(s_alertMac, st.ms);
+                        snprintf(sub, sizeof sub, "This one, %s", st.toast);
+                    } else {
+                        const uint8_t mh = NightMode::morningHour(Settings::nightMode());
+                        IgnoreList::snoozeFor(s_alertMac, NightMode::msUntilHour(Clock::hour(), Clock::minute(), mh));
+                        const uint8_t h12 = mh % 12 ? mh % 12 : 12;
+                        snprintf(sub, sizeof sub, "This one, until %u %s", (unsigned)h12, mh < 12 ? "AM" : "PM");
+                    }
+                    Serial.printf("[snooze] locked: %s\n", st.label);
                     s_snoozeStep = 0;
                     lastTouch = now;
                     Theme::showToast("SNOOZED", sub, Theme::AMBER);

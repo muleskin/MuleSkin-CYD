@@ -735,7 +735,28 @@ static void drawRow(TFT_eSPI& t, int w, int y, int hgt, const char* label,
     t.setTextSize(compact ? 1 : Theme::uiMenuTextSize(t));
     t.setTextColor(danger ? Theme::RED : labelColor, Theme::BG);
     t.setCursor(8, y + (hgt - t.fontHeight()) / 2);
-    t.print(label);
+    // The value is what the row is read for, so when the two would meet --
+    // the 240x135 screens: "PUSH ALERTS" ran into "NOT SET", "NIGHT POWER"
+    // into "DARK+WIFI" -- the label gives way: cut short with a dot, a gap
+    // of 6 px kept before the value.
+    const int room = value ? (w - 18 - t.textWidth(value)) - 6 - 8 : w;
+    if (label && t.textWidth(label) > room) {
+        char cut[32];
+        size_t n = strlen(label);
+        if (n >= sizeof cut) n = sizeof cut - 1;
+        memcpy(cut, label, n);
+        cut[n] = '\0';
+        while (n > 1) {
+            cut[--n] = '\0';
+            while (n > 1 && cut[n - 1] == ' ') cut[--n] = '\0';
+            cut[n] = '.'; cut[n + 1] = '\0';
+            if (t.textWidth(cut) <= room) break;
+            cut[n] = '\0';
+        }
+        t.print(cut);
+    } else {
+        t.print(label);
+    }
     if (value) {
         t.setTextColor(Theme::WHITE, Theme::BG);
         int vw = t.textWidth(value);

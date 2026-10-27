@@ -265,7 +265,8 @@ A full beginner-friendly walkthrough is in [docs/BUILD.md](docs/BUILD.md).
    in range -- one tag of that kind goes quiet and one new one turns up
    within 90 seconds at much the same signal, and no other tag fits --
    the new address carries on its minutes, and its days for NEAR YOU ON N
-   DAYS. Ignore a tag to stop it.
+   DAYS. Ignore a tag to stop it -- an IGNORE or SNOOZE moves to its new
+   address with it, the same way.
 
 If a microSD card is present, every detection is also appended to
 `MuleSkin-<day>.log` (CSV: `ts,type,rssi,mac,channel,vendor,ssid`).
@@ -526,8 +527,9 @@ none of the saved networks is in range. REMOVE takes one off the list.
 - **First of its kind.** The first time this board ever catches a type, the
   card says so.
 - **SNOOZE on an alert.** Quiets that one device for 10 minutes; tap again
-  for 30 minutes, 1 hour or 4 hours (the button shows the pick, which locks
-  in three seconds after the last tap). A restart ends it too. It is still
+  for 30 minutes, 1 hour, 4 hours or MORNING -- until NIGHT DIM's hours
+  end, or 7 AM without them; offered once the clock is set (the button
+  shows the pick, which locks in three seconds after the last tap). A restart ends it too. It is still
   scanned, counted and logged; only the alert stops. IGNORE is the same
   thing kept for good.
 

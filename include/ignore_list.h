@@ -77,4 +77,9 @@ namespace IgnoreList {
     bool snoozed(const uint8_t* mac);
     // What every alert gate asks: ignored for good, or snoozed for now.
     bool silenced(const uint8_t* mac);
+    // A tag that changed its address (TrackerFollow linked the two): an
+    // IGNORE moves to the new address (with its type; the old one comes off
+    // the list, which is full at MAX), and a SNOOZE carries on under it with
+    // the time it had left. True when there was either to carry.
+    bool carryOver(const uint8_t* from, const uint8_t* to);
 }

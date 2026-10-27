@@ -50,6 +50,18 @@ constexpr uint32_t WIFI_ON_MS    = 5000;
 constexpr uint32_t WIFI_REST_MS  = 25000;
 inline const char* powerLabel(uint8_t m) { return m < POWER_N ? POWER_LABELS[m] : "OFF"; }
 
+// SNOOZE's MORNING step: the hour the night ends -- NIGHT DIM's end when it
+// is set, else 7 AM -- and how long from h:m (local) until it next comes
+// round. Exactly on the hour is a whole day: the morning just begun is not
+// the one meant.
+inline uint8_t morningHour(uint8_t p) { return (p && p < PRESET_N) ? PRESETS[p].end : 7; }
+inline uint32_t msUntilHour(uint8_t h, uint8_t m, uint8_t target) {
+    const int now = h * 60 + m;
+    int mins = target * 60 - now;
+    if (mins <= 0) mins += 24 * 60;
+    return (uint32_t)mins * 60000u;
+}
+
 // The night backlight: a quarter of the day setting, never fully off.
 inline uint8_t duty(uint8_t day) {
     const uint8_t q = (uint8_t)(day / 4);
