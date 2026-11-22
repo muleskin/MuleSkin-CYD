@@ -37,7 +37,8 @@ class TFT_eSPI;
 // differently -- the first frame through it came out white. pushSprite()
 // until it is ported. And not on the CrowPanel 7, which has no SPI display at
 // all: CrowBlit writes rows into its RGB framebuffer (crowpanel7_blit.h).
-#if defined(ARDUINO_ARCH_ESP32) && !defined(SQW_S3) && !defined(CROWPANEL7)
+// Nor the Tab5, whose MIPI-DSI framebuffer Tab5Blit writes (tab5_blit.h).
+#if defined(ARDUINO_ARCH_ESP32) && !defined(SQW_S3) && !defined(CROWPANEL7) && !defined(TAB5)
   #define SQW_FRAME_PUSH 1
 #else
   #define SQW_FRAME_PUSH 0

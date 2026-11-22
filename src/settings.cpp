@@ -24,7 +24,9 @@ static bool        s_pocketNoteShown = false;
 // MADCTL, so rotating it would be a per-pixel software transform of an
 // 800x480 buffer every frame -- and the panel is natively landscape anyway.
 // And on the T-Deck: a keyboard under the screen has exactly one way up.
-#if defined(TWATCH_S3) || defined(CROWPANEL7) || defined(TDECK_PLUS) || defined(SQW_SMALL)
+// And on the Tab5 for now: the blit turns the frame landscape and has no
+// portrait mapping yet (tab5_board.h).
+#if defined(TWATCH_S3) || defined(CROWPANEL7) || defined(TDECK_PLUS) || defined(SQW_SMALL) || defined(TAB5)
 static const bool DEFAULT_ROTATION_LOCK = true;
 #else
 static const bool DEFAULT_ROTATION_LOCK = false;
@@ -35,8 +37,8 @@ static bool        s_aura = true;
 // one step round from that with its crown on the right (LilyGo's default).
 #if defined(TWATCH_S3)
 static const uint8_t DEFAULT_ROTATION = 2;
-#elif defined(CROWPANEL7)
-static const uint8_t DEFAULT_ROTATION = 0;   // the panel is landscape as wired
+#elif defined(CROWPANEL7) || defined(TAB5)
+static const uint8_t DEFAULT_ROTATION = 0;   // the panel is landscape as wired (the Tab5: as blitted)
 #else
 static const uint8_t DEFAULT_ROTATION = 1;
 #endif

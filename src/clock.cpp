@@ -9,8 +9,8 @@
 #if defined(SENSE_CYD_APP)
 #include "sense_cyd.h"   // SENSE <cmd>
 #endif
-#if defined(ARDUINO_ARCH_ESP32)
-#include <esp_phy_init.h> // RADIO FULLCAL
+#if defined(ARDUINO_ARCH_ESP32) && !defined(SQW_NO_RADIO)
+#include <esp_phy_init.h> // RADIO FULLCAL (not on the Tab5: the P4 has no radio of its own)
 #endif
 #include "flood_bench.h" // FLOOD N, for the bench (a no-op outside FLOOD_BENCH builds)
 #include "settings.h"
@@ -814,6 +814,7 @@ void pollSerial() {
 #endif
 #if defined(ARDUINO_ARCH_ESP32)   // the radios themselves: nothing to ask in the emulator
         if (strcasecmp(line, "RADIO HEAL") == 0) { g_consoleHeal = true; continue; }
+#if !defined(SQW_NO_RADIO)
         if (strcasecmp(line, "RADIO FULLCAL") == 0) {
             // Throw away the radio's saved tuning and restart: the next boot
             // has nothing to load, so it calibrates from scratch.
@@ -821,6 +822,7 @@ void pollSerial() {
             delay(300);
             ESP.restart();
         }
+#endif
         if (strncasecmp(line, "RADIO", 5) == 0) { radioReport(strcasestr(line, "SCAN") != nullptr); continue; }
 #if SQW_WIFI_5G
         // BAND: which WiFi bands the sniffer sweeps. BAND 2 is 2.4 GHz only,

@@ -24,8 +24,27 @@
 #include "buzzer.h"   // the alert chirp: the CrowPanel 7 buzzer or the 2.8" CYD speaker
 // The [frame] line's "rows" is whoever actually wrote them.
 #define SQW_PUSH_ROWS() CrowBlit::lastRows()
+#elif defined(TAB5)
+// The M5Stack Tab5 (upstream SquachWatch v1.47): a MIPI-DSI panel behind
+// M5GFX, its touch, and the ESP32-C6 radio's one-time update.
+#include "tab5_board.h"
+#include "tab5_display.h"
+#include "tab5_panel.h"
+#include "tab5_blit.h"
+#include "tab5_radio.h"
+#define SQW_PUSH_ROWS() Tab5Blit::lastRows()
 #else
 #define SQW_PUSH_ROWS() FramePush::lastRows()
+#endif
+// The frame buffer forced into INTERNAL RAM on the boards whose blit reads it
+// scattered (the CrowPanel's twitch, the Tab5's column-wise walk): plain
+// calloc() of anything over CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL is served
+// from PSRAM on a PSRAM core, so the threshold is raised around the one
+// allocation. See the createSprite() calls below.
+#if (defined(CROWPANEL7) && CROWPANEL_FRAME_INTERNAL) || (defined(TAB5) && TAB5_FRAME_INTERNAL)
+#define SQW_FRAME_FORCE_INTERNAL 1
+#else
+#define SQW_FRAME_FORCE_INTERNAL 0
 #endif
 #if defined(CYD32C) || defined(CYD35C) || defined(TDECK_PLUS)
 #include "gt911_touch.h"
@@ -48,7 +67,7 @@
 #include "tracker_follow.h" // a tag travelling with you (tested on the desktop)
 #include <new>            // std::nothrow, for the follow table
 #include <esp_heap_caps.h>   // heap_caps_get_largest_free_block() -- diagnostics screen
-#if defined(NM_CYD_C5)
+#if defined(NM_CYD_C5) || defined(TAB5)
 #include <esp_memory_utils.h> // esp_ptr_external_ram(): is the frame in PSRAM? (IDF 5 only)
 #endif
 #include <esp_system.h>      // esp_reset_reason() -- diagnostics screen
@@ -549,6 +568,10 @@ constexpr bool PANEL_NEEDS_INVERSION = false;
 // is a no-op and CrowPanelTFT hides it. False keeps the XOR in the Settings
 // handler meaningful rather than pretending a control exists.
 constexpr bool PANEL_NEEDS_INVERSION = false;
+#elif defined(TAB5)
+// A DSI video panel behind M5GFX; the app's INVERT setting has nothing to
+// send, so false keeps the Settings handler's XOR honest.
+constexpr bool PANEL_NEEDS_INVERSION = false;
 #else
 constexpr bool PANEL_NEEDS_INVERSION = false;
 #endif
@@ -592,6 +615,10 @@ public:
 // device type and only this hierarchy gives the two a common base. Nothing
 // is ever sent to an SPI display bus on this board -- see the header.
 CrowPanelTFT        tft;
+#elif defined(TAB5)
+// Likewise not a TFT_eSPI: a MIPI-DSI panel driven by M5GFX, wearing the
+// library's interface for the same reason -- see tab5_display.h.
+Tab5TFT             tft;
 #elif defined(FREENOVE_S3_35)
 // Likewise not a TFT_eSPI: an ST77922 on a four-lane QSPI bus, wearing the
 // library's interface for the same reason -- see st77922_display.h.
@@ -758,6 +785,10 @@ static bool rawReadResistive(int16_t& a, int16_t& b);
 // calibration is needed or wanted.
 static uint16_t CAP_NX_MIN = CROW_CAP_NX_MIN, CAP_NX_MAX = CROW_CAP_NX_MAX;
 static uint16_t CAP_NY_MIN = CROW_CAP_NY_MIN, CAP_NY_MAX = CROW_CAP_NY_MAX;
+#elif defined(TAB5)
+// M5GFX reports panel pixels of the rotated panel; a divide by TAB5_SCALE.
+static uint16_t CAP_NX_MIN = TAB5_CAP_NX_MIN, CAP_NX_MAX = TAB5_CAP_NX_MAX;
+static uint16_t CAP_NY_MIN = TAB5_CAP_NY_MIN, CAP_NY_MAX = TAB5_CAP_NY_MAX;
 #else
 #if defined(FREENOVE_S3_35)
 // The ST77922's own touch reports panel pixels: a pass-through.
@@ -1034,6 +1065,11 @@ static bool readTouchRaw(int16_t& a, int16_t& b) {
     if (!St77922Touch::read(x, y)) return false;
     a = (int16_t)x; b = (int16_t)y;
     return true;
+#elif defined(TAB5)
+    uint16_t x, y;
+    if (!Tab5Touch::read(x, y)) return false;
+    a = (int16_t)x; b = (int16_t)y;
+    return true;
 #elif defined(WAVESHARE_C5)
     uint16_t x, y;
     if (!Cst3530::read(x, y)) return false;
@@ -1141,7 +1177,8 @@ static bool s_screenDimmed = false;
 // Freenove 3.5", whose one button is GPIO0 like a CYD's (upstream v1.34).
 // Not the Waveshare C5: its BOOT is GPIO28, and GPIO0 is the I2C bus's SDA --
 // every byte of touch traffic would read as a press.
-#if defined(ESP32) && (!defined(SQW_S3) || defined(FREENOVE_S3_35)) && !defined(CROWPANEL7) && !defined(WAVESHARE_C5)
+// Not the Tab5 either: a P4's GPIO0 is not a button there (touch drives it).
+#if defined(ESP32) && (!defined(SQW_S3) || defined(FREENOVE_S3_35)) && !defined(CROWPANEL7) && !defined(TAB5) && !defined(WAVESHARE_C5)
 #define SQW_BOOT_BTN 1
 #else
 #define SQW_BOOT_BTN 0
@@ -1281,6 +1318,9 @@ static void applyBrightness() {
     // takes a bare I2C command byte on an inverted scale. CrowBL::set()
     // keeps the firmware's own 0..255-with-255-brightest convention.
     CrowBL::set(duty);
+#elif defined(TAB5)
+    // M5GFX's brightness: the backlight is a PWM pin it owns.
+    Tab5Panel::backlight(duty);
 #elif defined(TDECK_PLUS)
     if (s_crownDark && s_screenDimmed) duty = 0;   // POCKET MODE is OFF, whatever DIM LEVEL says
     tdeckBacklight(duty);   // a stepped driver chip, not a PWM pin
@@ -1312,11 +1352,12 @@ static void applyBrightness() {
 // would be both wasteful and a good way to find a driver's re-entrancy bug.
 static uint16_t s_cpuMhzApplied = 240;
 // TERMINAL MODE at rest (see terminalRestBudgetUs): 80 MHz. Not on the
-// CrowPanel 7, whose RGB panel is fed by the CPU. (Upstream v1.49.)
+// CrowPanel 7, whose RGB panel is fed by the CPU, or the Tab5 (a P4: other
+// clocks). (Upstream v1.49.)
 static bool s_termRest = false;
 static void applyCpuClock() {
     uint16_t want = Settings::cpuMhz();
-#if !defined(CROWPANEL7)
+#if !defined(CROWPANEL7) && !defined(TAB5)
     if (s_termRest && want > 80) want = 80;
 #endif
 #if defined(TWATCH_S3)
@@ -3507,11 +3548,11 @@ static void restoreFrameBuffer() {
 #if !defined(CYD35)
     if (frameBufferOk) return;
     frame.setColorDepth(8);
-#if defined(CROWPANEL7) && CROWPANEL_FRAME_INTERNAL
+#if SQW_FRAME_FORCE_INTERNAL
     heap_caps_malloc_extmem_enable(1u << 20);   // back into internal RAM, see setup()
 #endif
     const bool back = frame.createSprite(tft.width(), tft.height());
-#if defined(CROWPANEL7) && CROWPANEL_FRAME_INTERNAL
+#if SQW_FRAME_FORCE_INTERNAL
     heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
 #endif
     if (back) {
@@ -5788,6 +5829,104 @@ static bool terminalBatteryState(uint8_t& pct, bool& charging) {
 }
 #endif
 
+#if defined(TAB5)
+// ---- Tab5: the one-time radio update ---------------------------------------
+// (Upstream SquachWatch v1.47.) A Tab5 from the box runs M5Stack's firmware on
+// its C6 radio chip, which links but cannot sniff. When the link came up and
+// the hello did not answer, this asks once per boot: UPDATE writes upstream's
+// C6 image (carried inside this firmware) and restarts; LATER boots on with
+// the radio off. Two writes that never brought a hello and it stops offering:
+// the C6 has no way back from a bad image short of soldered wires, so it is
+// never written blind or in a loop.
+static inline void pushFrame(int x, int y);
+static void tab5RadioScreen(const char* head, const char* l1, const char* l2, const char* l3,
+                            const char* bLeft, const char* bRight, int pct) {
+    TFT_eSPI& t = *canvas;
+    const int w = t.width(), h = t.height();
+    t.fillScreen(Theme::BG);
+    t.setTextFont(1);
+    t.setTextSize(4);
+    t.setTextColor(Theme::AMBER, Theme::BG);
+    t.setCursor((w - t.textWidth(head)) / 2, h / 6);
+    t.print(head);
+    t.setTextSize(2);
+    t.setTextColor(Theme::WHITE, Theme::BG);
+    int y = h / 6 + 70;
+    for (const char* l : { l1, l2, l3 }) {
+        if (l && *l) { t.setCursor((w - t.textWidth(l)) / 2, y); t.print(l); }
+        y += 34;
+    }
+    if (pct >= 0) {
+        const int bw = w * 2 / 3, bx = (w - bw) / 2, by = y + 20;
+        t.drawRect(bx, by, bw, 28, Theme::CYAN);
+        t.fillRect(bx + 3, by + 3, (bw - 6) * pct / 100, 22, Theme::CYAN);
+    }
+    const int bh = 70, by = h - bh - 30, bw = w / 3;
+    if (bLeft)  Theme::drawButton(t, w / 2 - bw - 20, by, bw, bh, bLeft, false, 2);
+    if (bRight) Theme::drawButton(t, w / 2 + 20, by, bw, bh, bRight, false, 2);
+    if (canvas != &tft) pushFrame(0, 0);
+}
+
+// Which of the two buttons tab5RadioScreen drew a tap landed on: -1 none,
+// 0 left, 1 right. Waits for a whole tap (down, then up).
+static int tab5RadioWaitTap() {
+    const int w = tft.width(), h = tft.height(), bh = 70, by = h - bh - 30, bw = w / 3;
+    bool down = false; int x = 0, y = 0;
+    for (;;) {
+        TouchPoint tp = pollTouch();
+        if (tp.valid) { down = true; x = tp.x; y = tp.y; }
+        else if (down) {
+            down = false;
+            if (y >= by && y < by + bh) {
+                if (x >= w / 2 - bw - 20 && x < w / 2 - 20) return 0;
+                if (x >= w / 2 + 20 && x < w / 2 + 20 + bw) return 1;
+            }
+        }
+        delay(20);
+    }
+}
+
+static uint32_t s_radioPctAt = 0;
+static void tab5RadioProgress(uint32_t done, uint32_t total) {
+    // A frame every few hundred milliseconds is plenty, and keeps the push
+    // from slowing the write.
+    const uint32_t now = millis();
+    if (done < total && now - s_radioPctAt < 300) return;
+    s_radioPctAt = now;
+    char l[40];
+    snprintf(l, sizeof l, "%lu of %lu KB", (unsigned long)(done / 1024), (unsigned long)(total / 1024));
+    tab5RadioScreen("UPDATING RADIO", "Writing the radio's firmware.", "Keep the Tab5 plugged in.", l,
+                    nullptr, nullptr, (int)(done * 100 / total));
+}
+
+static void tab5RadioUpdatePrompt() {
+    if (!Tab5Radio::needsUpdate()) return;
+    if (Tab5Radio::updateTries() >= 2) {
+        Serial.println("[c6] radio update tried twice without a hello; not offering again (docs/TAB5.md)");
+        tab5RadioScreen("RADIO UPDATE", "The radio update did not take, twice.", "MuleSkin runs without WiFi and",
+                        "Bluetooth. See docs/TAB5.md for help.", nullptr, "OK", -1);
+        tab5RadioWaitTap();
+        return;
+    }
+    tab5RadioScreen("RADIO UPDATE", "This Tab5's radio still runs its", "factory firmware. One update, about a",
+                    "minute, and it hears WiFi and Bluetooth.", "LATER", "UPDATE", -1);
+    if (tab5RadioWaitTap() != 1) {
+        Serial.println("[c6] radio update: LATER; booting with the radio off");
+        return;
+    }
+    char why[64] = "";
+    s_radioPctAt = 0;
+    tab5RadioProgress(0, Tab5Radio::imageSize());
+    if (Tab5Radio::update(tab5RadioProgress, why, sizeof why)) {
+        tab5RadioScreen("RADIO UPDATED", "Restarting to use it.", "", "", nullptr, nullptr, 100);
+        delay(1500);
+        ESP.restart();
+    }
+    tab5RadioScreen("RADIO UPDATE", "It did not work:", why, "Nothing changed. Try again next boot.", nullptr, "OK", -1);
+    tab5RadioWaitTap();
+}
+#endif
+
 void setup() {
     // Before anything opens NVS -- crashReportInit() does: settings left in
     // the old 20 KB store by a USB install onto the new table move across.
@@ -5805,11 +5944,12 @@ void setup() {
 #if SQW_BOOT_BTN
     pinMode(0, INPUT_PULLUP);   // BOOT: see bootButtonTick()
 #endif
-#if defined(SQW_S3) || defined(WAVESHARE_C5)
+#if defined(SQW_S3) || defined(TAB5) || defined(WAVESHARE_C5)
     // Native USB: with nothing reading the port, every print would otherwise
     // wait its full timeout for a host, and after the chatty first-boot
     // calibration the loop crawled so slowly the screen looked frozen black.
-    // Drop the bytes instead when nobody is listening.
+    // Drop the bytes instead when nobody is listening. (Upstream's Tab5 showed
+    // the same thing: laggy and freezing only while on the cable.)
     Serial.setTxTimeoutMs(0);
 #endif
     delay(200);
@@ -5868,7 +6008,7 @@ void setup() {
 // ... and not on the CrowPanel 7, where GPIO21 is the panel's BLUE-0 data
 // line. Driving it high before the panel driver claims it is a stripe down the
 // picture at best.
-#if !defined(AWOK) && !defined(RLPHANTOM) && !defined(RLPHANTOM_R) && !defined(SQW_S3) && !defined(CROWPANEL7) && !defined(CYD32C) && !defined(CYD35C) && !defined(WAVESHARE_C5)
+#if !defined(AWOK) && !defined(RLPHANTOM) && !defined(RLPHANTOM_R) && !defined(SQW_S3) && !defined(CROWPANEL7) && !defined(CYD32C) && !defined(CYD35C) && !defined(TAB5) && !defined(WAVESHARE_C5)
     pinMode(21, OUTPUT); digitalWrite(21, HIGH);
 #endif
 #if defined(SQW_S3)
@@ -5880,6 +6020,9 @@ void setup() {
     // command to the helper MCU, sent once Wire is up. GPIO27/32 are the same
     // OPI PSRAM lines the watch avoids, and every other candidate here is an
     // RGB data line.
+#elif defined(TAB5)
+    // Nothing: M5GFX owns the backlight pin, and 21/27/32 are somebody else's
+    // on a P4.
 #elif defined(WAVESHARE_C5)
     // No backlight pin and no reset pin: both are the CH32 helper's, on I2C.
     // It has to release the panel from reset before tft.init() talks to it
@@ -6007,6 +6150,8 @@ void setup() {
 #if defined(CROWPANEL7)
     // No LEDC at all: the backlight is an I2C command byte. Claiming channels
     // here would only take them away from something that has a pin.
+#elif defined(TAB5)
+    // No LEDC here either: M5GFX set the backlight's PWM up with the panel.
 #elif defined(TDECK_PLUS)
     // No LEDC: GPIO42 is a pulse-counting 16-step driver, and a PWM on it
     // would walk the brightness round and round. tdeckBacklight() steps it.
@@ -6084,6 +6229,8 @@ void setup() {
         // browned the Phantom out into a second boot.
 #if defined(CROWPANEL7)
         CrowBL::set(24);
+#elif defined(TAB5)
+        Tab5Panel::backlight(24);
 #elif defined(TDECK_PLUS)
         tdeckBacklight(24);
 #elif defined(WAVESHARE_C5)
@@ -6135,7 +6282,7 @@ void setup() {
     // 16-bit — the full 16-bit buffer didn't fit in the available
     // contiguous heap on this board.
     frame.setColorDepth(8);
-#if (defined(SQW_S3) && !defined(FREENOVE_S3_40) && !defined(FREENOVE_S3_35)) || (defined(CROWPANEL7) && CROWPANEL_FRAME_INTERNAL)
+#if (defined(SQW_S3) && !defined(FREENOVE_S3_40) && !defined(FREENOVE_S3_35)) || SQW_FRAME_FORCE_INTERNAL
     // (Not the Freenove 4.0": 480x320 at 8 bits is 154 KB, which goes to
     // PSRAM, as upstream SquachWatch does for its 480x320 S3 boards.)
     // 57.6 KB fits in internal RAM with room to spare (75 KB at 320x240), and a sprite in
@@ -6144,9 +6291,11 @@ void setup() {
     // CrowPanel: not an economy but the fix for a twitching picture -- the
     // panel's DMA reads its framebuffer from PSRAM, and the UI's scattered
     // writes into a PSRAM sprite starve it (see crowpanel7_board.h).
+    // Tab5: the blit reads it a column at a time, cheap in SRAM and slow in
+    // PSRAM; 640x360 at 8 bits is 225 KB, which the P4's SRAM has room for.
     frame.setAttribute(PSRAM_ENABLE, false);
 #endif
-#if defined(CROWPANEL7) && CROWPANEL_FRAME_INTERNAL
+#if SQW_FRAME_FORCE_INTERNAL
     // PSRAM_ENABLE=false only makes TFT_eSPI call plain calloc() -- and on a
     // PSRAM-enabled Arduino core plain calloc() of anything over
     // CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL (4 KB here) is served from PSRAM
@@ -6161,15 +6310,15 @@ void setup() {
     heap_caps_malloc_extmem_enable(1u << 20);
 #endif
     const bool frameOk = frame.createSprite(tft.width(), tft.height());
-#if defined(CROWPANEL7) && CROWPANEL_FRAME_INTERNAL
+#if SQW_FRAME_FORCE_INTERNAL
     heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
 #endif
-#if (defined(CROWPANEL7) && CROWPANEL_FRAME_INTERNAL) || defined(NM_CYD_C5)
+#if SQW_FRAME_FORCE_INTERNAL || defined(NM_CYD_C5)
     // Say where it landed: a frame in the wrong memory is the CrowPanel's
     // twitch and the C5's eight frames a second.
     if (frameOk) {
         const void* a = frame.buf();
-#if defined(NM_CYD_C5)
+#if defined(NM_CYD_C5) || defined(TAB5)
         const bool ext = esp_ptr_external_ram(a);
 #else
         // The S3's PSRAM window; internal SRAM sits at 0x3FC8xxxx.
@@ -6235,6 +6384,15 @@ void setup() {
     // buzzer a crash may have left sounding -- the helper keeps its state
     // across our reset. Not a boot beep.
     Buzzer::begin();
+#elif defined(TAB5)
+    // The ST7123's own touch, through M5GFX, which brought it up with the
+    // panel in tft.init().
+    usingCapTouch = Tab5Panel::up() && Tab5Panel::hasTouch();
+    Serial.println(usingCapTouch ? "Tab5 -- ST7123 touch through M5GFX."
+                                 : "Tab5 -- no touch controller; no touch.");
+    // Spelled out, because a brownout here looked like a lock-up on the
+    // console until the reset reason was read (upstream, 2026-10-19).
+    Serial.printf("[power] boot: %s (esp_reset_reason %d)\n", resetReasonName(), (int)esp_reset_reason());
 #elif defined(FREENOVE_S3_35)
     // The Freenove S3 3.5"'s touch is in the ST77922 itself, on I2C SDA 38 /
     // SCL 39 at 0x55, reset on GPIO48, interrupt on GPIO47 (unused: polled).
@@ -6351,7 +6509,7 @@ void setup() {
         uint32_t windowStart = millis();
         while (millis() - windowStart < 1200) {
             int16_t a, b;
-#if defined(CROWPANEL7) || defined(CYD32C) || defined(CYD35C) || defined(FREENOVE_S3_35) || defined(TDECK_PLUS) || defined(SQW_SMALL) || defined(WAVESHARE_C5)
+#if defined(CROWPANEL7) || defined(CYD32C) || defined(CYD35C) || defined(FREENOVE_S3_35) || defined(TDECK_PLUS) || defined(SQW_SMALL) || defined(TAB5) || defined(WAVESHARE_C5)
             // The GT911 (and the ST77922's touch) is neither of the two
             // below; the two-way dispatch polled a capacitive controller that
             // is not on this bus.
@@ -6403,15 +6561,15 @@ void setup() {
     // injected against the compiled-in ranges -- a calibration screen would
     // just sit there waiting for a finger.
     initTouchFit();
-#if defined(ESP32) && !defined(CROWPANEL7) && !defined(FREENOVE_S3_35) && !defined(SQW_SMALL)   // nothing to calibrate with no touch
+#if defined(ESP32) && !defined(CROWPANEL7) && !defined(FREENOVE_S3_35) && !defined(SQW_SMALL) && !defined(TAB5)   // nothing to calibrate with no touch
     if (s_calSource != CalSource::SAVED) {
         Serial.println("Touch: no five-target calibration yet -- running it now.");
         runTouchCalibration();
     }
 #endif
-#if defined(CROWPANEL7) || defined(FREENOVE_S3_35)
-    // Never on first boot here. The GT911 (and the ST77922's own touch)
-    // reports panel pixels, so the
+#if defined(CROWPANEL7) || defined(FREENOVE_S3_35) || defined(TAB5)
+    // Never on first boot here. The GT911 (and the ST77922's own touch, and
+    // the Tab5's ST7123 through M5GFX) reports panel pixels, so the
     // compiled-in fit is already the identity and there is nothing to
     // calibrate -- making someone tap five targets would only replace an
     // exact mapping with a hand-aimed one. SETTINGS can still run it.
@@ -6420,7 +6578,7 @@ void setup() {
 
     // Seed the PRNG so the digital rain starts in a fresh-looking state
     // on every boot.
-#if defined(SQW_S3) || defined(CROWPANEL7) || defined(NM_CYD_C5)
+#if defined(SQW_S3) || defined(CROWPANEL7) || defined(NM_CYD_C5) || defined(TAB5)
     // GPIO34 is not an ADC pin on an S3 (it is an octal PSRAM line on these
     // boards, the CrowPanel's N16R8 module included): analogRead() refuses
     // it and the seed was a constant. The hardware RNG instead -- before WiFi
@@ -6451,6 +6609,8 @@ void setup() {
     // is the one large load that nobody misses for a second at boot.
 #if defined(CROWPANEL7)
     CrowBL::set(24);
+#elif defined(TAB5)
+    Tab5Panel::backlight(24);
 #elif defined(TDECK_PLUS)
     tdeckBacklight(24);
 #elif defined(WAVESHARE_C5)
@@ -6508,6 +6668,9 @@ void setup() {
     }
 #endif
     engine.init();
+#if defined(TAB5)
+    tab5RadioUpdatePrompt();   // only when the C6 linked but has no sniff extension
+#endif
 #if MULESKIN_LORA
     // The LoRa radio, after WiFi and Bluetooth: its own task and its own bus.
     // Receive only. Console LORA for what it hears.
@@ -6681,6 +6844,10 @@ static inline void pushFrame(int x, int y) {
     // the 8->16 bit conversion on the way. It declines only if the panel
     // never came up, in which case there is nowhere to put the frame at all.
     CrowBlit::push(frame.buf(), frame.bufW(), frame.bufH(), x, y);
+#elif defined(TAB5)
+    // Same shape: the framebuffer is memory and Tab5Blit writes the changed
+    // columns into it, turned landscape and doubled on the way.
+    Tab5Blit::push(frame.buf(), frame.bufW(), frame.bufH(), x, y);
 #elif defined(FREENOVE_S3_35)
     // The ST77922 over QSPI: TFT_eSPI cannot reach it, so no pushSprite
     // fallback either -- St77922Blit or nothing (the panel never came up).
@@ -7272,6 +7439,8 @@ static uint32_t s_chargeAt = 0, s_chargeLitAt = 0, s_chargeLitUntil = 0, s_charg
 static void chargeBacklight(uint8_t duty) {
 #if defined(CROWPANEL7)
     CrowBL::set(duty);
+#elif defined(TAB5)
+    Tab5Panel::backlight(duty);
 #elif defined(TDECK_PLUS)
     tdeckBacklight(duty);
 #elif defined(WAVESHARE_C5)
@@ -7874,7 +8043,7 @@ void loop() {
     }
     gpsTick();
 #endif
-#if defined(ESP32) && !defined(SQW_S3) && !defined(CROWPANEL7)   // hardware only: the emulators build this too
+#if defined(ESP32) && !defined(SQW_S3) && !defined(CROWPANEL7) && !defined(TAB5)   // hardware only: the emulators build this too
     // ADC: every input-only analog pin the CYDs leave free, in millivolts,
     // averaged over 16 reads. A battery divider shows up as about half the
     // cell's voltage, and moves when the cell is unplugged.
@@ -10253,6 +10422,8 @@ void loop() {
             info.usingCapTouch = usingCapTouch;
 #if defined(CROWPANEL7)
             info.boardName = "CrowPanel 7";
+#elif defined(TAB5)
+            info.boardName = "Tab5 BETA";
 #elif defined(TOUCH_ON_DISPLAY_BUS)
             info.boardName = "AWOK";
 #elif defined(FREENOVE_S3_40)
