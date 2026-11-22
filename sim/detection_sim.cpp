@@ -168,6 +168,7 @@ void DetectionEngine::huntWifi(const uint8_t* bssid, const char* ssid) {
     _huntRssiCount = 0;
 }
 void DetectionEngine::clearHunt() { _huntKind = WatchKind::NONE; _huntLabel[0] = 0; _huntRssiCount = 0; }
+void DetectionEngine::retargetHunt(const uint8_t* mac) { if (_huntKind == WatchKind::BLE && mac) memcpy(_huntMac, mac, 6); }
 int8_t DetectionEngine::huntRssiAt(uint8_t idx) const {
     if (idx >= _huntRssiCount) return 0;
     uint8_t slot = (uint8_t)((_huntRssiHead + WATCH_RSSI_CAP - _huntRssiCount + idx) % WATCH_RSSI_CAP);

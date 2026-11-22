@@ -1938,6 +1938,17 @@ void DetectionEngine::huntWifi(const uint8_t* bssid, const char* ssid) {
     _huntRssiLastMs = 0;
 }
 
+void DetectionEngine::retargetHunt(const uint8_t* mac) {
+    if (_huntKind != WatchKind::BLE || !mac) return;
+    // Off while the address is written, as in huntBle(): the scan callback
+    // reads it on the other core.
+    _huntKind = WatchKind::NONE;
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+    memcpy(_huntMac, mac, 6);
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+    _huntKind = WatchKind::BLE;
+}
+
 void DetectionEngine::clearHunt() {
     _huntKind = WatchKind::NONE;
     _huntRssiHead = _huntRssiCount = 0;

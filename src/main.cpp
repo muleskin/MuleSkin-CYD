@@ -3259,6 +3259,12 @@ static void serviceFollowing(uint32_t now) {
             s_awayDays.relink(from, d->mac);
             if (IgnoreList::carryOver(from, d->mac))
                 Serial.println("[follow] ...its IGNORE / SNOOZE goes with it");
+            // A HUNT on it follows it too, readings and all.
+            if (engine.isHunted(from, true)) {
+                engine.retargetHunt(d->mac);
+                Serial.println("[follow] ...and the hunt follows it");
+                Theme::showToast("HUNT FOLLOWS", "Same tag, new address", Theme::CYAN);
+            }
         }
     }
     s_follow->expire(now);

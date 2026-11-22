@@ -267,7 +267,8 @@ A full beginner-friendly walkthrough is in [docs/BUILD.md](docs/BUILD.md).
    within 90 seconds at much the same signal, and no other tag fits --
    the new address carries on its minutes, and its days for NEAR YOU ON N
    DAYS. Ignore a tag to stop it -- an IGNORE or SNOOZE moves to its new
-   address with it, the same way.
+   address with it, the same way, and so does a HUNT on it ("HUNT FOLLOWS",
+   readings kept).
 
 If a microSD card is present, every detection is also appended to
 `MuleSkin-<day>.log` (CSV: `ts,type,rssi,mac,channel,vendor,ssid`).

@@ -348,6 +348,11 @@ public:
     void huntBle(const uint8_t* mac, const char* name);
     void huntWifi(const uint8_t* bssid, const char* ssid);
     void clearHunt();
+    // The hunted tag changed its address (TrackerFollow linked the two in
+    // main.cpp): the hunt carries on at the new one, keeping its label and
+    // its readings. MuleSkin's form of upstream's phone-ID hunt follow,
+    // which hangs off the SCAN screen MuleSkin does not have.
+    void retargetHunt(const uint8_t* mac);
     // The hunt half of isWatched(), and for the same reason: HUNT was the
     // other one-way door -- clearHunt() had no caller outside the wipe, so a
     // hunt could only be replaced, never ended.
