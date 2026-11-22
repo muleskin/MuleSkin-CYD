@@ -13,6 +13,7 @@
 #include "settings.h"
 #include "security.h"
 #include "ignore_list.h"
+#include "my_alerts.h"
 #include "muleskin.h"
 #include "dex.h"
 #include "ui_dex.h"
@@ -87,6 +88,9 @@ static const SettingsRow ALL_ROWS[] = {
     SettingsRow::WIFI_BANDS,
 #endif
     SettingsRow::DETECTION_FILTER,
+    // The owner's own WiFi names, between what the board filters out and
+    // what it has been told to ignore.
+    SettingsRow::MY_ALERTS,
     SettingsRow::IGNORED_DEVICES,
     // APPEARANCE opens the display page -- see APPEARANCE_ROWS. It sat at the
     // very top of this list, which put it under the first thumb that opened
@@ -259,6 +263,7 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::WIFI_BANDS:
 #endif
         case SettingsRow::DETECTION_FILTER:
+        case SettingsRow::MY_ALERTS:
         case SettingsRow::IGNORED_DEVICES:
             return RowGroupId::BEHAVIOR;
         case SettingsRow::APPEARANCE:
@@ -884,7 +889,12 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             // keeps the full name in its title bar.
             label = "TYPE FILTER";
             snprintf(valBuf, valBufN, "%u/%u", (unsigned)Settings::enabledTypeCount(),
-                     (unsigned)DetectionType::COUNT - 1);
+                     (unsigned)DetectionType::MINE - 1);
+            value = valBuf;
+            break;
+        case SettingsRow::MY_ALERTS:
+            label = "MY ALERTS";
+            snprintf(valBuf, valBufN, "%u", (unsigned)MyAlerts::count());
             value = valBuf;
             break;
         case SettingsRow::IGNORED_DEVICES:

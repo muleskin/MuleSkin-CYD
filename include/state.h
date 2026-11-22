@@ -33,7 +33,13 @@ enum class DetectionType : uint8_t {
     // chip, and sixteen Espressif prefixes already sit under FLOCK. HACKER
     // takes exact signatures only, which is what keeps it worth alerting on.
     HACKER  = 17,
-    COUNT   = 18
+    // MY ALERTS: a WiFi name matching one of the owner's own patterns (see
+    // my_alerts.h). Kept LAST and outside everything that walks the catalogue
+    // of known kit -- the DEX, BINGO and the TYPE FILTER stop short of it
+    // (they loop to MINE, not COUNT): it is not a kind of device anybody
+    // could collect, and its on/off switch is the list itself.
+    MINE    = 18,
+    COUNT   = 19
 };
 
 inline const char* detectionTypeName(DetectionType t) {
@@ -55,6 +61,7 @@ inline const char* detectionTypeName(DetectionType t) {
         case DetectionType::EVILTWIN:    return "EVIL TWIN";
         case DetectionType::IBEACON:     return "IBEACON";
         case DetectionType::HACKER:      return "HACKER";
+        case DetectionType::MINE:        return "MY ALERT";
         default:                         return "UNKNOWN";
     }
 }
@@ -182,7 +189,8 @@ enum class AppState : uint8_t {
     LORA_CHAT        = 38, // LORA CHATS, from WATCH SETTINGS (MULESKIN_LORA builds). See ui_lorachat.h.
     MEETING          = 39, // IN A MEETING: the red sign, from the main screen's bar. See ui_meeting.h.
     TIME_SYNC        = 40, // WIFI TIME: join a saved network, set the clock. See ui_timesync.h.
-    TODAY            = 41  // TODAY: today's sightings by hour and type. See ui_today.h.
+    TODAY            = 41, // TODAY: today's sightings by hour and type. See ui_today.h.
+    MY_ALERTS        = 42  // MY ALERTS, from Settings: the owner's own WiFi names. See ui_myalerts.h.
 };
 
 enum class ButtonId : uint8_t {

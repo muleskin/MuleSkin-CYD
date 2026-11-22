@@ -19,6 +19,8 @@ bool important(DetectionType t) {
         // Attack tools: a karma AP answering to every network name, a
         // Flipper, a Pineapple -- an attack in the room, like a deauth flood.
         case DetectionType::HACKER:
+        // MY ALERTS: a name the owner asked to be told about.
+        case DetectionType::MINE:
             return true;
         default:
             return false;

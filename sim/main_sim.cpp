@@ -59,6 +59,8 @@
 #include "ui_sysprops.h"
 #include "ota_core.h"
 #include "ui_wifinets.h"
+#include "ui_myalerts.h"
+#include "my_alerts.h"
 #include "png_writer.h"
 #include "touch_cal.h"
 
@@ -264,6 +266,8 @@ static void usage() {
         "usage: muleskinsim <screen> [out.png] [options]\n"
         "  screens: clear log alert settings detfilter power diary hunt watchalert colorcheck boot pin dex touchcal icons\n"
         "  dex               --pose N opens entry N\'s card (1-17); 0 is the index\n"
+        "  myalerts          MY ALERTS with three patterns (MULESKINSIM_MYALERTS_EMPTY=1: none)\n"
+        "  alertkbd          ...and its keyboard, typing a pattern\n"
         "  touchcal          the touch calibration, played by a scripted finger:\n"
         "                    --frames skips that many 66 ms frames, --sequence films\n"
         "  --portrait        render 240x320 instead of 320x240\n"
@@ -577,6 +581,8 @@ int main(int argc, char** argv) {
         else if (screen == "petunlock" || screen == "unlock") uiOutfitUnlockTick(frame, t, engine);
         else if (screen == "sysprops") uiSysPropsTick(frame, t, engine);
         else if (screen == "wifinets") uiWifiNetsTick(frame, t);
+        else if (screen == "myalerts") uiMyAlertsTick(frame, t);
+        else if (screen == "alertkbd") uiWifiPassTick(frame, t);
         else if (screen == "wifiadd")  uiWifiAddTick(frame, t, engine);
         else if (screen == "poses") {
             // Every arm movement he has, for the costume test in
@@ -728,6 +734,19 @@ int main(int argc, char** argv) {
         }
     }
     else if (screen == "wifinets")   uiWifiNetsInit(frame);
+    else if (screen == "myalerts" || screen == "alertkbd") {
+        // A list like the one the feature was asked for: patrol cars by
+        // their routers' names, the county's too, and one with no label.
+        MyAlerts::begin();
+        MyAlerts::clear();
+        if (!getenv("MULESKINSIM_MYALERTS_EMPTY")) {
+            MyAlerts::add("veh9*", "CITY PD");
+            MyAlerts::add("cty??", "COUNTY");
+            MyAlerts::add("*-pd-*", "");
+        }
+        if (screen == "myalerts") uiMyAlertsInit(frame);
+        else uiWifiPassInitText(frame, "WIFI NAME TO WATCH", "* = anything, ? = one", "veh9*", MyAlerts::PAT_MAX, false);
+    }
     else if (screen == "wifiadd")    uiWifiAddInit(frame);
     else if (screen == "dex") {
         // Eleven of the seventeen caught, through the engine's own door, with

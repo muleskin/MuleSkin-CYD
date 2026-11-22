@@ -1,5 +1,6 @@
 // MuleSkin-CYD — clear (idle) screen implementation
 #include "ui_clear.h"
+#include "my_alerts.h"     // MY ALERTS takes the twelfth counter while its list is in use
 #include "clock.h"      // the watch's corner clock
 #include "draw_band.h"
 #include "frame_prof.h"
@@ -217,6 +218,7 @@ static const char* counterLabel(DetectionType t) {
         // keeps its own label everywhere else -- it just does not get its
         // own column here, because its count is inside this one.
         case DetectionType::HACKER:      return "HACK";
+        case DetectionType::MINE:        return "MINE";
         default:                         return "?";
     }
 }
@@ -233,8 +235,16 @@ static const char* counterLabel(DetectionType t) {
 // whereas a rogue AP is a different kind of problem and had nowhere to
 // go. It has somewhere to go now -- HACKER, below. Row stays at 12
 // columns either way, so the layout has never moved.
+// MY ALERTS takes the twelfth column while its list has anything in it, and
+// beacons (which otherwise have that column) fold into TRACKER for as long as
+// it does -- they are filed with the trackers everywhere else already. Twelve
+// columns either way, so the row never grows into MuleSkin's band.
+static bool mineColumn()   { return MyAlerts::count() > 0; }
+static bool beaconFolded() { return mineColumn() && Settings::typeEnabled(DetectionType::IBEACON); }
+
 static uint16_t counterCount(const DetectionEngine& eng, DetectionType t) {
     uint16_t n = eng.countByType(t);
+    if (t == DetectionType::AIRTAG && beaconFolded()) n += eng.countByType(DetectionType::IBEACON);
     if (t == DetectionType::AIRTAG) {
         n += eng.countByType(DetectionType::GOOGLE_TAG)
            + eng.countByType(DetectionType::TILE)
@@ -292,7 +302,8 @@ static const uint8_t MAX_COUNTER_TYPES = FIXED_COUNTER_TYPES_N + 1;
 static uint8_t activeCounterTypes(DetectionType* out) {
     uint8_t n = 0;
     for (; n < FIXED_COUNTER_TYPES_N; n++) out[n] = FIXED_COUNTER_TYPES[n];
-    if (Settings::typeEnabled(DetectionType::IBEACON)) out[n++] = DetectionType::IBEACON;
+    if (mineColumn())                                       out[n++] = DetectionType::MINE;
+    else if (Settings::typeEnabled(DetectionType::IBEACON)) out[n++] = DetectionType::IBEACON;
     for (uint8_t i = 1; i < n; i++) {
         const DetectionType v = out[i];
         uint8_t j = i;

@@ -311,6 +311,8 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "clock.h"
 #include "ui_zone.h"
 #include "ui_wifinets.h"
+#include "ui_myalerts.h"
+#include "my_alerts.h"
 #include "flood_bench.h"
 #include "ui_boot.h"
 #include "ui_clear.h"
@@ -2397,6 +2399,71 @@ static void enterWifiNets() {
     transitionStart = millis();
     uiWifiNetsInit(*canvas);
 }
+// MY ALERTS, and the two trips to the keyboard it makes: the pattern, then
+// its label (or a new label for one already saved). The keyboard is the
+// WiFi password one in its plain-text mode; this says what it is typing for.
+enum class AlertTyping : uint8_t { NONE, PATTERN, LABEL_NEW, RELABEL };
+static AlertTyping s_alertTyping = AlertTyping::NONE;
+static char        s_alertPattern[MyAlerts::PAT_MAX + 1] = "";
+static uint8_t     s_alertSlot = 0;
+static void enterMyAlerts() {
+    state = AppState::MY_ALERTS;
+    transitionStart = millis();
+    uiMyAlertsInit(*canvas);
+}
+static void enterAlertKeyboard(AlertTyping what, const char* prompt, const char* subject, const char* initial,
+                               uint8_t maxLen, bool allowEmpty) {
+    s_alertTyping = what;
+    state = AppState::WIFI_PASS;
+    transitionStart = millis();
+    uiWifiPassInitText(*canvas, prompt, subject, initial, maxLen, allowEmpty);
+}
+// The keyboard came back from one of MY ALERTS' trips with OK or BACK.
+static void myAlertsTyped(WifiPassResult r) {
+    const AlertTyping what = s_alertTyping;
+    s_alertTyping = AlertTyping::NONE;
+    char text[MyAlerts::PAT_MAX + 1];
+    snprintf(text, sizeof text, "%s", uiWifiPassText());
+    uiWifiPassClear();
+    if (r == WifiPassResult::BACK) {
+        if (what == AlertTyping::LABEL_NEW) Theme::showToast("NOT ADDED", nullptr, Theme::AMBER);
+        enterMyAlerts();
+        return;
+    }
+    switch (what) {
+        case AlertTyping::PATTERN:
+            if (MyAlerts::check(text) == MyAlerts::Check::TOO_WIDE) {
+                // A star alone, or one letter and a star, is every network in the street.
+                Theme::showToast("TOO WIDE", "Needs 2+ letters besides * and ?", Theme::AMBER);
+                enterMyAlerts();
+                return;
+            }
+            snprintf(s_alertPattern, sizeof s_alertPattern, "%s", text);
+            enterAlertKeyboard(AlertTyping::LABEL_NEW, "LABEL (OPTIONAL) FOR", s_alertPattern, "",
+                               MyAlerts::LABEL_MAX, true);
+            return;
+        case AlertTyping::LABEL_NEW: {
+            const int8_t slot = MyAlerts::add(s_alertPattern, text);
+            if (slot < 0) {
+                Theme::showToast("LIST FULL", "Remove one first", Theme::AMBER);
+            } else {
+                uiMyAlertsSelect(slot);
+                if (MyAlerts::check(s_alertPattern) == MyAlerts::Check::WIDE)
+                    Theme::showToast("SAVED, BUT WIDE", "Short patterns catch other networks", Theme::AMBER);
+                else
+                    Theme::showToast("WATCHING", s_alertPattern, Theme::CYAN);
+            }
+            break;
+        }
+        case AlertTyping::RELABEL:
+            MyAlerts::setLabel(s_alertSlot, text);
+            Theme::showToast(text[0] ? "LABEL SAVED" : "LABEL CLEARED", nullptr, Theme::CYAN);
+            break;
+        default: break;
+    }
+    enterMyAlerts();
+}
+
 static void enterWifiAdd() {
     state = AppState::WIFI_ADD;
     transitionStart = millis();
@@ -3500,7 +3567,10 @@ static bool secretNamespace(const char* ns) {
     // your home routers (homeaps). Upstream's review round 1 added regulars;
     // the other two are MuleSkin's own.
     return !strcmp(ns, "meshtalk") || !strcmp(ns, "ignore") || !strcmp(ns, "otawifi") ||
-           !strcmp(ns, "regulars") || !strcmp(ns, "awaydays") || !strcmp(ns, "homeaps");
+           !strcmp(ns, "regulars") || !strcmp(ns, "awaydays") || !strcmp(ns, "homeaps") ||
+           // The WiFi names the owner asked to be warned about, which says
+           // what they are watching for (MY ALERTS).
+           !strcmp(ns, "myalerts");
 }
 
 static void physicalNvsWipe() {
@@ -5201,6 +5271,7 @@ void setup() {
     // type sits out, and those are read in init().
     Dex::begin();
     Regulars::begin();
+    MyAlerts::begin();
     // AWAYDAYS on the console, and "2d away" on the LOG (the away-days table).
     awayDaysLoad();
     Clock::setConsoleHook(awayDaysConsole);
@@ -7758,6 +7829,7 @@ void loop() {
                         case SettingsRow::STATUS_LIGHT: enterLight(); break;
                         case SettingsRow::SECURITY:    enterSecurity(); break;
                         case SettingsRow::IGNORED_DEVICES:  enterIgnoreList(); break;
+                        case SettingsRow::MY_ALERTS:        enterMyAlerts(); break;
                         // These ask first -- see the confirm panel over in
                         // ui_settings. A row earns one when tapping it a
                         // second time does not put things back: calibration
@@ -7937,7 +8009,9 @@ void loop() {
             else if (tp.valid)    uiWifiPassTouch(tp.x, tp.y, now, WifiPassTouch::MOVE);
             else if (touchJustUp) uiWifiPassTouch(tp.x, tp.y, now, WifiPassTouch::UP);
             const WifiPassResult r = uiWifiPassResult();
-            if (r == WifiPassResult::OK && s_passForNets) {
+            if (s_alertTyping != AlertTyping::NONE) {
+                if (r != WifiPassResult::NONE) myAlertsTyped(r);
+            } else if (r == WifiPassResult::OK && s_passForNets) {
                 s_passForNets = false;
                 const bool ok = OtaWifi::saveNetwork(uiWifiPassSsid(), uiWifiPassText());
                 uiWifiPassClear();
@@ -7988,6 +8062,41 @@ void loop() {
                             enterWifiAdd();
                         break;
                     case WifiNetsHit::BACK: enterSettings(); break;
+                    default: break;
+                }
+            }
+            break;
+        }
+        case AppState::MY_ALERTS: {
+            drawTwoBand([&](TFT_eSPI& t, bool) { uiMyAlertsTick(t, now); });
+            if (touchJustDown) {
+                int slot = -1;
+                const int sel = uiMyAlertsSelected();
+                const bool haveSel = sel >= 0 && MyAlerts::used((uint8_t)sel);
+                switch (uiMyAlertsHit(*canvas, tp.x, tp.y, &slot)) {
+                    case MyAlertsHit::ROW: uiMyAlertsSelect(slot); break;
+                    case MyAlertsHit::ADD:
+                        if (MyAlerts::count() >= MyAlerts::MAX)
+                            Theme::showToast("LIST FULL", "Remove one first", Theme::AMBER);
+                        else
+                            enterAlertKeyboard(AlertTyping::PATTERN, "WIFI NAME TO WATCH", "* = anything, ? = one",
+                                               "", MyAlerts::PAT_MAX, false);
+                        break;
+                    case MyAlertsHit::LABEL:
+                        if (haveSel) {
+                            s_alertSlot = (uint8_t)sel;
+                            enterAlertKeyboard(AlertTyping::RELABEL, "LABEL FOR", MyAlerts::pattern((uint8_t)sel),
+                                               MyAlerts::label((uint8_t)sel), MyAlerts::LABEL_MAX, true);
+                        }
+                        break;
+                    case MyAlertsHit::REMOVE:
+                        if (haveSel) {
+                            MyAlerts::remove((uint8_t)sel);
+                            uiMyAlertsSelect(MyAlerts::nth(0));
+                            Theme::showToast("REMOVED", nullptr, Theme::CYAN);
+                        }
+                        break;
+                    case MyAlertsHit::BACK: enterSettings(); break;
                     default: break;
                 }
             }

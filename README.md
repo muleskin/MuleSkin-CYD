@@ -42,6 +42,7 @@ headlines in Orbitron.
 | `DEAUTH` | WiFi deauthentication floods | Rate-detected burst, not a signature: 12 from one sender in 3 s, or 6 sent to everyone |
 | `EVILTWIN` | Rogue / spoofed access points | One SSID beaconing from two BSSIDs that disagree about encryption |
 | `IBEACON` | Retail proximity beacons | Exact Apple header `4C 00 02 15` — **off by default**, see below |
+| `MY ALERT` | WiFi networks whose names match your own patterns | Settings → MY ALERTS: up to eight names of your own, each with an optional label for the alert card. Plain text catches names that start with it; `*` stands for anything and `?` for one character (`veh*` catches `veh912`). At least two fixed characters. A PIN wipe clears the list (from upstream SquachWatch v1.45) |
 | `HACKER` | Flipper Zero, Pwnagotchi, WiFi Pineapple, ESP deauthers, karma APs | Flipper's service UUIDs `0x3080`–`0x3083` (not its company ID or OUI, which are its BUSY Bar's); the Pwnagotchi's own beacon payload; `Pineapple_` and `pwned` SSIDs; and any access point answering to five network names in five minutes from one address (beacons and probe responses) -- a karma AP, `Karma-AP` |
 
 ### Confidence is per signature, not per type

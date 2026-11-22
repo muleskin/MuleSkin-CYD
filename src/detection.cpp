@@ -12,6 +12,7 @@
 extern volatile uint32_t g_advDumpUntil;   // ADVDUMP (clock.cpp)
 #endif
 #include "regulars.h"
+#include "my_alerts.h"
 #include "clock.h"
 #include <Arduino.h>
 #include <WiFi.h>
@@ -2082,6 +2083,11 @@ void DetectionEngine::processWiFiQ() {
         // throwaway SSID must not be fed to the AP tracker as if it were a
         // network somebody might be impersonating.
         bool evilTwin = false, karma = false;
+        // MY ALERTS: the owner's own patterns. After the evil-twin check, so
+        // the AP tracker still hears every named network, and ahead of the
+        // signature tables: somebody who typed "veh*" wants to hear about
+        // veh912 even when its router's prefix is also in the camera list.
+        int8_t mine = -1;
         // One BSSID answering to five names in five minutes: a karma AP
         // (KarmaWatch). Every beacon and probe response with a name is fed
         // in; a probe response is fed in and nothing else.
@@ -2099,6 +2105,9 @@ void DetectionEngine::processWiFiQ() {
             conf = confidenceFor(t);
         } else if ((evilTwin = (e.ssid[0] && noteApBeacon(e.mac, e.ssid, e.encrypted)))) {
             t = DetectionType::EVILTWIN;
+        } else if (e.ssid[0] && (mine = MyAlerts::match(e.ssid)) >= 0) {
+            t = DetectionType::MINE;
+            conf = Confidence::HIGH_CONF;   // the owner said so, by name
         } else {
             // Check OUI first (per DESIGN.md §6.2 precedence); fall back
             // to the SSID prefix (e.g. an Axon/Flock unit in pairing
@@ -2182,6 +2191,11 @@ void DetectionEngine::processWiFiQ() {
         } else if (e.drone) {
             d.vendor = "DroneID";
             strncpy(d.name, e.ssid, sizeof(d.name) - 1);   // its serial, when the pack had one
+        } else if (mine >= 0) {
+            // The owner's label (or their pattern) on the plate, and the
+            // network's own name under it: "CITY PD" over "veh912".
+            d.vendor = MyAlerts::tag((uint8_t)mine);
+            strncpy(d.name, e.ssid, sizeof(d.name) - 1);
         } else if (matchedBySsid) {
             const char* name = ssidVendorName(e.ssid);
             if (name) d.vendor = name;
