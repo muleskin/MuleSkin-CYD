@@ -50,6 +50,10 @@ Passively listening to radio broadcasts that devices are already sending into th
 
 That said — I'm a hairy cryptid mascot, not a lawyer. Know your local laws, use your brain, don't do anything stupid.
 
+## Does HUMAN SENSING transmit?
+
+Yes, and only then. **Settings → HUMAN SENSING** joins one of your saved WiFi networks and pings the router about fifty times a second, so it can watch how the signal between the two changes when someone moves (the motion model is ESP32Marauder's CsiMotionModel, by way of upstream SquachWatch). It does that only while its screen is open (SLEEP turns the screen off but keeps sensing); detection is paused meanwhile, because there is one radio. **BACK** or HOME ends it, and the detector goes back to listening. On the T-Deck Plus and the Freenove S3s, SCOPE also listens to the router's channel for other transmitters' paths. It saves nothing about your room. SCOPE, SNEAK and VITALS are EXPERIMENTAL, and VITALS is a toy, not a medical device.
+
 ## What's with the walking, talking MuleSkin on the screen?
 
 That's MuleSkin. He's the whole point, honestly — the detection is the *why*, MuleSkin is the *fun*. He reacts to what the device sees, cracks jokes when nothing's happening, remembers how many times you've petted him, unlocks cosmetics the longer you use the device, and occasionally does something unhinged with confetti if the mood strikes. He grows through stages as your lifetime detection count climbs. Tap him. He likes that. Don't overthink it, he's a good guy.

@@ -706,6 +706,76 @@ StickS3-only TERMINAL MODE row (here the row is on every board), the boot
 screen's wave and the first-boot lines (Squachy's), and the lava-lamp
 battery on the main screen.
 
+### HUMAN SENSING, brought over from upstream SquachWatch (v1.42-v1.49)
+
+<p align="center">
+  <img src="sim/golden/sensing.png" width="320"
+       alt="HUMAN SENSING on a 320x240 board: the SPECTRUM waterfall, the NOW, FLOOR, PEAK and MARGIN tiles, the MOTION graph with someone having walked through, and a PRESENCE banner over the BACK, RECAL and SLEEP buttons">
+</p>
+
+**Settings → HUMAN SENSING** turns the board's own WiFi radio into a motion
+sensor. It joins one of your saved networks (add one in **Settings → SYSTEM
+→ WIFI NETWORKS** first; the same list WIFI TIME uses), pings the router
+fifty times a second, and watches how the radio signal between them
+changes (the channel state, CSI). A person moving through that path changes
+it a lot; an empty room barely at all. It takes about 15 seconds to learn
+the empty room, so keep still while it says PLEASE STAND BY.
+
+- **SPECTRUM** (how fast the signal is changing, the newest on top and the
+  last 11 seconds sliding down), the **NOW / FLOOR / PEAK / MARGIN** tiles,
+  **MOTION** (the last 30 seconds against the line that counts as movement)
+  and a banner: CLEAR, PRESENCE (someone moved in the last 15 seconds), or
+  what the radio is doing (JOINING, and why a router said no).
+- **RECAL** re-learns the empty room, **SLEEP** turns the screen off while
+  sensing carries on (a tap or a key wakes it), **BACK** and the gear go to
+  Settings, HOME to the radar.
+- **Detection pauses while this screen is up**: there is one radio. The
+  detector hands it over the way it does for WIFI TIME and gets it back the
+  moment the screen goes. No saved network: the banner says ADD WIFI, and a
+  tap on it opens WIFI NETWORKS.
+- **The keys**: on the T-Deck, Backspace, R and S do the same, and O hands
+  the radio straight back to the detector; on the StickS3 and the Cardputer
+  (no button bar at 240x135) the cursor's one stop is the banner, where a
+  press re-calibrates, and BACK or HOME leaves.
+- **A refused board backs off** (20 s, then 40, up to 5 minutes) instead of
+  getting itself blocked by the router. A board switched off on this screen
+  comes back to it. PRIVACY MODE keeps the network's name and the router's
+  address off the screen and the console.
+
+**Three more pages, EXPERIMENTAL**, on the boards with the PSRAM and the
+screen for them (the T-Deck Plus and the Freenove S3 2.8" and 3.5"): swipe,
+tap the dots in the title bar, or press `,` and `.` on the T-Deck. The board
+comes back to the same page after a restart. All three say EXPERIMENTAL at
+the top: telling more than "something moved" from one router's signal is
+hard, and they can be wrong. SENSING itself is not.
+
+| Page | What it shows |
+|---|---|
+| **SCOPE** | A radar of the WiFi paths around the board (your router plus the three busiest other transmitters on its channel), each lighting up as something moves through it |
+| **SNEAK** | A game: START RUN (ENTER on the T-Deck), hold still 5 s, then cross the room in 10 s without tripping the sensor. LEVEL (L) sets how still you have to be |
+| **VITALS** | Sit still between the board and the router and it reads your breathing from the signal: breaths a minute, rhythm, depth, a waterfall, a breath loop and a lab log, and a heart rate only when it is sure. NEW SESSION (N) starts again. A toy, not a medical device |
+
+**Which boards.** Every ESP32 and ESP32-S3 build (`extra_script.py` adds
+`SENSE_CYD_APP`): the CYDs, the AWOK, the CrowPanel 7, the T-Watch, the
+T-Deck Plus, the StickS3, the Cardputer ADV and the Freenove S3s. Not the
+ESP32-C5 boards (NM-CYD-C5, Marauder V8, Waveshare C5): their radio's
+channel-state calls differ, and upstream has not ported it there either.
+It costs about 33 KB of flash; its buffers (about 8.5 KB, more for SCOPE
+and VITALS) come from the heap only while the screen is open and go back
+when it closes (upstream v1.44's fix), so a board that never opens it
+scans with the heap it always had.
+
+**Console**: `SENSE OPEN`, `SENSE CLOSE`,
+`SENSE OPEN NOWIFI`, `SENSE NEXT` / `SENSE BACK` (the page), `SENSE SLEEP`
+/ `SENSE WAKE`, and `SENSE <cmd>` for the engine (`SENSE HELP` lists them:
+`cal`, `rates`, `stat`, `joins` ...). Upstream's `SENSE SHOT` is MuleSkin's
+`SHOT` on the dev builds.
+
+The motion model is ESP32Marauder's CsiMotionModel (MIT, justcallmekoko),
+as upstream's is. Not brought over: upstream's Tab5 sensing (its ESP32-C6
+radio, its own screens), the mascot's reactions on these screens
+(MuleSkin's mascot is compiled out) and the web emulator's DEMO room.
+
 ### Fixes brought over from upstream SquachWatch (v1.41-v1.49)
 
 - **Espressif's `BC:DD:C2` is no longer "Arlo"**: every ESP32 in that block
@@ -817,6 +887,9 @@ MuleSkin-CYD/
   PR #46), **VV-B0Y** (the 3.5" capacitive, PR #24) and **T0x0pl4sm4** (the
   Freenove S3 4.0", PR #51); the Marauder V8 bring-up is skizzophrenic's,
   on justcallmekoko's board.
+- HUMAN SENSING's motion model: ported from
+  [ESP32Marauder](https://github.com/justcallmekoko/ESP32Marauder)'s
+  CsiMotionModel (MIT), by **justcallmekoko**, by way of upstream SquachWatch.
 - AWOK 2.4" board port (ESP32-Marauder V6.1 hardware): **bkbroiler**,
   who did the actual pin-mapping and shared-bus touch-calibration work
   that made this board possible.
