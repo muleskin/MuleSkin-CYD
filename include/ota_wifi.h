@@ -86,6 +86,10 @@ int8_t      savedIndexOf(const char* ssid);   // -1 when it is not saved
 // nothing has joined since boot.
 uint32_t    joinedBssid(uint8_t out[6], int8_t* savedIdx);
 SavedResult savedResult(uint8_t i);
+// Saved network i's password, into the caller's buffer, which the caller
+// wipes: HUMAN SENSING joins a saved network itself, with no scan first
+// (upstream SquachWatch v1.42).
+bool        savedPassAt(uint8_t i, char* out, size_t cap);
 // Add a network, or replace the password of one already saved. False when
 // the list is full.
 bool        saveNetwork(const char* ssid, const char* pass);

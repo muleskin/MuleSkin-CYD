@@ -74,6 +74,9 @@ enum class SettingsRow : uint8_t {
     PUSH_HOME,       // ...while the home network is in view: AS SET / IMPORTANT / WITH YOU
     PUSH_DAILY,      // ...and the 8 PM summary: ON / OFF
     NIGHT_POWER,     // on the APPEARANCE page: NIGHT POWER OFF / DARK / DARK+WIFI
+#if defined(SENSE_CYD_APP)
+    SENSING,         // HUMAN SENSING: WiFi motion sensing on the board's own radio (opens the screen)
+#endif
     MY_ALERTS,       // MY ALERTS: the owner's own WiFi names to alert on (opens the screen)
     BACK,
     COUNT,

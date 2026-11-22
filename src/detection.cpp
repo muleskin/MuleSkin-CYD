@@ -819,7 +819,15 @@ bool DetectionEngine::init() {
         cfg.ampdu_rx_enable    = 0;
         cfg.ampdu_tx_enable    = 0;
         cfg.amsdu_tx_enable    = 0;
+#if defined(SENSE_CYD_APP)
+        // HUMAN SENSING reads channel state from this same driver: with
+        // csi_enable 0, esp_wifi_set_csi(true) fails (ESP_FAIL) on every try,
+        // and each try held the loop up for seconds (upstream SquachWatch's
+        // bench, 2026-11-08).
+        cfg.csi_enable         = 1;
+#else
         cfg.csi_enable         = 0;
+#endif
         cfg.mgmt_sbuf_num      = 6;    // the floor
         cfg.nvs_enable         = 0;
         const esp_err_t rc = esp_wifi_init(&cfg);
@@ -858,6 +866,7 @@ bool DetectionEngine::init() {
     filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT | WIFI_PROMIS_FILTER_MASK_DATA;
     esp_wifi_set_promiscuous_filter(&filter);
     esp_wifi_set_promiscuous_rx_cb([](void* buf, wifi_promiscuous_pkt_type_t) {
+        if (g_sniffMuted) return;   // HUMAN SENSING has the channel (include/detection.h)
         s_wifiRaw++;
         if (!g_engine) return;
         const wifi_promiscuous_pkt_t* pkt = (const wifi_promiscuous_pkt_t*)buf;
@@ -2374,6 +2383,7 @@ void DetectionEngine::drainBlackBox(uint32_t now) {
 // line each, through this. Off at boot. Vendor and name lose any comma so the
 // line stays CSV.
 volatile bool g_liveOn = false;
+volatile bool g_sniffMuted = false;   // HUMAN SENSING's SCOPE (include/detection.h)
 void printLive(const Detection& d, bool again) {
     char vendor[24], name[24];
     snprintf(vendor, sizeof vendor, "%s", vendorText(d));

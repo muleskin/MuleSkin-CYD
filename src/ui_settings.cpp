@@ -92,6 +92,11 @@ static const SettingsRow ALL_ROWS[] = {
     // what it has been told to ignore.
     SettingsRow::MY_ALERTS,
     SettingsRow::IGNORED_DEVICES,
+#if defined(SENSE_CYD_APP)
+    // Beside what the detector listens for: what the board's radio senses
+    // (the detector paused while HUMAN SENSING is up; upstream SquachWatch v1.42).
+    SettingsRow::SENSING,
+#endif
     // APPEARANCE opens the display page -- see APPEARANCE_ROWS. It sat at the
     // very top of this list, which put it under the first thumb that opened
     // the screen and got pressed by accident. Down here it sits with the other
@@ -273,6 +278,9 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::DETECTION_FILTER:
         case SettingsRow::MY_ALERTS:
         case SettingsRow::IGNORED_DEVICES:
+#if defined(SENSE_CYD_APP)
+        case SettingsRow::SENSING:
+#endif
             return RowGroupId::BEHAVIOR;
         case SettingsRow::APPEARANCE:
         case SettingsRow::REPLAY_INTRO:
@@ -908,6 +916,11 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
                      (unsigned)DetectionType::MINE - 1);
             value = valBuf;
             break;
+#if defined(SENSE_CYD_APP)
+        case SettingsRow::SENSING:
+            label = "HUMAN SENSING"; value = ">";   // opens the screen
+            break;
+#endif
         case SettingsRow::MY_ALERTS:
             label = "MY ALERTS";
             snprintf(valBuf, valBufN, "%u", (unsigned)MyAlerts::count());

@@ -198,7 +198,9 @@ enum class AppState : uint8_t {
     MEETING          = 39, // IN A MEETING: the red sign, from the main screen's bar. See ui_meeting.h.
     TIME_SYNC        = 40, // WIFI TIME: join a saved network, set the clock. See ui_timesync.h.
     TODAY            = 41, // TODAY: today's sightings by hour and type. See ui_today.h.
-    MY_ALERTS        = 42  // MY ALERTS, from Settings: the owner's own WiFi names. See ui_myalerts.h.
+    MY_ALERTS        = 42, // MY ALERTS, from Settings: the owner's own WiFi names. See ui_myalerts.h.
+    SENSING          = 43  // HUMAN SENSING (SENSE_CYD_APP builds): WiFi motion sensing on the board's
+                           // own radio, from Settings > HUMAN SENSING. See ui_sensing_cyd.h and sense_cyd.h.
 };
 
 enum class ButtonId : uint8_t {

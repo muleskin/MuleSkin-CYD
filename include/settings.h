@@ -223,6 +223,15 @@ namespace Settings {
     // name. See include/privacy.h. Off by default.
     bool       privacyMode();
     void       togglePrivacyMode();
+    // HUMAN SENSING (SENSE_CYD_APP builds; upstream SquachWatch v1.42): set
+    // while its screen is up, so a board switched off there boots back into
+    // it. Kept on every board so the settings file reads the same.
+    bool       sensing();
+    void       setSensing(bool on);
+    // Which HUMAN SENSING page was showing (0 SENSING .. 3 VITALS), so a
+    // restart comes back to it. Saved when the page is turned (upstream v1.49).
+    uint8_t    sensePage();
+    void       setSensePage(uint8_t p);
     bool       quietTrackers();
     void       toggleQuietTrackers();
     // Set the first time this watch's GPS answers: it is an S3 Plus, whose

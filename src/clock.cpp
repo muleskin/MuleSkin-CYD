@@ -6,6 +6,9 @@
 #include "ota_wifi.h"    // the WIFI command lists the saved networks
 #include "nvs_backup.h"  // NVS EXPORT / SET / RESTART: the web flasher's settings backup
 #include "detection.h"   // WINDOW N, for the bench; RADIO
+#if defined(SENSE_CYD_APP)
+#include "sense_cyd.h"   // SENSE <cmd>
+#endif
 #if defined(ARDUINO_ARCH_ESP32)
 #include <esp_phy_init.h> // RADIO FULLCAL
 #endif
@@ -639,6 +642,21 @@ void pollSerial() {
             OtaWifi::printSaved();
             continue;
         }
+#if defined(SENSE_CYD_APP)
+        // HUMAN SENSING on the bench (upstream SquachWatch v1.42-v1.49):
+        // SENSE OPEN / SENSE CLOSE / SENSE OPEN NOWIFI open or leave the screen,
+        // SENSE NEXT / BACK turn its page, SENSE SLEEP / WAKE its screen, and
+        // SENSE <cmd> goes to the engine (cal, rates, stat, ... SENSE HELP).
+        // MuleSkin's SHOT (dev builds) stands in for upstream's SENSE SHOT.
+        if (strcasecmp(line, "SENSE OPEN") == 0) { g_senseConsole = 1; continue; }
+        if (strcasecmp(line, "SENSE OPEN NOWIFI") == 0) { g_senseConsole = 3; continue; }   // as if none were saved
+        if (strcasecmp(line, "SENSE CLOSE") == 0) { g_senseConsole = 2; continue; }
+        if (strcasecmp(line, "SENSE NEXT") == 0)  { g_senseConsole = 4; continue; }   // the next page (SCOPE...)
+        if (strcasecmp(line, "SENSE BACK") == 0)  { g_senseConsole = 5; continue; }
+        if (strcasecmp(line, "SENSE SLEEP") == 0) { g_senseConsole = 6; continue; }   // the SLEEP button
+        if (strcasecmp(line, "SENSE WAKE") == 0)  { g_senseConsole = 7; continue; }
+        if (strncasecmp(line, "SENSE ", 6) == 0) { ::senseCydCommand(line + 6); continue; }
+#endif
         if (strcasecmp(line, "INVERT") == 0) { g_consoleInvert = true; continue; }
         if (strcasecmp(line, "ADC") == 0)    { g_consoleAdc = true; continue; }
         if (strcasecmp(line, "XYZZY") == 0)  { g_consoleXyzzy = true; continue; }

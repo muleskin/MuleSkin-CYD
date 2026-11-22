@@ -888,6 +888,7 @@ uint8_t     savedCount()          { readSaved(); return s_n; }
 const char* savedSsidAt(uint8_t i){ readSaved(); return i < s_n ? s_list[i].ssid : ""; }
 uint8_t     savedUse()            { readSaved(); return s_use; }
 SavedResult savedResult(uint8_t i){ readSaved(); return i < s_n ? s_list[i].result : SavedResult::UNTRIED; }
+bool savedPassAt(uint8_t i, char* out, size_t cap) { readSaved(); return i < s_n && passAt(i, out, cap); }
 int8_t savedIndexOf(const char* ssid) {
     readSaved();
     if (!ssid || !ssid[0]) return -1;

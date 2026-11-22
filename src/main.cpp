@@ -317,6 +317,13 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "ui_wifinets.h"
 #include "ui_myalerts.h"
 #include "my_alerts.h"
+#if defined(SENSE_CYD_APP)
+// HUMAN SENSING: WiFi motion sensing on the board's own radio
+// (include/sense_cyd.h; upstream SquachWatch v1.42-v1.49).
+#include "sense_store.h"
+#include "ui_sensing_cyd.h"
+#include "sense_cyd.h"
+#endif
 #include "flood_bench.h"
 #include "ui_boot.h"
 #include "ui_clear.h"
@@ -1231,11 +1238,22 @@ static bool s_nightDim = false;
 // NIGHT POWER's dark: the saver has the screen dimmed for the night, and it
 // goes all the way off, whatever DIM LEVEL says (see the power saver).
 static bool s_nightDark = false;
+#if defined(SENSE_CYD_APP)
+// HUMAN SENSING's SLEEP: the backlight off while sensing runs on (VITALS by
+// the bed all night); the next tap or key only wakes it. (Upstream v1.49.)
+static bool s_senseDark = false;
+static void applyBrightness();
+static void senseWake()  { if (!s_senseDark) return; s_senseDark = false; applyBrightness(); Serial.println("[sense] screen on"); }
+static void senseSleep() { if (s_senseDark) return; s_senseDark = true; applyBrightness(); Serial.println("[sense] SLEEP: screen off, sensing runs on"); }
+#endif
 static void applyBrightness() {
     uint8_t duty = s_screenDimmed ? Settings::dimLevel()
                  : s_nightDim    ? NightMode::duty(Settings::brightness())
                  :                 Settings::brightness();
     if (s_screenDimmed && s_nightDark) duty = 0;
+#if defined(SENSE_CYD_APP)
+    if (s_senseDark) duty = 0;
+#endif
 #if defined(TWATCH_S3)
     if (s_screenDimmed) {
         if (!s_panelAsleep) {
@@ -2184,6 +2202,19 @@ static uint8_t stickStopsBuild(StickPt* out, uint8_t cap) {
         return n;
     }
     if (state == AppState::OUTFIT_UNLOCK) return 0;   // a card: SELECT or BACK closes it
+#if defined(SENSE_CYD_APP)
+    if (state == AppState::SENSING) {
+        // The page dots (SCOPE, SNEAK, VITALS: the T-Deck) and the three
+        // buttons; on the StickS3 and the Cardputer, with no button bar, the
+        // banner, where a press re-calibrates (or, with no network saved,
+        // opens WIFI NETWORKS). HOME leaves, as from anywhere, and hands the
+        // radio back to the detector. (Upstream v1.42/v1.49.)
+        int16_t xs[4], ys[4];
+        const uint8_t k = uiSensingStops(w, h, xs, ys, 4);
+        for (uint8_t i = 0; i < k; i++) add(xs[i], ys[i]);
+        return n;
+    }
+#endif
 #if defined(CARDPUTER_ADV)
     if (cardTyping()) return 0;   // the keyboard types; ESC is BACK; nothing to point at
 #endif
@@ -2432,6 +2463,13 @@ static bool stickBackPoint(StickPt& at) {
             return put(x + bw / 2, y + bh / 2);
         }
         case AppState::LOCKED: return false;   // no way back but the PIN; HOME will not leave it either
+#if defined(SENSE_CYD_APP)
+        case AppState::SENSING: {   // its BACK button; none on the small boards, where BACK goes home
+            int16_t x, y;
+            if (!uiSensingBackStop(w, h, x, y)) return false;
+            return put(x, y);
+        }
+#endif
         // Everything else has no BACK that can be found without pressing
         // something (SYS_PROPS closes to the main screen, which is home).
         default:                    return false;
@@ -3511,6 +3549,16 @@ static void enterWifiNets() {
     transitionStart = millis();
     uiWifiNetsInit(*canvas);
 }
+#if defined(SENSE_CYD_APP)
+// HUMAN SENSING: the board's own radio, borrowed from the detector while this
+// screen is up (the sensing tick in loop(), include/sense_cyd.h). The engine's
+// buffers (~8.5 KB) come from the heap then, and only then.
+static void enterSensing() {
+    state = AppState::SENSING;
+    transitionStart = millis();
+    uiSensingInit(*canvas);
+}
+#endif
 // MY ALERTS, and the two trips to the keyboard it makes: the pattern, then
 // its label (or a new label for one already saved). The keyboard is the
 // WiFi password one in its plain-text mode; this says what it is typing for.
@@ -5663,6 +5711,29 @@ static void tdeckKeysTick(uint32_t now) {
     const char c = k == 0x0D ? '\n' : k == 0x08 ? '\b' : (char)k;
     if (state == AppState::WIFI_PASS) uiWifiPassKey(c, now);
     else if (state == AppState::PIN_ENTRY || state == AppState::LOCKED) uiPhoneKey(c);
+#if defined(SENSE_CYD_APP)
+    // HUMAN SENSING's buttons from the keyboard (upstream v1.49): Backspace is
+    // BACK, R re-calibrates, S is SLEEP (any key wakes), O goes straight back
+    // to the detector; , and . turn the page, ENTER and L run SNEAK, N starts
+    // a new VITALS session.
+    else if (state == AppState::SENSING && s_senseDark) senseWake();
+    else if (state == AppState::SENSING) {
+#if SENSE_RICH
+        if (uiSensingKey(c, now)) {}
+        else
+#endif
+        if (c == 0x08) s_tdeckBackKey = true;   // BACK, as the cursor presses it
+        else if (c == 'r' || c == 'R') {
+            senseCydCommand("cal");
+            Theme::showToast("RECALIBRATING", "Keep the room still for 15 s", Theme::AMBER);
+        } else if (c == 's' || c == 'S') {
+            senseSleep();
+        } else if (c == 'o' || c == 'O') {
+            Theme::showToast("SENSING OFF", "Detector back on", Theme::CYAN);
+            enterClear();
+        }
+    }
+#endif
 #if defined(SQW_TRACKBALL)
     // Anywhere else Backspace is BACK, as the trackball's cursor would press
     // it (upstream SquachWatch v1.46).
@@ -7573,6 +7644,69 @@ void loop() {
         touchJustUp = false;
     }
     engine.loop();
+#if defined(SENSE_CYD_APP)
+    // HUMAN SENSING on the board's own radio, and only while its screen is up:
+    // one radio, so the detector lets go of it the way it does for WIFI TIME
+    // (startUpdateRadio) and gets it back the moment the screen goes (BACK,
+    // HOME, the gear, a lock, an alert). The network is one of the saved
+    // ones (SETTINGS > SYSTEM > WIFI NETWORKS). (Upstream v1.42-v1.49.)
+    {
+        static bool s_senseNoWifi = false;   // SENSE OPEN NOWIFI: this session only
+        if (g_senseConsole && !Security::locked()) {   // SENSE OPEN / CLOSE / ... on the console (bench)
+            const uint8_t c = g_senseConsole; g_senseConsole = 0;
+            if ((c == 1 || c == 3) && state != AppState::SENSING) { s_senseNoWifi = c == 3; enterSensing(); }
+            else if (c == 2 && state == AppState::SENSING) enterClear();
+#if SENSE_RICH
+            else if ((c == 4 || c == 5) && state == AppState::SENSING) uiSensingSwipe(c == 4 ? 1 : -1);
+#endif
+            else if (c == 6 && state == AppState::SENSING) senseSleep();
+            else if (c == 7) senseWake();
+        }
+        // Booted straight into SENSING: the detector's radio gets 8 s to
+        // settle first. Started at once, the first join came up deaf (no
+        // CSI, every ping lost) on upstream's bench; opened later it never did.
+        // WIFI TIME (or AUTO TIME) mid-join keeps the radio until it is done.
+        const bool want = state == AppState::SENSING && millis() > 8000;
+        if (want && !senseCydRunning() && !s_timeSyncRadio && !OtaWifi::timeSyncBusy() &&
+            OtaWifi::state() == OtaWifi::State::OFF) {
+            // Remembered (NVS), so a board switched off in SENSING boots back
+            // into it (the boot screen's exit). Cleared below when the screen
+            // is left any way but a power cut.
+            if (!Settings::sensing()) Settings::setSensing(true);
+            engine.startUpdateRadio();
+            SenseStore::begin();
+            char ssid[33] = "", pass[65] = "";
+            // Which saved network: there is no scan here (the screen should
+            // come up at once), so the one marked USE if it has joined before,
+            // else the first that has, else USE. A board carried between two
+            // places has both saved, and USE may be the one that is not here.
+            const uint8_t nSaved = s_senseNoWifi ? 0 : OtaWifi::savedCount();
+            s_senseNoWifi = false;
+            if (nSaved) {
+                const uint8_t use = OtaWifi::savedUse() < nSaved ? OtaWifi::savedUse() : 0;
+                int k = OtaWifi::savedResult(use) == OtaWifi::SavedResult::JOINED ? use : -1;
+                for (uint8_t i = 0; i < nSaved && k < 0; i++)
+                    if (OtaWifi::savedResult(i) == OtaWifi::SavedResult::JOINED) k = i;
+                if (k < 0) k = use;
+                strncpy(ssid, OtaWifi::savedSsidAt((uint8_t)k), sizeof ssid - 1);
+                OtaWifi::savedPassAt((uint8_t)k, pass, sizeof pass);
+            }
+            senseCydStart(ssid, pass);
+            memset(pass, 0, sizeof pass);
+        } else if (!want && senseCydRunning()) {
+            if (s_senseDark) senseWake();   // left any other way (a lock, an alert): the screen comes back
+            if (Settings::sensing()) Settings::setSensing(false);
+            senseCydStop();
+            SenseStore::end();
+            engine.stopUpdateRadio();
+            Serial.println("[sense] detector back on");
+        } else if (!want && state != AppState::SENSING && Settings::sensing()) {
+            Settings::setSensing(false);   // left before the engine had started
+        }
+        senseCydTick();
+        SenseStore::tick(now);
+    }
+#endif
 #if defined(CYD_GPS)
     cydGpsTick(millis());
 #endif
@@ -7975,7 +8109,11 @@ void loop() {
                       state == AppState::SETTINGS || state == AppState::OUTFIT ||
                       state == AppState::DETECTION_FILTER ||
                       state == AppState::IGNORE_LIST || state == AppState::POWER_SAVER ||
-                      state == AppState::SECURITY || state == AppState::STATUS_LIGHT) &&
+                      state == AppState::SECURITY || state == AppState::STATUS_LIGHT
+#if defined(SENSE_CYD_APP)
+                      || state == AppState::SENSING
+#endif
+                      ) &&
         Theme::settingsButtonHit(tp.x, tp.y) &&
         // ...but not where the watch/hunt pill is sitting. The gear's tap box
         // is 55x50, much larger than its 28px glyph, so it reaches into the
@@ -7991,7 +8129,11 @@ void loop() {
         }
         else if (state == AppState::OUTFIT || state == AppState::DETECTION_FILTER ||
             state == AppState::IGNORE_LIST || state == AppState::POWER_SAVER ||
-            state == AppState::SECURITY) enterSettings();
+            state == AppState::SECURITY
+#if defined(SENSE_CYD_APP)
+            || state == AppState::SENSING
+#endif
+            ) enterSettings();
         else if (state == AppState::SETTINGS) {
             // The gear on a sub-page goes back up a level, the way it does
             // from every other screen Settings opens.
@@ -8078,6 +8220,10 @@ void loop() {
                 // board gets on with its day. Not over the first-boot
                 // walkthrough, which has a screen of its own to finish.
                 else if (OtaCore::availableVersion()[0] && !Security::locked()) enterSysProps();
+#if defined(SENSE_CYD_APP)
+                // Switched off with HUMAN SENSING up: straight back to it.
+                else if (Settings::sensing() && !Security::locked()) enterSensing();
+#endif
                 else                              enterClear();
             }
             break;
@@ -9305,6 +9451,13 @@ void loop() {
                         case SettingsRow::SECURITY:    enterSecurity(); break;
                         case SettingsRow::IGNORED_DEVICES:  enterIgnoreList(); break;
                         case SettingsRow::MY_ALERTS:        enterMyAlerts(); break;
+#if defined(SENSE_CYD_APP)
+                        case SettingsRow::SENSING:
+                            // Opens HUMAN SENSING; the detector pauses while it is up.
+                            Theme::showToast("HUMAN SENSING", "Detector paused while this is open", Theme::CYAN);
+                            enterSensing();
+                            break;
+#endif
                         // These ask first -- see the confirm panel over in
                         // ui_settings. A row earns one when tapping it a
                         // second time does not put things back: calibration
@@ -9541,6 +9694,43 @@ void loop() {
             }
             break;
         }
+#if defined(SENSE_CYD_APP)
+        case AppState::SENSING: {
+            drawTwoBand([&](TFT_eSPI& t, bool advance) { uiSensingTick(t, now, advance); });
+            // A tap acts on release, where the finger went down.
+            static bool sGesture = false;
+            static int  sDownX = 0, sDownY = 0, sLastX = 0, sLastY = 0;
+            // Asleep (SLEEP): the touch that wakes it does nothing else.
+            if (s_senseDark) { if (touchJustUp) { senseWake(); lastTouch = now; sGesture = false; } break; }
+            if (touchJustDown) { sGesture = true; sDownX = sLastX = tp.x; sDownY = sLastY = tp.y; }
+            if (tp.valid) { sLastX = tp.x; sLastY = tp.y; }
+            if (touchJustUp && sGesture && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
+                sGesture = false;
+#if SENSE_RICH
+                // A sideways drag of 60 px or more is a swipe to the next or
+                // previous screen; anything else is a tap where it went down.
+                const int sdx = sLastX - sDownX, sdy = sLastY - sDownY;
+                if (sdx * sdx > 60 * 60 && sdx * sdx > 2 * sdy * sdy) { uiSensingSwipe(sdx < 0 ? 1 : -1); lastTouch = now; break; }
+#endif
+                const SensingTap tap = uiSensingTap(sDownX, sDownY, tft.width(), tft.height(), now);
+                if (tap != SensingTap::NONE) lastTouch = now;
+                if (tap == SensingTap::BACK) {
+                    enterSettings();
+                } else if (tap == SensingTap::RECAL) {
+                    senseCydCommand("cal");
+                    Theme::showToast("RECALIBRATING", "Keep the room still for 15 s", Theme::AMBER);
+                } else if (tap == SensingTap::ADD_WIFI) {
+                    // No saved network: straight to the list to add one. Leaving
+                    // SENSING hands the radio back, which the add screen's scan needs.
+                    enterWifiNets();
+                } else if (tap == SensingTap::SLEEP) {
+                    // The screen off; sensing runs on. A tap wakes it.
+                    senseSleep();
+                }
+            }
+            break;
+        }
+#endif
         case AppState::MY_ALERTS: {
             drawTwoBand([&](TFT_eSPI& t, bool) { uiMyAlertsTick(t, now); });
             if (touchJustDown) {

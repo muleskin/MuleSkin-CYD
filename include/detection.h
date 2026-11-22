@@ -46,7 +46,12 @@ void     radioReport(bool withScan);   // the RADIO console command
 bool     wifi5Enabled();                // 5 GHz on, and the radio accepted some channels
 void     setWifi5Enabled(bool on);      // takes effect at the next sweep
 #endif
-extern char g_bootRadioLine[192];     // how the radios started this boot
+extern char g_bootRadioLine[192];
+// HUMAN SENSING on the boards with the extra screens (SENSE_RICH) listens to
+// the whole channel while it has the radio, for SCOPE's paths. The detector's
+// promiscuous handler stays installed, so it is told to drop what it is fed
+// until sensing hands the radio back. (Upstream SquachWatch v1.49.)
+extern volatile bool g_sniffMuted;     // how the radios started this boot
 uint32_t advertsSeen();      // adverts the radio has handed over since boot, seatbelt or not
 const volatile uint32_t* advertKinds();   // [ind, direct, scan, nonconn, other] since boot
 // The scan window, 1..100 of the 100 ms interval, changed live: WINDOW N on

@@ -43,6 +43,18 @@ env.Append(BUILD_FLAGS=['-DSQW_ENV=\\"%s\\"' % env["PIOENV"]])
 # a pre: script land before the framework's and lose). C accepts it too.
 env.Append(BUILD_FLAGS=["-fno-exceptions"])
 
+# HUMAN SENSING (SETTINGS > HUMAN SENSING, src/sense_cyd/; upstream SquachWatch
+# v1.42-v1.49) in every build for an ESP32 or an ESP32-S3. Not the ESP32-C5
+# boards (their radio's channel-state calls differ: a port of its own, which
+# upstream has not made either) and not the CrowPanel bench builds that have
+# no app. It costs ~33 KB of flash and ~0.3 KB of fixed RAM; its ~8.5 KB of
+# buffers come from the heap only while the screen is open and go back when
+# it closes (upstream v1.44: v1.42 had them fixed, and CYDs short of heap
+# went deaf), so a board that never opens it scans with the heap it had.
+_SENSE_SKIP = ("crowpanel7-paneltest", "crowpanel7-probe", "crowpanel7-touchtrace", "crowpanel7-native")
+if env.BoardConfig().get("build.mcu", "") in ("esp32", "esp32s3") and env["PIOENV"] not in _SENSE_SKIP:
+    env.Append(BUILD_FLAGS=["-DSENSE_CYD_APP=1"])
+
 
 # ---------------------------------------------------------------------------
 # TFT_eSPI, ESP32-C5. Only for the nm-cyd-c5 environment.
