@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Freenove 3.2\")",
-  "version": "3.10.0",
-  "release_name": "Snooze till morning",
-  "whats_new": ["SNOOZE until morning (clock set)", "Ignore and snooze follow new address", "Small screens: labels no longer overlap"],
+  "version": "3.11.0",
+  "release_name": "Upstream catch-up",
+  "whats_new": ["Fixes: hidden-camera ESP32, LoRa crash", "MY ALERTS: your own WiFi names", "RING a tracker (S3/C5 boards)", "LoRaWAN alerts, T-Deck trackball"],
   "new_install_prompt_erase": true,
   "builds": [
     {
