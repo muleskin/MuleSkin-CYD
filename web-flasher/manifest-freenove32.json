@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Freenove 3.2\")",
-  "version": "3.11.0",
-  "release_name": "Upstream catch-up",
-  "whats_new": ["Fixes: hidden-camera ESP32, LoRa crash", "MY ALERTS: your own WiFi names", "RING a tracker (S3/C5 boards)", "LoRaWAN alerts, T-Deck trackball"],
+  "version": "3.12.0",
+  "release_name": "Terminal & sensing",
+  "whats_new": ["TERMINAL MODE replaces BORING MODE", "HUMAN SENSING (WiFi motion, beta)", "StickS3 and Cardputer controls", "Tab5 build (build-it-yourself)"],
   "new_install_prompt_erase": true,
   "builds": [
     {
