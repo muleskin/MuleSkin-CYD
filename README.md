@@ -580,6 +580,24 @@ were ported (v3.5.0), adapted where the two have grown apart:
   hardware. (Upstream's emulator GPS replay and main-screen GPS label were
   not brought over.)
 
+### Boards brought over from upstream SquachWatch (v1.41-v1.46), build-it-yourself
+
+Not on the flasher until they have been run on a board here
+(`pio run -e <env> -t upload`):
+
+- `waveshare-c5-28` -- the Waveshare ESP32-C5-Touch-LCD-2.8 (PR #62 by
+  bobsdinner-cell): 2.4 + 5 GHz, CST3530 touch, the panel's reset and
+  backlight behind a CH32V003 helper on I2C. See docs/WAVESHARE-C5-28.md.
+- `freenove-s3-gps` and `freenove-s3-35-gps` -- the Freenove S3 2.8" and 3.5"
+  with a GPS module on the UART port's RXD (GPIO44): positions on SD rows and
+  alerts, the clock from GPS, WARDRIVE to the SD_MMC card.
+- `rlphantom-r-alt` -- the RL Phantom 2.4" resistive panel batch that shows a
+  noise band and mirrored text on `rlphantom-r` (#88): the ILI9341_2 init and
+  inversion on.
+
+(The M5Stack Tab5 is not brought over: its radio is a separate ESP32-C6 with
+firmware of its own, and upstream still calls it a test build.)
+
 ### Fixes brought over from upstream SquachWatch (v1.41-v1.49)
 
 - **Espressif's `BC:DD:C2` is no longer "Arlo"**: every ESP32 in that block
