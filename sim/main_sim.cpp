@@ -440,6 +440,22 @@ int main(int argc, char** argv) {
     if (getenv("MULESKINSIM_LEGEND")) MuleSkin::previewLegend(true);
     // MULESKINSIM_PRIVACY=1: PRIVACY MODE on, for shots of the masked screens.
     if (getenv("MULESKINSIM_PRIVACY") && !Settings::privacyMode()) Settings::togglePrivacyMode();
+    // MULESKINSIM_TERMINAL=1: TERMINAL MODE on (the dashboard in the radar's
+    // place). Only ever switched ON here: --bg with BLACK has already turned
+    // the same switch on, and turning it off would take BLACK away again.
+    // (Upstream v1.43's SQUACHSIM_TERMINAL.)
+    if (getenv("MULESKINSIM_TERMINAL") && !Settings::boringMode()) Settings::toggleBoringMode();
+    // MULESKINSIM_TMSORT=3 (or 3-): the terminal LOG sorted by that heading, 0 TIME .. 3 dBm; '-' flips it.
+    if (const char* ts = getenv("MULESKINSIM_TMSORT")) uiTerminalSetSort((uint8_t)atoi(ts), strchr(ts, '-') ? -1 : 1);
+    // MULESKINSIM_BATT=54 (or 54c, on the cable): a battery for TERMINAL
+    // MODE's LOG title bar, the way the battery boards report theirs. Unset:
+    // no battery, as on the CYDs.
+    if (getenv("MULESKINSIM_BATT")) uiClearSetBatterySource([](uint8_t& pct, bool& chg) {
+        const char* b = getenv("MULESKINSIM_BATT");
+        pct = (uint8_t)atoi(b);
+        chg = strchr(b, 'c') != nullptr;
+        return true;
+    });
     // MULESKINSIM_LTBRIGHT=N: the STATUS LIGHT's BRIGHTNESS step, 1..7.
     if (const char* lb = getenv("MULESKINSIM_LTBRIGHT"))
         for (int g = 0; g < 8 && Settings::lightBrightness() != atoi(lb); g++) Settings::cycleLightBrightness();

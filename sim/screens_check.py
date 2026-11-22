@@ -69,6 +69,13 @@ SCREENS = [
     # the TAP AGAIN line sits above it -- on the CYD and on the small card.
     ("alert-snooze",  "alert",      ["--alert", "1"], {"MULESKINSIM_SNOOZE": "30 MIN"}),
     ("alert-snooze-240", "alert",   ["--alert", "1", "--size", "240x135"], {"MULESKINSIM_SNOOZE": "30 MIN"}),
+    # TERMINAL MODE (the BORING MODE switch): the main screen as a desktop of
+    # windows -- the sortable LOG with the battery in its title bar, AIR,
+    # COUNTS and LATEST -- on the CYD, and the LOG alone on the StickS3 and
+    # the Cardputer. Sorted by dBm on the CYD, so the heading strip's lit tab
+    # and the sorted column's band are in the picture too. (Upstream v1.43.)
+    ("terminal",      "clear",      [], {"MULESKINSIM_TERMINAL": "1", "MULESKINSIM_BATT": "80", "MULESKINSIM_TMSORT": "3"}),
+    ("terminal-240",  "clear",      ["--size", "240x135"], {"MULESKINSIM_TERMINAL": "1", "MULESKINSIM_BATT": "80"}),
 ]
 
 
