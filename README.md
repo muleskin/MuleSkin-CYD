@@ -632,7 +632,7 @@ are Squachy's), the EXT SCREEN, the speaker tones and WARDRIVE SOUND (no
 sound layer for the boards' codecs here), gps-status.log, and the SquachMesh,
 SCAN and desk screens' stops.
 
-### Boards brought over from upstream SquachWatch (v1.41-v1.46), build-it-yourself
+### Boards brought over from upstream SquachWatch (v1.41-v1.47), build-it-yourself
 
 Not on the flasher until they have been run on a board here
 (`pio run -e <env> -t upload`):
@@ -646,9 +646,13 @@ Not on the flasher until they have been run on a board here
 - `rlphantom-r-alt` -- the RL Phantom 2.4" resistive panel batch that shows a
   noise band and mirrored text on `rlphantom-r` (#88): the ILI9341_2 init and
   inversion on.
-
-(The M5Stack Tab5 is not brought over: its radio is a separate ESP32-C6 with
-firmware of its own, and upstream still calls it a test build.)
+- `tab5` (BETA, upstream v1.47) -- the M5Stack Tab5: an ESP32-P4 with a 5"
+  1280x720 touch screen (the app draws 640x360, doubled) and no radio of its
+  own. WiFi and Bluetooth come from the ESP32-C6 beside it over ESP-Hosted,
+  running upstream's sniff extension (`tools/tab5-c6/`); on first boot the
+  app offers to write that firmware to the C6 itself. No SD card, WiFi
+  updates, WIFI TIME or PUSH ALERTS on it yet, and no HUMAN SENSING. Never
+  run on a board here. See docs/TAB5.md.
 
 ### TERMINAL MODE, brought over from upstream SquachWatch (v1.43-v1.49)
 
