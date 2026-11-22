@@ -130,6 +130,15 @@ UI_SRCS  := $(SRC)/theme.cpp \
 # with a scripted finger. Only here: the live and web builds already compile it.
 SIM_SRCS := $(SIM_DIR)/main_sim.cpp $(SIM_DIR)/detection_sim.cpp $(SRC)/touch_cal.cpp
 
+# HUMAN SENSING's screen (the `sensing` screen; upstream SquachWatch v1.42-v1.49):
+# the real screen and store from src/sense_cyd/, fed by sim/sense_cyd_sim.cpp in
+# place of the radio. Built with SENSE_CYD_APP on these objects alone
+# (build/sense/): the flag also adds a Settings row, and the rest of the
+# emulator must keep drawing the Settings the goldens were made from.
+# SENSE_RICH_SIM: it also draws SCOPE, SNEAK and VITALS (the T-Deck's and the
+# Freenove S3s' screens) at any size; MULESKINSIM_PAGE=1..3 picks one.
+SENSE_SRCS := $(SRC)/sense_cyd/ui_sensing_cyd.cpp $(SRC)/sense_cyd/sense_store.cpp $(SRC)/sense_cyd/sense_vitals.cpp $(SIM_DIR)/sense_cyd_sim.cpp
+
 # The interactive target additionally compiles the firmware's real
 # main.cpp -- its actual setup()/loop(), state machine, gesture handling
 # and touch mapping -- plus the two touch modules main.cpp includes.
@@ -162,13 +171,14 @@ OBJ_DIR  := build
 UI_OBJS   := $(patsubst %.cpp,$(OBJ_DIR)/ui/%.o,$(notdir $(UI_SRCS)))
 SIM_OBJS  := $(patsubst %.cpp,$(OBJ_DIR)/sim/%.o,$(notdir $(SIM_SRCS)))
 LIVE_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/live/%.o,$(notdir $(LIVE_SRCS)))
-DEPS      := $(UI_OBJS:.o=.d) $(SIM_OBJS:.o=.d) $(LIVE_OBJS:.o=.d)
+SENSE_OBJS := $(patsubst %.cpp,$(OBJ_DIR)/sense/%.o,$(notdir $(SENSE_SRCS)))
+DEPS      := $(UI_OBJS:.o=.d) $(SIM_OBJS:.o=.d) $(LIVE_OBJS:.o=.d) $(SENSE_OBJS:.o=.d)
 
 # Where a .cpp can come from. make looks in this directory first (the
 # cwd always wins over vpath), then the firmware tree -- so a file here
 # that shared a name with one in src/ would silently shadow it. None do
 # today; the guard keeps it that way.
-vpath %.cpp $(SRC) $(SIM_DIR)
+vpath %.cpp $(SRC) $(SIM_DIR) $(SRC)/sense_cyd
 CLASH := $(filter $(notdir $(wildcard $(SIM_DIR)/*.cpp)),$(notdir $(wildcard $(SRC)/*.cpp)))
 ifneq ($(CLASH),)
 $(error same basename in $(SRC) and $(SIM_DIR), vpath would pick the wrong one: $(CLASH))
@@ -189,7 +199,11 @@ $(OBJ_DIR)/live/%.o: %.cpp Makefile
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(LIVE_FLAGS) -MMD -MP -c -o $@ $<
 
-$(BIN): $(UI_OBJS) $(SIM_OBJS)
+$(OBJ_DIR)/sense/%.o: %.cpp Makefile
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -DSENSE_CYD_APP=1 -DSENSE_RICH_SIM=1 -MMD -MP -c -o $@ $<
+
+$(BIN): $(UI_OBJS) $(SIM_OBJS) $(SENSE_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ -lm
 
 $(LIVE_BIN): $(UI_OBJS) $(LIVE_OBJS)

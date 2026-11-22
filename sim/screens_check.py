@@ -76,6 +76,14 @@ SCREENS = [
     # and the sorted column's band are in the picture too. (Upstream v1.43.)
     ("terminal",      "clear",      [], {"MULESKINSIM_TERMINAL": "1", "MULESKINSIM_BATT": "80", "MULESKINSIM_TMSORT": "3"}),
     ("terminal-240",  "clear",      ["--size", "240x135"], {"MULESKINSIM_TERMINAL": "1", "MULESKINSIM_BATT": "80"}),
+    # HUMAN SENSING (upstream v1.42-v1.49), on the emulator's pretend radio
+    # (sim/sense_cyd_sim.cpp): a room someone walked through and then sat
+    # still in -- the waterfall, the tiles, the MOTION graph and the PRESENCE
+    # banner with its hold ring -- at 320x240 with the button bar, and on the
+    # StickS3 and the Cardputer, which have none. The emulator draws the page
+    # dots the T-Deck and the Freenove S3s show (SENSE_RICH_SIM).
+    ("sensing",       "sensing",    [], {"MULESKINSIM_SENSE": "presence"}),
+    ("sensing-240",   "sensing",    ["--size", "240x135"], {"MULESKINSIM_SENSE": "presence"}),
 ]
 
 

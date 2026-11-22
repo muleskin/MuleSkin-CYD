@@ -61,6 +61,13 @@
 #include "ui_wifinets.h"
 #include "ui_myalerts.h"
 #include "my_alerts.h"
+// HUMAN SENSING's screen, built with SENSE_CYD_APP on its own objects (see the
+// Makefile); its header is read with the flag so the calls are declared.
+#define SENSE_CYD_APP 1
+#include "ui_sensing_cyd.h"
+#undef SENSE_CYD_APP
+void simSenseBegin(uint32_t now);   // sim/sense_cyd_sim.cpp
+void simSenseStep(uint32_t now);
 #include "png_writer.h"
 #include "touch_cal.h"
 
@@ -600,6 +607,11 @@ int main(int argc, char** argv) {
         else if (screen == "myalerts") uiMyAlertsTick(frame, t);
         else if (screen == "alertkbd") uiWifiPassTick(frame, t);
         else if (screen == "wifiadd")  uiWifiAddTick(frame, t, engine);
+        else if (screen == "sensing") {
+            // HUMAN SENSING at this panel's size; MULESKINSIM_SENSE picks the room.
+            simSenseStep(t);
+            uiSensingTick(frame, t);
+        }
         else if (screen == "poses") {
             // Every arm movement he has, for the costume test in
             // sim/test_outfit_poses.py: IDLE, WAVE, then each ActPose, each at
@@ -764,6 +776,10 @@ int main(int argc, char** argv) {
         else uiWifiPassInitText(frame, "WIFI NAME TO WATCH", "* = anything, ? = one", "veh9*", MyAlerts::PAT_MAX, false);
     }
     else if (screen == "wifiadd")    uiWifiAddInit(frame);
+    else if (screen == "sensing") {
+        simSenseBegin(now);
+        uiSensingInit(frame);
+    }
     else if (screen == "dex") {
         // Eleven of the seventeen caught, through the engine's own door, with
         // a record for each so the cards have something to say. --pose N

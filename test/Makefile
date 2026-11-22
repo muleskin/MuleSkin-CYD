@@ -157,6 +157,12 @@ sig_extra_test_SRCS          := $(SRC)/signatures.cpp
 # Where a detection sits on the radar scope (src/radar_blip.cpp).
 radar_blip_test_SRCS         := $(SRC)/radar_blip.cpp
 
+# HUMAN SENSING's chest signal (VITALS, the T-Deck and the Freenove S3s)
+# through its 8-bit input (upstream SquachWatch v1.49).
+TESTS += chestsig_test
+chestsig_test_SRCS  := $(SRC)/sense_cyd/csi_vitals.cpp
+chestsig_test_FLAGS := -DSENSE_MODEL_HOST=1
+
 # The firmware update's signature check (src/ota_sig.cpp), against real
 # mbedtls -- only where mbedtls is installed (CI: libmbedtls-dev). Probed by
 # preprocessing mbedtls_compat.h, which includes <mbedtls/version.h>.
