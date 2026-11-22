@@ -507,12 +507,6 @@ static const ConfirmText CONFIRMS[] = {
     { SettingsRow::RESET_STATS, "RESET STATS?",
       "Clears every detection total.",
       "Outfits earned by count re-lock.", "RESET" },
-    // The second line is the whole reason this row has a panel: boring mode
-    // hides every MuleSkin row, so the first thing it does is take away the
-    // OUTFIT row, and the way back is not obvious once it has.
-    { SettingsRow::BORING_MODE, "BORING MODE?",
-      "Hides MuleSkin and his rows,",
-      "OUTFIT included. Same row undoes.", "TURN ON" },
     { SettingsRow::REPLAY_INTRO, "REPLAY INTRO?",
       "Runs the first-boot walkthrough",
       "again, from the top.", "REPLAY" },
@@ -877,7 +871,9 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             label = "ROTATION LOCK"; value = Settings::rotationLocked() ? "ON" : "OFF";
             break;
         case SettingsRow::BORING_MODE:
-            label = "BORING MODE"; value = Settings::boringMode() ? "ON" : "OFF";
+            // The BORING MODE switch, renamed: the same NVS key, so a board
+            // that had BORING MODE on wakes up in TERMINAL MODE. (Upstream v1.43.)
+            label = "TERMINAL MODE"; value = Settings::boringMode() ? "ON" : "OFF";
             break;
         case SettingsRow::CONFIDENCE:
             label = "ALERT FILTER"; value = Settings::minConfidenceLabel();
@@ -1221,7 +1217,7 @@ void uiSettingsTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
             // value goes, rather than gone. See isMuleSkinOnlyRow().
             const bool off = Settings::boringMode() && isMuleSkinOnlyRow(items[idx].row);
             if (off) {
-                drawRow(t, w, y, itemH, label, "boring mode", false, Theme::W95_SHADOW, h > w);
+                drawRow(t, w, y, itemH, label, "terminal", false, Theme::W95_SHADOW, h > w);
             } else if (isTwoLineRow(items[idx].row)) {
                 drawTwoLineRow(t, w, y, itemH, label, value, groupColor(items[idx].group),
                                items[idx].row == SettingsRow::BACKGROUND);

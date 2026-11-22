@@ -50,3 +50,26 @@ bool uiClearNearbyHit(int x, int y);
 // 0 for none. Set by main.cpp every pass.
 void uiClearSetPushWaiting(uint8_t n);
 
+// The battery, for TERMINAL MODE's LOG title bar. A board with a battery
+// hands over a function that fills in the percent and whether it is on the
+// cable, and returns false while no cell is plugged in. Boards without a
+// battery never set one, and the title bar shows none. (Upstream v1.43.)
+typedef bool (*BatterySource)(uint8_t& pct, bool& charging);
+void uiClearSetBatterySource(BatterySource fn);
+bool uiClearHasBattery();   // a source is set: this board can show a battery
+
+// TERMINAL MODE (Settings::boringMode(): the BORING MODE switch, renamed):
+// the windows on the home screen. (Upstream SquachWatch v1.43-v1.49.)
+// True while a gesture that started on a window is theirs.
+bool uiTerminalTouch(int x, int y, bool valid, bool justDown, uint32_t now);
+// The device the terminal asked to open (the LOG's WATCH/HUNT/INFO/IGNORE
+// panel), once.
+bool uiTerminalTakeOpen(uint8_t mac[6]);
+// The LOG's order without a tap (emulator shots): 0 TIME, 1 KIND, 2 DEVICE, 3 dBm;
+// dir 1 is the first tap's order, -1 the flipped one.
+void uiTerminalSetSort(uint8_t col, int8_t dir);
+// The terminal's cursor stops for the boards that drive a cursor (StickS3,
+// Cardputer, the T-Deck's trackball). Boxes, so the cursor can light each
+// one whole.
+uint8_t uiTerminalStops(int16_t* rx, int16_t* ry, int16_t* rw, int16_t* rh, uint8_t cap);
+

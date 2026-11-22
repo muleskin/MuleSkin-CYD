@@ -1293,8 +1293,14 @@ static void applyBrightness() {
 // setCpuFrequencyMhz() reconfigures peripherals, so calling it every frame
 // would be both wasteful and a good way to find a driver's re-entrancy bug.
 static uint16_t s_cpuMhzApplied = 240;
+// TERMINAL MODE at rest (see terminalRestBudgetUs): 80 MHz. Not on the
+// CrowPanel 7, whose RGB panel is fed by the CPU. (Upstream v1.49.)
+static bool s_termRest = false;
 static void applyCpuClock() {
     uint16_t want = Settings::cpuMhz();
+#if !defined(CROWPANEL7)
+    if (s_termRest && want > 80) want = 80;
+#endif
 #if defined(TWATCH_S3)
     // Asleep, the watch only listens and waits for a tap: SLEEP CPU, which
     // never goes above the screen-on clock. About 25 mA at 80 instead of 240.
@@ -2066,6 +2072,14 @@ static bool clearWatchAt(int x, int y) { return uiClearWatchPillHit(x, y); }
 static uint8_t s_stickRowsN = 0;
 // Whether the screen has anything worth pointing at yet: a scan's results.
 static bool    s_stickHasRows = false;
+// A screen that hands over its own targets as rectangles (TERMINAL MODE:
+// its hit tests act, so they cannot be swept): the stops are the centres,
+// and the highlight fills the rectangle itself. A zero rectangle is a stop
+// with no button to light (the menu, the clock): a frame round its point.
+// (Upstream v1.43.)
+struct StickRect { int16_t x, y, w, h; };
+static StickRect s_stickRect[STICK_STOPS_MAX];
+static bool      s_stickRectOn = false;
 
 // How tall `id` is where it is, measured down a column through (cx, cy).
 template <typename F>
@@ -2098,6 +2112,7 @@ static uint8_t stickStopsBuild(StickPt* out, uint8_t cap) {
     uint8_t n = 0;
     s_stickRowsN = 0;
     s_stickHasRows = false;
+    s_stickRectOn = false;
     auto add = [&](int x, int y, uint8_t kind = 0) { if (n < cap) out[n++] = { (int16_t)x, (int16_t)y, kind }; };
     if (s_infoPending && (state == AppState::LOG || state == AppState::ALERT)) {
         add(w / 2, h - 17);             // MORE / GOT IT
@@ -2108,6 +2123,30 @@ static uint8_t stickStopsBuild(StickPt* out, uint8_t cap) {
         int16_t xs[3], ys[3];
         uiZoneCardStops(w, h, xs, ys);
         for (int i = 0; i < 3; i++) add(xs[i], ys[i]);
+        return n;
+    }
+    if (state == AppState::CLEAR && Settings::boringMode()) {
+        // TERMINAL MODE: the bar, the clock, the menu and the watch pill as
+        // on the radar, then the terminal's headings, rows, scroll arrows and
+        // LATEST, each lit whole. A heading sorts (again flips it), a row is
+        // picked (again opens its WATCH / HUNT / INFO / IGNORE panel), LATEST
+        // opens its device. (Upstream v1.43.)
+        auto addR = [&](int x, int y, int rw, int rh) {
+            if (n < cap) { s_stickRect[n] = { (int16_t)x, (int16_t)y, (int16_t)rw, (int16_t)rh }; add(x + rw / 2, y + rh / 2); }
+        };
+        auto addP = [&](int x, int y) {   // no button to light: a frame round it
+            if (n < cap) { s_stickRect[n] = { 0, 0, 0, 0 }; add(x, y); }
+        };
+        const Theme::ButtonBarGeom bar = Theme::computeButtonBar(w, h);
+        for (int b = 0; b < 3; b++) addR(bar.x[b], bar.y, bar.w[b], bar.h);   // WIFI TIME, LOG, IN MEETING
+        StickPt c;
+        if (stickSweep(clearClockAt, c)) addP(c.x, c.y);
+        addP(13, 11);                   // the menu
+        if (stickSweep(clearWatchAt, c)) addP(c.x, c.y);
+        int16_t rx[STICK_STOPS_MAX], ry[STICK_STOPS_MAX], rw[STICK_STOPS_MAX], rh[STICK_STOPS_MAX];
+        const uint8_t k = uiTerminalStops(rx, ry, rw, rh, STICK_STOPS_MAX);
+        for (uint8_t i = 0; i < k; i++) addR(rx[i], ry[i], rw[i], rh[i]);
+        s_stickRectOn = true;
         return n;
     }
     if (state == AppState::CLEAR) {
@@ -2776,8 +2815,13 @@ static void stickDrawCursor(TFT_eSPI& t, uint32_t now) {
     // The button's rectangle: grown from the cursor while the id holds.
     int x0 = 0, x1 = 0, y0 = 0, y1 = 0;
     bool region = false;
-    const int id = (p.kind == 1 || p.kind == 2) ? -1 : stickRegionId(p.x, p.y);
-    if (id >= 0) {
+    const int id = (p.kind == 1 || p.kind == 2 || s_stickRectOn) ? -1 : stickRegionId(p.x, p.y);
+    if (s_stickRectOn) {
+        // The screen named the rectangle itself (TERMINAL MODE).
+        const StickRect& r = s_stickRect[s_stickStop];
+        x0 = r.x; y0 = r.y; x1 = r.x + r.w - 1; y1 = r.y + r.h - 1;
+        region = r.w >= 6 && r.h >= 6;
+    } else if (id >= 0) {
         x0 = x1 = p.x; y0 = y1 = p.y;
         while (x0 > 0     && stickRegionId(x0 - 1, p.y) == id) x0--;
         while (x1 < w - 1 && stickRegionId(x1 + 1, p.y) == id) x1++;
@@ -3173,11 +3217,17 @@ static void openConfirmFor(const Detection* d) {
     s_confirmArmed   = false;
 }
 
+// Set when TERMINAL MODE opened the LOG's panel for one of its rows: once the
+// panel (or INFO after it) is closed, back to the terminal rather than the
+// LOG screen it was drawn over. enterLog() clears it. (Upstream v1.43.)
+static bool s_logFromTerminal = false;
+
 static void enterLog() {
     state = AppState::LOG;
     transitionStart = millis();
     s_confirmPending = false;
     s_infoPending    = false;
+    s_logFromTerminal = false;
     uiLogInit(*canvas);
 }
 
@@ -5642,6 +5692,31 @@ static bool panelTextOk() { return true; }
 static void panelShow()   {}
 #endif
 
+// The battery for TERMINAL MODE's LOG title bar (uiClearSetBatterySource),
+// read off the same line the SETTINGS battery row prints, so there is one
+// reader per board and its two-second cache: "81% 4.12V" (a "+" after it
+// while the Marauder's gauge sees it charging), "CHG 81%" on the watch, and
+// "NONE" / "NO GAUGE" / "?" with no cell to read. The voltage-divider boards
+// cannot tell a cable from a full cell, so they never say CHG. (Upstream
+// v1.43 reads the chips directly; MuleSkin already had these lines.)
+#if defined(FREENOVE_S3) || defined(FREENOVE_S3_35) || defined(MARAUDER_V8) || defined(TDECK_PLUS) || defined(TWATCH_S3)
+static bool terminalBatteryState(uint8_t& pct, bool& charging) {
+    char b[24];
+#if defined(TWATCH_S3)
+    twatchBatteryLine(b, sizeof b);
+#else
+    boardBatteryLine(b, sizeof b);
+#endif
+    const bool chg = strncmp(b, "CHG ", 4) == 0;
+    const char* num = chg ? b + 4 : b;
+    if (*num < '0' || *num > '9') return false;
+    const int p = atoi(num);
+    pct = (uint8_t)(p < 0 ? 0 : p > 100 ? 100 : p);
+    charging = chg || strchr(b, '+') != nullptr;
+    return true;
+}
+#endif
+
 void setup() {
     // Before anything opens NVS -- crashReportInit() does: settings left in
     // the old 20 KB store by a USB install onto the new table move across.
@@ -5673,6 +5748,11 @@ void setup() {
     if (nvsMoved < 0)  Serial.println("[nvs] could not move the old settings store; will try again next boot");
 #if defined(TWATCH_S3)
     twatchPowerUp();
+#endif
+#if defined(FREENOVE_S3) || defined(FREENOVE_S3_35) || defined(MARAUDER_V8) || defined(TDECK_PLUS) || defined(TWATCH_S3)
+    // Read lazily, at TERMINAL MODE's first frame: the gauge and the power
+    // chip are up by then.
+    uiClearSetBatterySource(terminalBatteryState);
 #endif
 #if defined(TDECK_PLUS)
     tdeckPowerUp();
@@ -7271,6 +7351,72 @@ static void bootButtonTick(uint32_t now) {
 #endif
 #endif
 
+// ---- TERMINAL MODE at rest ---------------------------------------------------
+// TERMINAL MODE is text and numbers: once nobody has touched it for a few
+// seconds it redraws four times a second, and twice after half a minute, with
+// the CPU at 80 MHz. The radios lose nothing: the loop's radio work runs every
+// 20 ms through the wait (terminalRestWait), as it does at full speed. A
+// touch, a key, the ball or a new catch ends the rest at once. The POWER
+// SAVER's own idle pace still applies on top: whichever is slower wins.
+// (Upstream SquachWatch v1.49.)
+static const uint32_t TERM_REST_AFTER_MS   = 3000;
+static const uint32_t TERM_SLOWER_AFTER_MS = 30000;
+static uint32_t       s_termWokeAt = 0;   // an input ended the last rest
+
+static void terminalRestSet(bool on) {
+    if (on == s_termRest) return;
+    s_termRest = on;
+    applyCpuClock();
+    Serial.printf("[term] %s (CPU %u MHz)\n", on ? "resting" : "awake", (unsigned)s_cpuMhzApplied);
+}
+
+// The frame budget at rest, in microseconds; 0 while TERMINAL MODE is not
+// resting (or not up).
+static uint32_t terminalRestBudgetUs(uint32_t now, uint32_t idleMs) {
+    const bool rest = state == AppState::CLEAR && Settings::boringMode() &&
+                      idleMs > TERM_REST_AFTER_MS &&
+                      now - transitionStart > TERM_REST_AFTER_MS &&
+                      now - s_termWokeAt > 1000 &&
+                      !Theme::toastUp(now);
+    terminalRestSet(rest);
+    if (!rest) return 0;
+    return idleMs > TERM_SLOWER_AFTER_MS ? 500000UL : 250000UL;
+}
+
+static void terminalRestWait(uint32_t ms) {
+    const uint32_t until = millis() + ms;
+    const uint32_t seq = engine.latestSeq();
+    for (;;) {
+        const int32_t left = (int32_t)(until - millis());
+        if (left <= 0) return;
+        delay(left > 20 ? 20 : (uint32_t)left);
+        engine.loop();   // the WiFi queue holds a few frames; the hop keeps its own clock
+        // A catch: draw it now. The clock stays where it is -- in a busy room
+        // catches come every second, and the clock is not switched that often.
+        if (engine.latestSeq() != seq) return;
+        bool input = false;
+#if !defined(SQW_SMALL)
+        int16_t a, b;
+        if (readTouchRaw(a, b)) input = true;
+#endif
+#if defined(SQW_TRACKBALL)
+        if (tdeckBallPending()) input = true;
+#endif
+#if defined(STICKS3)
+        if (digitalRead(STICK_KEY1) == LOW || digitalRead(STICK_KEY2) == LOW) input = true;
+#endif
+#if defined(CARDPUTER_ADV)
+        if (s_cardKeysOk) { const int cnt = cardRead(0x03); if (cnt > 0 && (cnt & 0x0F)) input = true; }
+#endif
+        if (input) break;
+    }
+    // A finger, a key or the ball: full speed for it, and no rest again for a
+    // second even if the loop never counts it as a touch (a light brush), so
+    // the clock is not switched every frame.
+    s_termWokeAt = millis();
+    terminalRestSet(false);
+}
+
 void loop() {
     // Cheap and unconditional: available() is a register read, and this
     // is the only way in for the one serial command the firmware takes.
@@ -8190,7 +8336,33 @@ void loop() {
             if (const uint8_t said = Theme::consumeXyzzy()) MuleSkin::magicWord(said);
     if (Theme::consumePetUnlock())      MuleSkin::unlockPet();
 
+            // TERMINAL MODE (the BORING MODE switch): the home screen is
+            // uiClearTick()'s desktop of windows, not the radar.
             bool boring = Settings::boringMode();
+            // A touch that starts on one of its windows is theirs, from the
+            // press to the let-go -- a drag scrolls the log, a tap picks a
+            // row, a heading sorts. The title bar (menu, clock, pills) and
+            // the buttons are outside every window, so they work as they
+            // always have. Not under the time zone card, whose taps are its
+            // own. (Upstream v1.43.)
+            if (boring && !uiZoneCardWanted() && uiTerminalTouch(tp.x, tp.y, tp.valid, touchJustDown, now)) {
+                lastTouch = now;
+                // The picked row (or LATEST) asked for the device's menu: the
+                // LOG screen's WATCH / HUNT / INFO / IGNORE panel, and back
+                // here when it closes (s_logFromTerminal).
+                uint8_t want[6];
+                if (uiTerminalTakeOpen(want)) {
+                    for (uint8_t i = 0; i < engine.logCount(); i++) {
+                        const Detection* d = engine.logAt(i);
+                        if (!d || memcmp(d->mac, want, 6)) continue;
+                        enterLog();
+                        openConfirmFor(d);
+                        s_logFromTerminal = true;
+                        break;
+                    }
+                }
+                break;
+            }
             ButtonId barBtn = tp.valid ? Theme::hitTestButtonBar(tp.x, tp.y, tft.width(), tft.height()) : ButtonId::NONE;
 
             // Left/right 10% slivers of the screen (excluding the button
@@ -8202,7 +8374,9 @@ void loop() {
             // for the gesture classifier instead of also nudging the
             // background, so he can be poked without changing the scene.
             const int edgeZoneW = tft.width() / 10;
-            bool inEdgeZone = tp.valid && barBtn == ButtonId::NONE &&
+            // Not in TERMINAL MODE: the windows reach both edges, and the
+            // radar they stand in for is not on screen to be changed.
+            bool inEdgeZone = !boring && tp.valid && barBtn == ButtonId::NONE &&
                                (tp.x < edgeZoneW || tp.x >= tft.width() - edgeZoneW);
 
             // MuleSkin gesture state, tracked across frames from the
@@ -8288,7 +8462,7 @@ void loop() {
                 lastTouch = now;
                 sqActive  = false;
                 enterWatchAlert();
-            } else if (touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
+            } else if (!boring && touchJustDown && (now - lastTouch) > TOUCH_DEBOUNCE_MS &&
                        Theme::radarBlipAt(tp.x, tp.y, now, s_tappedBlip)) {
                 // A blip on the radar: that device's panel on the LOG --
                 // WATCH, IGNORE, HUNT or what it is -- as a long press on
@@ -8379,14 +8553,6 @@ void loop() {
                 if (barBtn == ButtonId::LOG) { MuleSkin::trigger(MuleSkin::Event::LOG_OPENED); enterLog(); }
                 else if (barBtn == ButtonId::CLR) enterMeeting();
                 else if (barBtn == ButtonId::SCAN) enterTimeSync();
-                else if (barBtn == ButtonId::NONE && boring && tp.y >= 20 && !Settings::backgroundLocked()) {
-                    // No MuleSkin to tap for this in boring mode — any tap
-                    // on the main content area (below the title bar, not
-                    // a real button, and not already claimed by an edge
-                    // zone above) cycles the background instead, so it's
-                    // still reachable without him.
-                    Settings::cycleBackground();
-                }
             }
 
             // Finalize the MuleSkin gesture on the exact frame the touch
@@ -8695,6 +8861,14 @@ void loop() {
                 Theme::drawToast(t, now);
             });
 
+            // Opened from TERMINAL MODE: once its panel (and INFO, if that
+            // came next) is closed, straight back to the terminal.
+            if (s_logFromTerminal && !s_confirmPending && !s_infoPending) {
+                s_logFromTerminal = false;
+                enterClear();
+                break;
+            }
+
             // Same "ignore the touch that opened this until it releases"
             // gate s_confirmArmed uses on the confirm panel, applied to
             // the info panel's own GOT IT button -- it appears mid-hold
@@ -8925,8 +9099,6 @@ void loop() {
                             engine.resetLifetime();
                             Dex::reset();
                             Regulars::reset();
-                        } else if (pending == SettingsRow::BORING_MODE) {
-                            Settings::toggleBoringMode();
                         } else if (pending == SettingsRow::REPLAY_INTRO) {
                             MuleSkin::replayIntro();
                             enterClear();
@@ -8980,7 +9152,7 @@ void loop() {
                     // Switched off by a mode: say so, rather than doing nothing
                     // and reading as a broken row.
                     if (uiSettingsRowIsOff(row)) {
-                        Theme::showToast("BORING MODE IS ON", nullptr, Theme::CYAN);
+                        Theme::showToast("TERMINAL MODE IS ON", nullptr, Theme::CYAN);
                         gestureActive = false;
                         break;
                     }
@@ -9145,14 +9317,13 @@ void loop() {
                             uiSettingsSetConfirm(row);
                             break;
                         case SettingsRow::BORING_MODE:
-                            // Asked on the way IN only. Boring mode hides
-                            // every MuleSkin row, which is exactly what makes
-                            // it hard to undo by accident -- but turning it
-                            // back off restores all of them, so a panel there
-                            // would just be friction on the fix for the thing
-                            // the panel exists to warn about.
-                            if (Settings::boringMode()) Settings::toggleBoringMode();
-                            else                        uiSettingsSetConfirm(row);
+                            // TERMINAL MODE (this was BORING MODE): no panel
+                            // either way. It had one on the way in when it
+                            // only hid MuleSkin's rows; TERMINAL MODE is a
+                            // dashboard people pick on purpose, its row stays
+                            // where it was, and the same tap puts the radar
+                            // back. (Upstream v1.43.)
+                            Settings::toggleBoringMode();
                             break;
                         case SettingsRow::CHECK_COLORS: enterColorCheck(true); break;
                         case SettingsRow::DIAGNOSTICS:  enterDiagnostics(); break;
@@ -10217,10 +10388,17 @@ void loop() {
         }
 #endif
         const uint8_t fps = Settings::idleFps();
-        if (fps && idleMs > (uint32_t)Settings::idleAfterSec() * 1000UL) {
-            const uint32_t budgetUs = 1000000UL / fps;
-            const uint32_t spentUs  = micros() - frameStartUs;
-            if (spentUs < budgetUs) delay((budgetUs - spentUs) / 1000UL);
+        uint32_t budgetUs = 0;
+        if (fps && idleMs > (uint32_t)Settings::idleAfterSec() * 1000UL) budgetUs = 1000000UL / fps;
+        // TERMINAL MODE at rest: whichever is slower, its pace or the saver's.
+        const uint32_t restUs = terminalRestBudgetUs(now, idleMs);
+        if (restUs > budgetUs) budgetUs = restUs;
+        if (budgetUs) {
+            const uint32_t spentUs = micros() - frameStartUs;
+            if (spentUs < budgetUs) {
+                if (restUs) terminalRestWait((budgetUs - spentUs) / 1000UL);
+                else        delay((budgetUs - spentUs) / 1000UL);
+            }
         }
     }
 

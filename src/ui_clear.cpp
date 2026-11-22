@@ -395,6 +395,49 @@ static void drawCounterLine(TFT_eSPI& t, int w, int y, const DetectionEngine& en
     }
 }
 
+// The same folds, asked the other way round: which column a device lands in.
+// TERMINAL MODE's COUNTS window counts the log's rows with it, so a Tile is
+// a TRACKER there exactly as it is on the counter row. (Upstream v1.43.)
+static bool uiClearColumnHolds(DetectionType column, DetectionType d) {
+    if (d == column) return true;
+    switch (column) {
+        case DetectionType::AIRTAG:
+            return d == DetectionType::GOOGLE_TAG || d == DetectionType::TILE || d == DetectionType::SAMSUNG_TAG ||
+                   (d == DetectionType::IBEACON && beaconFolded());
+        case DetectionType::CAMERA: return d == DetectionType::RING;
+        case DetectionType::HACKER: return d == DetectionType::EVILTWIN;
+        default:                    return false;
+    }
+}
+
+// The battery, for TERMINAL MODE's LOG title bar. A board with a cell hands
+// over a function (main.cpp) that fills in the percent and whether it is on
+// the cable, and returns false while no cell is plugged in. Boards without a
+// battery never set one, and the title bar shows none. Upstream also drew a
+// lava lamp off this on its main screen; MuleSkin's main screen is the radar,
+// and it is not brought over. (Upstream v1.43.)
+static BatterySource s_battSrc = nullptr;
+void uiClearSetBatterySource(BatterySource fn) { s_battSrc = fn; }
+bool uiClearHasBattery() { return s_battSrc != nullptr; }
+
+// The battery as last read: once a second at most. False with no cell to show.
+static bool battRead(uint32_t now, uint8_t& pctOut, bool& chgOut) {
+    if (!s_battSrc) return false;
+    static uint32_t at = 0;
+    static bool     has = false, chg = false;
+    static uint8_t  pct = 0;
+    if (!at || now - at >= 1000) {
+        at = now ? now : 1;
+        has = s_battSrc(pct, chg);
+        if (pct > 100) pct = 100;
+    }
+    pctOut = pct; chgOut = chg;
+    return has;
+}
+
+// TERMINAL MODE: the desktop of windows CLEAR draws instead of the radar.
+#include "ui_terminal.inc"
+
 
 static uint32_t s_mascotStepMs = 0;   // 0: not yet read from settings
 void     uiMascotStepSet(uint32_t ms) { Settings::setMascotPaceMs((uint16_t)ms); s_mascotStepMs = Settings::mascotPaceMs(); }
@@ -526,7 +569,18 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     // from the space he is given, so telling him about these rows would make
     // him a tenth bigger and move everything hanging off him.
     FrameProf::lap(FrameProf::CHROME);   // the counting and geometry above
-    Theme::drawActiveBackground(t, now, 0, h, eng, advance);
+    // TERMINAL MODE: the desktop of windows instead of the radar. Everything
+    // that would have stood on the radar -- the NEARBY headline, the counter
+    // rows, the idle flourishes -- stays out in this mode (see below); the
+    // clock, the title bar, its pills and the buttons go on top as always.
+    // (Upstream v1.43.)
+    //
+    // The windows start at row 22, not upstream's titleBottom + 2: MuleSkin's
+    // clock sits at the top centre on a black box 20 rows tall (see
+    // drawCornerClock), and at 18 it bit the LOG's title bar in half.
+    const bool terminal = Settings::boringMode();
+    if (terminal) uiTerminalDraw(t, now, eng, titleBottom + 6, bar.y - 2);
+    else          Theme::drawActiveBackground(t, now, 0, h, eng, advance);
     Theme::clearBackgroundFloor();
     FrameProf::lap(FrameProf::BG);
     // Under everything that moves: see drawCornerClock().
@@ -588,7 +642,7 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     // before MuleSkin and the bubble was ending up behind him. Same
     // reasoning as ALL CLEAR below -- text is the one thing here that
     // cannot afford to be half-covered.
-    Theme::drawBackgroundOverlay(t, now);
+    if (!terminal) Theme::drawBackgroundOverlay(t, now);
 
     // Title bar at the top
     if (DrawBand::has(0, titleBottom)) Theme::drawTitleBar(t, ">> MuleSkin <<  SCANNING");
@@ -672,7 +726,8 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     // frame, so a headline that stops being drawn is simply gone next frame.
     // Not on a 240x135 screen (the StickS3, the Cardputer): no room for a
     // headline over the radar and the counters both (upstream v1.31.0).
-    if (anyActive && !(h < 200 && w < 300)) {
+    // Not in TERMINAL MODE either: its LOG says the same, row by row.
+    if (anyActive && !terminal && !(h < 200 && w < 300)) {
         // The rainbow ALL CLEAR used to own. It was the good part and it was
         // wasted on the state you see least; now it runs on the state that
         // actually matters. Same hue-wash as MuleSkin's party-mode confetti.
@@ -784,6 +839,8 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     // per-orientation cap on any row.
     DetectionType counterTypes[MAX_COUNTER_TYPES];
     uint8_t counterN = activeCounterTypes(counterTypes);
+    // TERMINAL MODE: COUNTS says this, in its own window.
+    if (terminal) counterN = 0;
     // A 240x135 screen shows only what is in range: the zeroes are what ran
     // off its edges, and the radar already says "nothing" by being empty.
     if (h < 200 && w < 300) {
@@ -800,7 +857,7 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
         const int rowY = counterTextTop + row * lineH;
         // `start` advances either way: the rows share one list of types, so a
         // row that is not painted still has to hand the next one its place.
-        if (DrawBand::has(rowY, rowY + lineH))
+        if (!terminal && DrawBand::has(rowY, rowY + lineH))
             drawCounterLine(t, w, rowY, eng, counterTypes + start, n);
         start += n;
     }

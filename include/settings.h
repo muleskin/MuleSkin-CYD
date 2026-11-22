@@ -26,7 +26,7 @@ namespace Settings {
         TUNNEL = 9,
         SYNTHWAVE = 10,
         // No animation at all -- the band is filled flat and nothing moves.
-        // Only reachable while BORING MODE is on, which is the mode that
+        // Only reachable while BORING MODE (TERMINAL MODE now: the same switch) is on, which is the mode that
         // already strips MuleSkin, the pet and the idle flourishes. It did
         // not strip the backdrop, so "boring" still meant a screen full of
         // falling glyphs; this is the rest of that thought.
