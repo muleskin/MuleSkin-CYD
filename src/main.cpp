@@ -1416,6 +1416,13 @@ static char    s_confirmLabel[24];
 // draw. The real ones stay in s_confirmLabel / s_confirmName: they are what
 // WATCH and HUNT hand the engine.
 static const char* privLabel(const char* in) { static char b[40]; return Privacy::name(in, b, sizeof b); }
+// True when s_confirmLabel is a device's own name (masked in PRIVACY MODE);
+// false when it is the type or maker it fell back to, which privacy.h leaves
+// alone -- RING showed as "RIN***" (upstream #92).
+static bool s_confirmLabelIsName = false;
+static const char* confirmLabelOnScreen() {
+    return s_confirmLabelIsName ? privLabel(s_confirmLabel) : s_confirmLabel;
+}
 static const char* privName(const char* in)  { static char b[40]; return Privacy::name(in, b, sizeof b); }
 // LOG's long-press sets this per-row: BLE vs WiFi is a property of the
 // entry, not of the screen.
@@ -2291,7 +2298,8 @@ static void openConfirmFor(const Detection* d) {
     s_confirmType  = d->type;
     snprintf(s_confirmVendor, sizeof s_confirmVendor, "%s", vendorText(*d));
     memcpy(s_confirmName, d->name, sizeof s_confirmName);
-    const char* lbl = d->name[0] ? d->name : vendorText(*d);
+    s_confirmLabelIsName = d->name[0] != 0;
+    const char* lbl = s_confirmLabelIsName ? d->name : vendorText(*d);
     strncpy(s_confirmLabel, lbl, sizeof(s_confirmLabel) - 1);
     s_confirmLabel[sizeof(s_confirmLabel) - 1] = 0;
     uiLogSetConfirmRing(s_confirmIsBle && TagRing::canRing(d->type));
@@ -6222,11 +6230,15 @@ static void chargeDraw(uint32_t now) {
     PANEL.drawString(line, w / 2, h / 2 - 10);
     PANEL.setTextSize(1);
     PANEL.setTextColor(Theme::blend(TFT_BLACK, TFT_WHITE, 170), TFT_BLACK);
-    PANEL.drawString("Radios and screen are off so the battery fills faster.", w / 2, h / 2 + 20);
-    PANEL.drawString("About 4-6 hours from empty.", w / 2, h / 2 + 34);
+    // Two lines, not one: at size 1 the sentence was 324 px, wider than a
+    // portrait 240 px screen (and a landscape 320), and lost "Radios" and
+    // "faster." off its ends. (Upstream SquachWatch, 2026-11-15.)
+    PANEL.drawString("Radios and screen are off", w / 2, h / 2 + 20);
+    PANEL.drawString("so the battery fills faster.", w / 2, h / 2 + 32);
+    PANEL.drawString("About 4-6 hours from empty.", w / 2, h / 2 + 46);
     PANEL.setTextColor(Theme::GREEN, TFT_BLACK);
     PANEL.setTextSize(2);
-    PANEL.drawString("TAP TO WAKE UP", w / 2, h / 2 + 64);
+    PANEL.drawString("TAP TO WAKE UP", w / 2, h / 2 + 72);
     PANEL.setTextDatum(TL_DATUM);
     panelShow();
 }
@@ -7692,7 +7704,7 @@ void loop() {
             // Nothing on LOG moves by the call -- the note about
             // drawActiveBackground in ui_log.cpp is a comment, not a call.
             drawTwoBand([&](TFT_eSPI& t, bool) {
-                uiLogTick(t, now, engine, 0, s_confirmPending, privLabel(s_confirmLabel),
+                uiLogTick(t, now, engine, 0, s_confirmPending, confirmLabelOnScreen(),
                           s_infoPending, infoTypeName, infoText,
                           engine.isWatched(s_confirmMac, s_confirmIsBle),
                           engine.isHunted(s_confirmMac, s_confirmIsBle),
