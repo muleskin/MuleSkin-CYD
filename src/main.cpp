@@ -317,6 +317,7 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "ui_boot.h"
 #include "ui_clear.h"
 #include "ui_alert.h"
+#include "tag_ring.h"
 #include "ui_log.h"
 #include "ui_watchalert.h"
 #include "ui_settings.h"
@@ -2108,6 +2109,7 @@ static void openConfirmFor(const Detection* d) {
     const char* lbl = d->name[0] ? d->name : vendorText(*d);
     strncpy(s_confirmLabel, lbl, sizeof(s_confirmLabel) - 1);
     s_confirmLabel[sizeof(s_confirmLabel) - 1] = 0;
+    uiLogSetConfirmRing(s_confirmIsBle && TagRing::canRing(d->type));
     s_confirmPending = true;
     s_confirmArmed   = false;
 }
@@ -2172,6 +2174,7 @@ volatile bool g_consoleAdc = false;     // ADC: the spare analog inputs, for fin
 volatile bool g_consoleXyzzy = false;   // XYZZY: the TERMINAL background types the magic word now
 volatile bool g_consoleBtUpdate = false;  // UPDATE BT: the UPDATE screen's Bluetooth button, from the console
 volatile int8_t g_consolePush = -1;       // PUSH OFF / ON / TEST: the PUSH ALERTS row, and a test message
+volatile bool g_consoleRing     = false;   // RING: ring the tracker heard most recently, for the bench
 volatile bool g_consoleWho      = false;   // WHO: which board this is (the web flasher, the bench scripts)
 volatile bool g_consoleSelfTest = false;  // SELFTEST: check every part, one line each (runSelfTest)
 volatile bool g_consoleLegend = false;  // LEGEND: wear the Legend look (and its aura) until the next boot, or take it off
@@ -6455,6 +6458,32 @@ void loop() {
         Serial.println(line);
     }
 #endif
+#if SQW_RING
+    {
+        uint8_t fm[6];
+        if (!TagRing::busy() && TagRing::takeFound(fm) && !TagRing::start(engine, fm))
+            Serial.println("[ring] busy");
+    }
+    if (g_consoleRing) {
+        g_consoleRing = false;
+        uint8_t mac[6];
+        if (!TagRing::latest(mac))              Serial.println("[ring] no tracker heard since boot");
+        else if (!TagRing::start(engine, mac))  Serial.println("[ring] busy");
+        else Serial.printf("[ring] ringing %02X:%02X:%02X:%02X:%02X:%02X\n",
+                           mac[5], mac[4], mac[3], mac[2], mac[1], mac[0]);
+    }
+    {
+        // A ring has finished: the radio is back, the button comes up, and
+        // the answer is a toast on whatever screen is showing.
+        const TagRing::Result r = TagRing::poll(engine);
+        if (r != TagRing::Result::NONE) {
+            uiAlertSetRinging(false);
+            uiLogSetRinging(false);
+            Theme::showToast(TagRing::title(r), TagRing::detail(r),
+                             r == TagRing::Result::RANG ? Theme::GREEN : Theme::AMBER);
+        }
+    }
+#endif
     if (g_consoleInvert) {
         g_consoleInvert = false;
         Settings::toggleInvert();
@@ -7272,6 +7301,22 @@ void loop() {
                     s_infoShowingPrimer  = !Settings::infoPrimerShown();
                     s_infoPending        = true;
                     s_infoArmed          = false;
+#if SQW_RING
+                } else if (uiAlertHitRing(tp.x, tp.y, tft.width(), tft.height())) {
+                    // The card stays up while the tracker is asked to beep,
+                    // and its timer starts again so it does not close
+                    // mid-ring. The answer arrives as a toast (see loop()).
+                    alertStart = now;
+                    if (TagRing::busy()) {
+                        Theme::showToast("RINGING...", "Still asking it", Theme::AMBER);
+                    } else if (TagRing::start(engine, s_alertMac)) {
+                        uiAlertSetRinging(true);
+                        Theme::showToast("RINGING...", "Asking it to beep", Theme::AMBER);
+                        Serial.println("[ring] from the alert");
+                    } else {
+                        Theme::showToast("CAN'T RING", "Bluetooth is busy", Theme::RED);
+                    }
+#endif
                 } else if (uiAlertHitIgnore(tp.x, tp.y, tft.width(), tft.height())) {
                     // Toggle, not just add: the button reads MUTED once the
                     // device is on the list, so tapping it again has to be
@@ -7500,6 +7545,22 @@ void loop() {
                     } else if (ctap == LogConfirmTap::CANCEL) {
                         lastTouch = now;
                         s_confirmPending = false;
+#if SQW_RING
+                    } else if (ctap == LogConfirmTap::RING) {
+                        // The panel closes; the answer comes as a toast over
+                        // the LOG when the tracker has been asked (loop()).
+                        lastTouch = now;
+                        s_confirmPending = false;
+                        if (TagRing::busy()) {
+                            Theme::showToast("RINGING...", "Still asking it", Theme::AMBER);
+                        } else if (TagRing::start(engine, s_confirmMac)) {
+                            uiLogSetRinging(true);
+                            Theme::showToast("RINGING...", "Asking it to beep", Theme::AMBER);
+                            Serial.println("[ring] from the LOG");
+                        } else {
+                            Theme::showToast("CAN'T RING", "Bluetooth is busy", Theme::RED);
+                        }
+#endif
                     }
                 }
                 break;

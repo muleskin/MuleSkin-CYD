@@ -5,6 +5,7 @@
 #include "signatures.h"
 #include "detection.h"
 #include "ignore_list.h"
+#include "tag_ring.h"
 #include <Arduino.h>
 #if defined(CYD_GPS)
 #include "sd_row.h"   // degreesText() for the place line
@@ -119,6 +120,9 @@ bool drawQr(TFT_eSPI& t, int cx, int cy, int side) {
 }  // namespace
 #endif
 static bool s_touched = false;
+static bool s_ringing = false;   // RING held down while the board talks to the tracker
+static int  s_ringW = 0, s_ringH = 0;   // the panel the card was last drawn on
+void uiAlertSetRinging(bool on) { s_ringing = on; }
 static bool s_redacted = false;
 void uiAlertSetRedacted(bool r) { s_redacted = r; }
 
@@ -256,6 +260,7 @@ static uint8_t s_days = 0;
 void uiAlertSetDays(uint8_t days) { s_days = days; }
 
 void uiAlertInit(TFT_eSPI& t, const Detection& d) {
+    s_ringW = t.width(); s_ringH = t.height();
     s_last = d;
     s_first = false;
     s_night = false;
@@ -400,6 +405,41 @@ bool uiAlertHitIgnore(int x, int y, int screenW, int screenH) {
     const int SLOP = 6;
     return x >= bx - SLOP && x <= bx + bw + SLOP &&
            y >= by - SLOP && y <= by + bh + SLOP;
+}
+
+// RING, on the trackers only (and only on the boards built with it): the same
+// system button as IGNORE, just left of it in the header strip. The label's
+// budget is measured off this one when it is there.
+// Not on the 240x135 card: its row of three has no room, and a button that
+// is not drawn must not take taps either.
+static bool ringShown() { return TagRing::canRing(s_last.type) && !tinyAlert(s_ringW, s_ringH); }
+static void ringBtnRect(int screenW, int screenH, int& bx, int& by, int& bw, int& bh) {
+    int ix, iy, iw, ih;
+    ignoreBtnRect(screenW, screenH, ix, iy, iw, ih);
+    bw = wideAlert(screenW) ? 76 : 52;
+    bh = ih;
+    bx = ix - 10 - bw;
+    by = iy;
+}
+
+bool uiAlertRingShown() { return ringShown(); }
+
+bool uiAlertHitRing(int x, int y, int screenW, int screenH) {
+    s_ringW = screenW; s_ringH = screenH;
+    if (!ringShown()) return false;
+    int bx, by, bw, bh;
+    ringBtnRect(screenW, screenH, bx, by, bw, bh);
+    // Less sideways slop than IGNORE's: the two sit 10 px apart.
+    return x >= bx - 3 && x <= bx + bw + 3 && y >= by - 6 && y <= by + bh + 6;
+}
+
+bool uiAlertRingCentre(int screenW, int screenH, int& cx, int& cy) {
+    if (!ringShown()) return false;
+    int bx, by, bw, bh;
+    ringBtnRect(screenW, screenH, bx, by, bw, bh);
+    cx = bx + bw / 2;
+    cy = by + bh / 2;
+    return true;
 }
 
 // SNOOZE, bottom centre. The corners are taken and the plate ends well
@@ -562,6 +602,7 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
                  bool infoPending, const char* infoTypeName, const char* infoText) {
     int w = t.width();
     int h = t.height();
+    s_ringW = w; s_ringH = h;
 
     uint32_t elapsed = now - s_alertStart;
     // Capped well short of wrapping the uint8_t step counter -- an
@@ -636,7 +677,8 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
         // shows up on the narrow board. Read from ignoreBtnRect rather than
         // restated, so the two cannot drift when the button is resized.
         int ibx, iby, ibw, ibh;
-        ignoreBtnRect(w, h, ibx, iby, ibw, ibh);
+        if (ringShown()) ringBtnRect(w, h, ibx, iby, ibw, ibh);
+        else             ignoreBtnRect(w, h, ibx, iby, ibw, ibh);
         // The 6 is the gap between this label and the button, down from 8 to
         // pay for the button's new edge margin without shrinking the button
         // or pushing "CARD SKIMMER" -- the longest name that still fits the
@@ -943,6 +985,12 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
         // nothing to learn: the thing is pushed in, and pushed in means done.
         Theme::drawWin95Button(t, bx, by, bw, bh,
                                already ? "MUTED" : "IGNORE", already);
+    }
+    // RING: held down while the board is connected to the tracker.
+    if (ringShown()) {
+        int bx, by, bw, bh;
+        ringBtnRect(w, h, bx, by, bw, bh);
+        Theme::drawWin95Button(t, bx, by, bw, bh, "RING", s_ringing);
     }
 
     {

@@ -1,5 +1,6 @@
 // MuleSkin-CYD — wall-clock time. See clock.h.
 #include "clock.h"
+#include "tag_ring.h"   // RING NAME on the console
 #include "serial_flush.h"
 #include "security.h"   // a locked device takes no console commands
 #include "ota_wifi.h"    // the WIFI command lists the saved networks
@@ -68,6 +69,7 @@ extern volatile bool g_consoleSelfTest;
 extern volatile bool g_consoleBtUpdate; // UPDATE BT (main.cpp)
 extern volatile int8_t g_consolePush;    // PUSH OFF / ON / TEST (main.cpp)
 extern volatile bool g_consoleWho;       // WHO (main.cpp)
+extern volatile bool g_consoleRing;      // RING, the tracker heard most recently (main.cpp)
 extern volatile bool g_liveOn;   // LIVE ON / OFF (detection.cpp printLive)
 extern volatile bool g_consoleOutfitSet;
 extern volatile bool g_consoleAura;
@@ -651,6 +653,14 @@ void pollSerial() {
         // PUSH OPTIONS, from the web flasher: which types CHOSEN pushes, and
         // PUSH AT NIGHT's own hours.
         if (strcasecmp(line, "WHO") == 0) { g_consoleWho = true; continue; }
+        if (strcasecmp(line, "RING") == 0) { g_consoleRing = true; continue; }
+#if SQW_RING
+        if (strncasecmp(line, "RING NAME ", 10) == 0) {
+            TagRing::armFind(line + 10);
+            Serial.printf("[ring] waiting for a device named *%s* that takes connections\n", line + 10);
+            continue;
+        }
+#endif
         if (strcasecmp(line, "PUSH TYPES LIST") == 0) {
             const uint32_t m = Settings::pushTypes();
             for (uint8_t t = 1; t < (uint8_t)DetectionType::COUNT && t < 32; t++)

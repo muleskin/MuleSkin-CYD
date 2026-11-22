@@ -534,6 +534,16 @@ none of the saved networks is in range. REMOVE takes one off the list.
   shows the pick, which locks in three seconds after the last tap). A restart ends it too. It is still
   scanned, counted and logged; only the alert stops. IGNORE is the same
   thing kept for good.
+- **RING** (the S3 and C5 boards; from upstream SquachWatch v1.48). A RING
+  button on an AirTag, Samsung, Google or Tile alert, and RING IT on a
+  tracker's LOG panel: the board pauses its scan, connects to the tracker
+  and asks it to beep (AirTag's own sound command, then DULT, then Find My),
+  and says how it went. Trackers only answer while they are away from their
+  owner -- that is the anti-stalking design -- so "it said no" usually means
+  its owner is near. Not on the CYDs (no room for Bluetooth's connecting
+  role) or the 240x135 boards' alert card. Console: RING rings the tracker
+  heard most recently. Idea: JBoHack and Hedge; command bytes as AirGuard
+  (seemoo-lab) documents them.
 
 ### Brought over from upstream SquachWatch (v1.31-v1.36)
 

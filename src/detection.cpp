@@ -13,6 +13,7 @@ extern volatile uint32_t g_advDumpUntil;   // ADVDUMP (clock.cpp)
 #endif
 #include "regulars.h"
 #include "my_alerts.h"
+#include "tag_ring.h"
 #include "clock.h"
 #include <Arduino.h>
 #include <WiFi.h>
@@ -384,6 +385,14 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
         if (name && name[0]) {
             strncpy(det.name, name, sizeof(det.name) - 1);
         }
+#if SQW_RING
+        // RING NAME, for the bench: any device by its advertised name.
+        if (TagRing::findWanted()) {
+            const std::vector<uint8_t>& rpl = adv->getPayload();
+            TagRing::noteNamed(mac, adv->getAddress().getType(), det.name, adv->isConnectable(),
+                               rpl.data(), rpl.size());
+        }
+#endif
         // The matched row's own label, for the types that cover several
         // devices -- see where the vendor is written, below.
         const char* label = nullptr;
@@ -683,6 +692,10 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
             // An extra rule's own vendor, when one matched; else just BLE.
             det.vendor = label ? label : "BLE";
         }
+#if SQW_RING
+        // RING connects later and wants the address type this advert used.
+        if (TagRing::canRing(det.type)) TagRing::noteSeen(det.mac, adv->getAddress().getType(), adv->isConnectable());
+#endif
         g_engine->postBle(det);
     }
 };
