@@ -8,6 +8,11 @@ SquachWatch v1.42-v1.43, laid out for MuleSkin's own screens.)
 On the main screen the cursor hides a while after the last key; the first
 key only brings it back.
 
+In TERMINAL MODE (Settings) the main screen is the LOG window: the cursor
+stops on the three buttons, the clock, the menu, then each heading (select
+sorts, again flips it), each row (select picks it, again opens its WATCH /
+HUNT / INFO / IGNORE panel) and the scroll arrows. (Upstream v1.43.)
+
 ## M5Stack StickS3
 
 | Do | Press |

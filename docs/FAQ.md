@@ -54,7 +54,7 @@ That said — I'm a hairy cryptid mascot, not a lawyer. Know your local laws, us
 
 That's MuleSkin. He's the whole point, honestly — the detection is the *why*, MuleSkin is the *fun*. He reacts to what the device sees, cracks jokes when nothing's happening, remembers how many times you've petted him, unlocks cosmetics the longer you use the device, and occasionally does something unhinged with confetti if the mood strikes. He grows through stages as your lifetime detection count climbs. Tap him. He likes that. Don't overthink it, he's a good guy.
 
-Don't want him? **Settings → Boring Mode** turns off his on-screen presence entirely — detection features stay 100% intact, you just get a plain, no-mascot detector if that's more your speed. No judgment. Some people just want the tool.
+Just want the data? **Settings → TERMINAL MODE** (it used to be Boring Mode) swaps the radar for a desktop of text windows — a log you can sort by time, kind, device or signal, the air over the last hour, counts by kind and the latest catch. Detection stays 100% intact; tap a line twice for WATCH / HUNT / INFO / IGNORE. Same row turns it off. No judgment. Some people just want the tool.
 
 ## Does it log anything?
 

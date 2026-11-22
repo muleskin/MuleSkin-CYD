@@ -244,6 +244,9 @@ A full beginner-friendly walkthrough is in [docs/BUILD.md](docs/BUILD.md).
    arm passes and fading a minute after it was last heard. (The bearing is
    only a fixed place per device: the board can't tell direction.) Tap a
    blip for that device's panel -- WATCH, IGNORE, HUNT or what it is.
+   Rather have text? **Settings → TERMINAL MODE** puts a sortable log and
+   a few windows of numbers in the radar's place (see
+   [TERMINAL MODE](#terminal-mode-brought-over-from-upstream-squachwatch-v143-v149)).
 4. The soft buttons at the bottom:
    - **`< WIFI TIME >`** — join your saved WiFi network just long enough to
      set the clock (see [The clock](#the-clock)).
@@ -646,6 +649,62 @@ Not on the flasher until they have been run on a board here
 
 (The M5Stack Tab5 is not brought over: its radio is a separate ESP32-C6 with
 firmware of its own, and upstream still calls it a test build.)
+
+### TERMINAL MODE, brought over from upstream SquachWatch (v1.43-v1.49)
+
+<p align="center">
+  <img src="sim/golden/terminal.png" width="320"
+       alt="TERMINAL MODE on the CYD: a LOG window sorted by signal with the battery in its title bar, and AIR, COUNTS and LATEST windows down the right, over the WIFI TIME, LOG and IN MEETING buttons">
+</p>
+
+**Settings → TERMINAL MODE** swaps the radar for a desktop of text windows,
+for when you just want the data:
+
+- **LOG**, one line per device: time, kind, name (through PRIVACY MODE, or
+  a regular's name), how many times it came back (x5), signal bars and dBm.
+  Drag it to scroll (or use the arrows and the track); scrolled up it says
+  PAUSED and a **NOW / N NEW** pill takes you back to the newest.
+- **Sort it**: tap TIME, KIND, DEVICE or dBm in the heading strip; tap again
+  to flip it. TIME, newest at the bottom, is the live log; any other order
+  says SORTED and names itself at the foot (CLOSEST UP, A-Z ...).
+- **Tap a line** to pick it, **tap it again** (or tap LATEST / DETAILS) for
+  the LOG screen's WATCH / HUNT / INFO / IGNORE panel; closing the panel
+  comes back here.
+- **AIR** (the busiest second of each of the last sixty minutes), **COUNTS**
+  (the log's devices by kind, busiest first, folded like the counter row)
+  and **LATEST**, down the right on a landscape screen and under the LOG on
+  a portrait one. The StickS3 and the Cardputer (240x135) show the LOG alone.
+- **The battery in the LOG's title bar** on the boards that can read one
+  (T-Watch, T-Deck Plus, Freenove S3, Marauder V8): four segments and the
+  percent, CHG on the cable where the board can tell, red under 20%.
+- **Bigger text on the 3.5" and the 7"** (font 2 in taller rows).
+- **It rests**: 3 s untouched it redraws four times a second, after 30 s
+  twice, with the CPU at 80 MHz (not on the CrowPanel 7, whose panel the CPU
+  feeds). The radios still get their turn every 20 ms; a touch, a key, the
+  ball or a new catch wakes it at once.
+- **The key cursor stops on it** (StickS3, Cardputer, the T-Deck's ball):
+  the three buttons, the clock, the menu and the watch pill, then each
+  heading, each row, the scroll arrows and LATEST, each lit whole.
+
+The clock (TODAY), the menu, the title-bar pills and the bottom bar --
+WIFI TIME / LOG / IN MEETING -- work as they do on the radar. A catch still
+opens the full ALERT screen.
+
+**Where it lives, and why.** Upstream reached it from a MODE button on the
+main screen that stepped normal -> desk -> TERMINAL MODE. MuleSkin has no
+desk (it was removed on purpose) and its third button is IN MEETING, so
+there is no MODE button here: TERMINAL MODE takes over the **BORING MODE**
+row in Settings, the way upstream turned BORING MODE into it. With the
+mascot compiled out, BORING MODE had little left to do; it is the same
+switch and the same NVS key (`boring`), so a board that had BORING MODE on
+wakes up in TERMINAL MODE, and its other effects stay (a white status
+light, the BLACK background on the other screens). One tap turns it on or
+off; the confirm panel BORING MODE had is gone.
+
+Not brought over: the MODE button and the desk's step to it, upstream's
+StickS3-only TERMINAL MODE row (here the row is on every board), the boot
+screen's wave and the first-boot lines (Squachy's), and the lava-lamp
+battery on the main screen.
 
 ### Fixes brought over from upstream SquachWatch (v1.41-v1.49)
 
