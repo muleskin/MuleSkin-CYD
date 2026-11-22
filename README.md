@@ -133,14 +133,18 @@ flasher until they have run here:
   keyboard down. The trackball, the LoRa radio and the speaker sit this one
   out.
 - **M5Stack StickS3** (`[env:sticks3]`, BETA) and **Cardputer ADV**
-  (`[env:cardputer-adv]`, experimental), from upstream v1.31.0: 240x135
-  screens with no touch. The keys drive a cursor through each screen's stops
-  -- on the StickS3 the side button steps, the front one presses, the side
-  one held goes home; on the Cardputer the arrows or TAB step, ENTER or space
-  presses, ESC goes home. The screens have small layouts of their own: a
-  compact alert card, a one-line-a-row LOG, tighter lists, a paged
-  DIAGNOSTICS and MORE INFO, a shorter PIN pad. No SD on either yet; the
-  Cardputer's optional EXT SCREEN panel is not ported.
+  (`[env:cardputer-adv]`, experimental), from upstream v1.31.0 and
+  v1.42-v1.43: 240x135 screens with no touch. The keys drive a cursor through
+  each screen's buttons, and the one it is on lights up whole -- on the
+  StickS3 a front click steps, a front hold selects, a side click is BACK and
+  a side hold goes home; on the Cardputer the arrows or TAB step, ENTER or
+  space presses, ESC is BACK (held 3 s, home) and letters are hotkeys. The
+  screens have small layouts of their own: a compact alert card, a
+  one-line-a-row LOG, tighter lists, a paged DIAGNOSTICS and MORE INFO, a
+  shorter PIN pad. The Cardputer types on its keyboard, has its SD slot and
+  wardrives with a Grove GPS; a wiggle wakes either one's dark screen. The
+  Cardputer's optional EXT SCREEN panel is not ported. Controls in
+  [docs/SMALL-BOARDS.md](docs/SMALL-BOARDS.md).
 - **Marauder V8** (`[env:marauder-v8]`, from upstream v1.36.0):
   justcallmekoko's ESP32-C5 board -- the NM-CYD-C5's SPI bus with an
   ILI9341 at 40 MHz, resistive touch, an SD slot, a MAX17048 battery gauge
@@ -572,7 +576,10 @@ were ported (v3.5.0), adapted where the two have grown apart:
 - **T-Deck Plus trackball** (v1.46, v1.49): the ball moves a cursor through
   each screen's buttons beside the touch panel (down/right the next, up/left
   the one before), a press presses there, and a touch puts the cursor out.
-  Held 2 s it is POCKET MODE; a press wakes it. Console: TBALL.
+  Held 2 s it is POCKET MODE; a press wakes it. Console: TBALL. It shares the
+  small boards' cursor (v1.42): the whole button lights up, lists scroll
+  under it, the first roll or press with it hidden only shows it, and
+  Backspace off a text screen is BACK.
 - **BRIGHT** has real - and + buttons (v1.35).
 - **SD log by date** (v1.36, PR #46 by jotra7): /MuleSkin-YYYYMMDD.log with
   the real time in each row (/MuleSkin-nodate.log until the clock is
@@ -584,6 +591,43 @@ were ported (v3.5.0), adapted where the two have grown apart:
   the card, the fix in DIAGNOSTICS. Not on the flasher until tested on
   hardware. (Upstream's emulator GPS replay and main-screen GPS label were
   not brought over.)
+
+### The small boards, brought over from upstream SquachWatch (v1.42-v1.43)
+
+The StickS3 and the Cardputer ADV got upstream's reworked key cursor, laid
+out for MuleSkin's own screens ([docs/SMALL-BOARDS.md](docs/SMALL-BOARDS.md)):
+
+- **One button scheme.** StickS3: front click next, front hold select, side
+  click BACK, side hold HOME. Cardputer: arrows move, ENTER selects, ESC is
+  BACK, ESC held 3 s is HOME. BACK on the main screen opens the menu.
+- **The whole button lights up** (a sliding purple-cyan-pink gradient) in
+  place of the amber brackets. BACK always lands on the screen's own BACK or
+  CANCEL, found with its own hit test, never on a guessed spot.
+- **Real stops on every screen**, found by sweeping each screen's hit test:
+  the color check, UPDATE, WIFI NETWORKS and its scan, MY ALERTS, the
+  ignore list, HUNT, IN MEETING, TODAY, WIFI TIME, the DEX tiles, SYSTEM
+  PROPERTIES, AUTO UPDATE, the time zone card. Half-hidden rows are skipped.
+- **Lists scroll under the cursor and loop**: no paging arrows.
+- **Cardputer**: the WiFi password, MY ALERTS' pattern and label, and the PIN
+  type on the keyboard (TAB shows a password); a letter presses the button
+  that starts with it, plus W / L / M / T / S from the main screen
+  ([docs/CARDPUTER-HOTKEYS.md](docs/CARDPUTER-HOTKEYS.md));
+  the SD slot; an M5 Unit GPS on the Grove port for WARDRIVE (the CYD GPS
+  code, 115200 first).
+- **StickS3**: the BMI270 wakes a dark screen on a wiggle or a shake (the
+  Cardputer's too); POWER SAVER on by default, dark after a minute. No
+  SECURITY, WIFI NETWORKS or UPDATE OVER WIFI: nothing can be typed on two
+  buttons, and a PIN saved earlier never locks it.
+- CALIBRATE TOUCH is gone from both; CHECK COLORS and CHARGE MODE fit 135
+  rows; prompts say PRESS, not TAP; the scrollbar fades when the list stops.
+- Dev builds `sticks3-dev` and `cardputer-adv-dev` take KEY, TYPE and SHOT on
+  the console; `tools/shot.py`, `goto.py` and `sheet.py` drive them
+  ([docs/SMALL-BOARDS-DEV.md](docs/SMALL-BOARDS-DEV.md)).
+
+Not brought over: FOB MODE and knocking or shaking the mascot (upstream's
+are Squachy's), the EXT SCREEN, the speaker tones and WARDRIVE SOUND (no
+sound layer for the boards' codecs here), gps-status.log, and the SquachMesh,
+SCAN and desk screens' stops.
 
 ### Boards brought over from upstream SquachWatch (v1.41-v1.46), build-it-yourself
 
