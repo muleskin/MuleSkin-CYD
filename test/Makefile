@@ -27,7 +27,7 @@ ifneq ($(findstring mingw,$(shell $(CXX) -dumpmachine)),)
 CXXFLAGS += -include $(SIM)/win_compat.h
 endif
 
-TESTS := remote_id_test ibeacon_test signatures_test emitter_roundtrip_test ignore_list_test hacker_test pwnagotchi_test shim_fidelity_test qwerty_test device_info_test security_test blackbox_test hunt_test bgretire_test autoquiet_test framepush_test touchfit_test logindex_test dex_test regulars_test spam_test gnss_test wigle_test wardrive_test wardrive_seen_test lora_survey_test lora_msgs_test lora_json_test lora_feed_test lora_airtime_test lora_ident_test lora_enrich_test lora_channels_test lora_nodes_test lora_crypto_test lora_meshtastic_test lora_meshcore_test lora_lorawan_test lora_ham_test version_test auto_time_test radar_blip_test night_mode_test tracker_follow_test today_test sig_extra_test push_queue_test muleskin_art_test karma_watch_test tracker_verdict_test away_days_test home_aps_test sd_row_test myalerts_test
+TESTS := remote_id_test ibeacon_test signatures_test emitter_roundtrip_test ignore_list_test hacker_test pwnagotchi_test shim_fidelity_test qwerty_test device_info_test security_test blackbox_test hunt_test bgretire_test autoquiet_test framepush_test touchfit_test logindex_test dex_test regulars_test spam_test gnss_test wigle_test wardrive_test wardrive_seen_test lora_survey_test lora_msgs_test lora_json_test lora_feed_test lora_airtime_test lora_ident_test lora_enrich_test lora_channels_test lora_nodes_test lora_crypto_test lora_meshtastic_test lora_meshcore_test lora_lorawan_test lora_ham_test version_test auto_time_test radar_blip_test night_mode_test tracker_follow_test today_test sig_extra_test push_queue_test muleskin_art_test karma_watch_test tracker_verdict_test away_days_test home_aps_test sd_row_test myalerts_test lora_opalert_test
 
 # Only the units under test get linked in. Pulling the whole firmware
 # would drag in TFT_eSPI, NimBLE and the UI, and a test that needs a
@@ -100,6 +100,8 @@ lora_meshtastic_test_SRCS    := $(SRC)/lora_meshtastic.cpp $(SRC)/lora_crypto.cp
 lora_meshcore_test_SRCS      := $(SRC)/lora_meshcore.cpp $(SRC)/lora_crypto.cpp
 # LoRaWAN: the envelope, the registry, MAC commands, the MIC and cipher on a published vector, the beacon.
 lora_lorawan_test_SRCS       := $(SRC)/lora_lorawan.cpp $(SRC)/lora_crypto.cpp
+lora_opalert_test_SRCS       := $(SRC)/lora_opalert.cpp $(SRC)/lora_lorawan.cpp $(SRC)/lora_crypto.cpp
+lora_opalert_test_SRCS       := $(SRC)/lora_opalert.cpp $(SRC)/lora_lorawan.cpp $(SRC)/lora_crypto.cpp
 # LoRa APRS, MeshCom and FANET: plaintext, so every field is a coordinate that must land where it says.
 lora_ham_test_SRCS           := $(SRC)/lora_aprs.cpp $(SRC)/lora_fanet.cpp $(SRC)/lora_crypto.cpp
 # The channel list across a reboot, through the settings store and the

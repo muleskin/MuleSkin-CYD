@@ -218,6 +218,7 @@ static const char* counterLabel(DetectionType t) {
         // keeps its own label everywhere else -- it just does not get its
         // own column here, because its count is inside this one.
         case DetectionType::HACKER:      return "HACK";
+        case DetectionType::LORAWAN:     return "LWAN";
         case DetectionType::MINE:        return "MINE";
         default:                         return "?";
     }
@@ -295,7 +296,12 @@ static const uint8_t FIXED_COUNTER_TYPES_N =
 // the one that asked for the type gets it, and the rule above stays true
 // without anybody having to remember it. Twelve is what this row has
 // always drawn, so the layout never grows.
-static const uint8_t MAX_COUNTER_TYPES = FIXED_COUNTER_TYPES_N + 1;
+#if MULESKIN_LORA
+static const uint8_t LORA_COUNTER_TYPES = 1;
+#else
+static const uint8_t LORA_COUNTER_TYPES = 0;
+#endif
+static const uint8_t MAX_COUNTER_TYPES = FIXED_COUNTER_TYPES_N + 1 + LORA_COUNTER_TYPES;
 // Alphabetical by the label the row shows (ALPR, AXON, ... TRACKER), sorted
 // here rather than written in that order above so the beacon column, when
 // it is on, lands in its place among them instead of tacked on the end.
@@ -304,6 +310,12 @@ static uint8_t activeCounterTypes(DetectionType* out) {
     for (; n < FIXED_COUNTER_TYPES_N; n++) out[n] = FIXED_COUNTER_TYPES[n];
     if (mineColumn())                                       out[n++] = DetectionType::MINE;
     else if (Settings::typeEnabled(DetectionType::IBEACON)) out[n++] = DetectionType::IBEACON;
+#if MULESKIN_LORA
+    // A board with a LoRa radio has one more thing it can catch: LWAN, after
+    // the rest. A column with nothing in it is not drawn, so the row only
+    // grows while an operator is in earshot. (Upstream v1.45.)
+    out[n++] = DetectionType::LORAWAN;
+#endif
     for (uint8_t i = 1; i < n; i++) {
         const DetectionType v = out[i];
         uint8_t j = i;
@@ -322,8 +334,11 @@ static const uint8_t MAX_PER_ROW_PORTRAIT   = 4;
 static const uint8_t COUNTER_ROWS_LANDSCAPE = 2;
 // Three rows in portrait at eleven columns and at twelve alike, so turning
 // beacons on never moves the counters up into MuleSkin's band.
+// The LoRa column is left out of this sum on purpose: counting it would
+// reserve another row on every portrait LoRa board for the one day all of
+// them are live at once.
 static const uint8_t COUNTER_ROWS_PORTRAIT  =
-    (MAX_COUNTER_TYPES + MAX_PER_ROW_PORTRAIT - 1) / MAX_PER_ROW_PORTRAIT;  // ceil
+    (FIXED_COUNTER_TYPES_N + 1 + MAX_PER_ROW_PORTRAIT - 1) / MAX_PER_ROW_PORTRAIT;  // ceil
 
 static void drawCounterLine(TFT_eSPI& t, int w, int y, const DetectionEngine& eng,
                             const DetectionType* types, uint8_t n) {

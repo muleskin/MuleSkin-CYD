@@ -33,13 +33,20 @@ enum class DetectionType : uint8_t {
     // chip, and sixteen Espressif prefixes already sit under FLOCK. HACKER
     // takes exact signatures only, which is what keeps it worth alerting on.
     HACKER  = 17,
+    // A LoRaWAN operator's network within earshot: a utility's meters, a
+    // city's sensors, The Things Network. One per OPERATOR, not per device --
+    // the DevAddr prefix names who runs it (lora_opalert.h), and a street of
+    // meters is one fact, not three hundred. Only a board with a LoRa radio
+    // can raise it, and only while that radio listens on LORAWAN. (Upstream
+    // SquachWatch v1.45; numbered as upstream, ahead of MINE.)
+    LORAWAN = 18,
     // MY ALERTS: a WiFi name matching one of the owner's own patterns (see
     // my_alerts.h). Kept LAST and outside everything that walks the catalogue
     // of known kit -- the DEX, BINGO and the TYPE FILTER stop short of it
     // (they loop to MINE, not COUNT): it is not a kind of device anybody
     // could collect, and its on/off switch is the list itself.
-    MINE    = 18,
-    COUNT   = 19
+    MINE    = 19,
+    COUNT   = 20
 };
 
 inline const char* detectionTypeName(DetectionType t) {
@@ -61,6 +68,7 @@ inline const char* detectionTypeName(DetectionType t) {
         case DetectionType::EVILTWIN:    return "EVIL TWIN";
         case DetectionType::IBEACON:     return "IBEACON";
         case DetectionType::HACKER:      return "HACKER";
+        case DetectionType::LORAWAN:     return "LORAWAN";
         case DetectionType::MINE:        return "MY ALERT";
         default:                         return "UNKNOWN";
     }

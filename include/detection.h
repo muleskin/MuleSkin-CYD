@@ -155,6 +155,19 @@ public:
     // Called from the BT Classic inquiry callback when a name match hits.
     void postBtClassic(Detection d);
 
+    // A LoRaWAN operator's network (Lora::OpAlert), from loop(). The same
+    // merge by address as postBle(), with one difference that is the reason
+    // it is separate: postBle() re-announces a row that went stale, and a row
+    // goes stale after STALE_MS of silence. That is right for an AirTag, which
+    // advertises every two seconds, and wrong for a network whose meters speak
+    // every ten minutes -- every frame would be a comeback and every comeback
+    // an alert. Here a row comes back quietly unless the operator has been
+    // unheard for LORA_GONE_MS, which is long enough to mean you left.
+    void postLora(Detection d);
+    static const uint32_t LORA_GONE_MS = 60UL * 60UL * 1000UL;
+    // ...and how long before its row stops counting as here (expireStale).
+    static const uint32_t LORA_STALE_MS = 10UL * 60UL * 1000UL;
+
     // ---- Raw WiFi network scan (WIFI NETWORKS' add screen) -----------
     // Pauses the continuous signature-matched scan and runs a real
     // one-shot WiFi.scanNetworks() AP sweep instead of the continuous

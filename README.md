@@ -44,6 +44,7 @@ headlines in Orbitron.
 | `IBEACON` | Retail proximity beacons | Exact Apple header `4C 00 02 15` — **off by default**, see below |
 | `MY ALERT` | WiFi networks whose names match your own patterns | Settings → MY ALERTS: up to eight names of your own, each with an optional label for the alert card. Plain text catches names that start with it; `*` stands for anything and `?` for one character (`veh*` catches `veh912`). At least two fixed characters. A PIN wipe clears the list (from upstream SquachWatch v1.45) |
 | `HACKER` | Flipper Zero, Pwnagotchi, WiFi Pineapple, ESP deauthers, karma APs | Flipper's service UUIDs `0x3080`–`0x3083` (not its company ID or OUI, which are its BUSY Bar's); the Pwnagotchi's own beacon payload; `Pineapple_` and `pwned` SSIDs; and any access point answering to five network names in five minutes from one address (beacons and probe responses) -- a karma AP, `Karma-AP` |
+| `LORAWAN` | A LoRaWAN operator's network in range (a utility's meters, city sensors, The Things Network) | LoRa boards only, while LORA listens on a LoRaWAN profile: the DevAddr prefix of a data frame, looked up in the LoRa Alliance NetID registry. One alert per operator, not per device |
 
 ### Confidence is per signature, not per type
 

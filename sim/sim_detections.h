@@ -129,6 +129,9 @@ inline const SimDetectionProfile kSimProfiles[] = {
     { DetectionType::HACKER,      {0x06, 0x50, 0x49}, "Pineapple",   "",               -60, true,  "WiFi Pineapple" },
     { DetectionType::HACKER,      {0x06, 0xDE, 0xA7}, "Deauther",    "",               -57, true,  "ESP deauther" },
     { DetectionType::HACKER,      {0x02, 0xC0, 0xCA}, "Hak5-LA",     "",               -63, true,  "Hak5 address" },
+    // LORAWAN -- the made-up address Lora::OpAlert::macFor gives an operator,
+    // and the operator's name where a device's would be.
+    { DetectionType::LORAWAN,     {0x02, 0x4C, 0x57}, "LoRaWAN",     "Oresundskraft",  -97, false, "LoRaWAN operator" },
     // MY ALERTS -- an in-car router of the kind it was asked for. The label
     // is the first pattern on the list when there is one (see below).
     { DetectionType::MINE,        {0x02, 0x76, 0x45}, "CITY PD",     "veh912",         -64, true,  "My alert (car WiFi)" },

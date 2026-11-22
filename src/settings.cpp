@@ -61,7 +61,7 @@ static const uint32_t DEFAULT_OFF = (1u << (uint8_t)DetectionType::IBEACON);
 // type on), computed once at namespace-init time rather than a hand-
 // maintained literal so it can never drift out of sync with COUNT.
 // 32-bit, not 16. DetectionType::COUNT reached 17 when IBEACON was added
-// (and 18 with HACKER),
+// (18 with HACKER, 19 with LORAWAN),
 // and bit 16 does not exist in a uint16_t -- the shift is undefined and the
 // last type silently loses its switch. NVS has always stored this through
 // putUInt/getUInt, so the saved format is unchanged and nothing migrates.
@@ -342,15 +342,17 @@ void toggleBuzzer() { s_buzzer = !s_buzzer; s_prefs.putBool("buzzer", s_buzzer);
 uint8_t loraMode()  { return s_loraMode; }
 void cycleLoraMode() { s_loraMode = (uint8_t)((s_loraMode + 1) % 3); s_prefs.putUChar("loraMode", s_loraMode); }
 uint8_t loraListen() { return s_loraListen; }
-// BOTH, MESHTASTIC, MESHCORE, OFF, and round.
+// BOTH, MESHTASTIC, MESHCORE, LORAWAN, OFF, and round. LORAWAN parks the
+// radio on the band plan's downlink profile, where the LORAWAN detection
+// (lora_opalert.h) is fed from; the meshes are not heard while it is there.
 void cycleLoraListen() {
-    static const uint8_t NEXT[4] = { 3, 2, 0, 1 };
-    s_loraListen = NEXT[s_loraListen & 3];
+    static const uint8_t NEXT[5] = { 3, 2, 4, 1, 0 };
+    s_loraListen = NEXT[s_loraListen <= 4 ? s_loraListen : 3];
     s_prefs.putUChar("loraLstn", s_loraListen);
 }
 const char* loraListenName() {
-    static const char* const N[4] = { "OFF", "MESHTASTIC", "MESHCORE", "BOTH" };
-    return N[s_loraListen & 3];
+    static const char* const N[5] = { "OFF", "MESHTASTIC", "MESHCORE", "BOTH", "LORAWAN" };
+    return N[s_loraListen <= 4 ? s_loraListen : 3];
 }
 uint8_t loraRegion() { return s_loraRegion; }
 void setLoraRegion(uint8_t r) { s_loraRegion = r > 2 ? 0 : r; s_prefs.putUChar("loraRgn", s_loraRegion); }

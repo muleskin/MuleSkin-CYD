@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include "lora_pkt.h"
 #include "lora_nodes.h"
+#include "lora_opalert.h"
 #include "lora_survey.h"
 #include "lora_msgs.h"
 
@@ -108,6 +109,14 @@ bool    nodeAt(uint8_t i, Nodes::Node& out);
 // bytes, and ten kilobytes is neither a stack buffer nor a good use of the
 // internal RAM there is.
 uint8_t nodeSnapshot(Nodes::Node* out, uint8_t cap, uint8_t from = 0);
+
+// ---- LoRaWAN operators, for the detection engine ------------------------------
+// The next operator sighting waiting to become a Detection (lora_opalert.h),
+// or false. Filled on the radio task, taken on loop()'s: the engine's log is
+// not something the radio task should be writing into from inside this mutex.
+// One entry per operator, holding its newest signal, so a busy network cannot
+// crowd a quiet one out.
+bool takeOperatorHit(OpAlert::Hit& out);
 
 // ---- the channel keys, for the CHANNELS view --------------------------------
 // One row per key worth showing. The screens go through here rather than
@@ -226,6 +235,7 @@ inline uint8_t nodeCount() { return 0; }
 inline uint8_t nodeOrder(uint8_t*, uint8_t) { return 0; }
 inline bool nodeAt(uint8_t, Nodes::Node&) { return false; }
 inline uint8_t nodeSnapshot(Nodes::Node*, uint8_t, uint8_t = 0) { return 0; }
+inline bool takeOperatorHit(OpAlert::Hit&) { return false; }
 struct ChannelRow {
     Proto    proto;
     char     name[24];

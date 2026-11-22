@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "lora_pkt.h"
+#include "lora_lorawan.h"
 
 namespace Lora {
 namespace Nodes {
@@ -85,6 +86,11 @@ static const uint8_t CAP = 96;
 // Feed a classified packet in. `now` is millis(); `epoch` the wall clock
 // or 0. Decodes what it needs itself.
 void note(const Packet& pk, uint32_t now, uint32_t epoch);
+
+// LoRaWAN, with the packet beside it for the signal and the CRC
+// (Lora::OpAlert: which operator's network that was).
+typedef void (*LoRaWANHook)(const LoRaWAN::Decoded& d, const Packet& pk, uint32_t now);
+void setLoRaWANHook(LoRaWANHook fn);
 
 uint8_t     count();
 const Node* at(uint8_t i);
