@@ -70,6 +70,13 @@ extern volatile bool g_consoleBtUpdate; // UPDATE BT (main.cpp)
 extern volatile int8_t g_consolePush;    // PUSH OFF / ON / TEST (main.cpp)
 extern volatile bool g_consoleWho;       // WHO (main.cpp)
 extern volatile bool g_consoleRing;      // RING, the tracker heard most recently (main.cpp)
+#if defined(SQW_TRACKBALL)
+// TBALL: the T-Deck trackball's edges on the console, on or off; TBALL n:
+// how many edges make one step (main.cpp, smallKeysRead).
+extern volatile uint8_t g_ballEdgesPerStep;
+extern volatile bool    g_ballTrace;
+void tdeckBallStatus();   // the counts and the lines' levels, after either
+#endif
 extern volatile bool g_liveOn;   // LIVE ON / OFF (detection.cpp printLive)
 extern volatile bool g_consoleOutfitSet;
 extern volatile bool g_consoleAura;
@@ -654,6 +661,21 @@ void pollSerial() {
         // PUSH AT NIGHT's own hours.
         if (strcasecmp(line, "WHO") == 0) { g_consoleWho = true; continue; }
         if (strcasecmp(line, "RING") == 0) { g_consoleRing = true; continue; }
+#if defined(SQW_TRACKBALL)
+        if (strcasecmp(line, "TBALL") == 0) {
+            g_ballTrace = !g_ballTrace;
+            Serial.printf("[ball] trace %s, %u edges a step\n", g_ballTrace ? "on" : "off", (unsigned)g_ballEdgesPerStep);
+            tdeckBallStatus();
+            continue;
+        }
+        if (strncasecmp(line, "TBALL ", 6) == 0) {
+            const int n = atoi(line + 6);
+            if (n >= 1 && n <= 50) g_ballEdgesPerStep = (uint8_t)n;
+            Serial.printf("[ball] %u edges a step\n", (unsigned)g_ballEdgesPerStep);
+            tdeckBallStatus();
+            continue;
+        }
+#endif
 #if SQW_RING
         if (strncasecmp(line, "RING NAME ", 10) == 0) {
             TagRing::armFind(line + 10);

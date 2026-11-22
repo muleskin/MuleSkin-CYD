@@ -568,6 +568,10 @@ were ported (v3.5.0), adapted where the two have grown apart:
 - **POCKET MODE** (v1.34): the BOOT button puts the screen out and only the
   button brings it back; an alert lights it for its card, then it is dark
   again.
+- **T-Deck Plus trackball** (v1.46, v1.49): the ball moves a cursor through
+  each screen's buttons beside the touch panel (down/right the next, up/left
+  the one before), a press presses there, and a touch puts the cursor out.
+  Held 2 s it is POCKET MODE; a press wakes it. Console: TBALL.
 - **BRIGHT** has real - and + buttons (v1.35).
 - **SD log by date** (v1.36, PR #46 by jotra7): /MuleSkin-YYYYMMDD.log with
   the real time in each row (/MuleSkin-nodate.log until the clock is

@@ -880,8 +880,14 @@ static bool readTouchRaw(int16_t& a, int16_t& b);
 // Raw touch -> screen, the same way on every board: the Fit gives a point
 // in the panel's native (rotation 0) frame, and the rotation step turns it
 // into this rotation's coordinates. No board has its own maths any more.
-#if defined(SQW_SMALL)
+#if defined(SQW_SMALL) || defined(SQW_TRACKBALL)
 static TouchPoint stickPoll();   // the buttons or keys stand in for a finger; below
+#endif
+#if defined(SQW_TRACKBALL)
+static bool tdeckBallPending();
+static void tdeckBallForget();
+static bool tdeckBallIdle();
+static void tdeckBallTouched();
 #endif
 static TouchPoint pollTouch() {
 #if defined(SQW_SMALL)
@@ -904,6 +910,13 @@ static TouchPoint pollTouch() {
         s_held.valid = false;
         return tp;
     }
+#elif defined(SQW_TRACKBALL)
+    // The T-Deck's two pointers. A finger on the glass wins, puts the
+    // highlight out and throws away what the ball was doing. Off the glass
+    // the ball's cursor runs, but only while there is something for it to
+    // do: the stops' hit-test sweep is not worth a frame while nobody rolls.
+    if (!readTouchRaw(a, b)) return tdeckBallIdle() ? tp : stickPoll();
+    tdeckBallTouched();
 #else
     if (!readTouchRaw(a, b)) return tp;
 #endif
@@ -1125,6 +1138,13 @@ static bool s_screenDimmed = false;
 #else
 #define SQW_BOOT_BTN 0
 #endif
+// POCKET MODE: the boards with a button for it. The T-Deck uses its
+// trackball, held 2 s (tdeckPocketBall). (Upstream SquachWatch v1.49.)
+#if defined(TWATCH_S3) || SQW_BOOT_BTN || defined(TDECK_PLUS)
+#define SQW_POCKET 1
+#else
+#define SQW_POCKET 0
+#endif
 #if defined(TWATCH_S3)
 // A watch goes dark, not dim. When the screen timeout lands, the backlight
 // goes off and the ST7789 is put to sleep (DISPOFF, SLPIN: about a milliamp
@@ -1137,7 +1157,7 @@ static bool s_panelAsleep = false;
 static bool     s_onUsb = true;
 static bool s_radiosResting = false;   // the duty cycle's state; see twatchRadioTick()
 #endif
-#if defined(TWATCH_S3) || SQW_BOOT_BTN
+#if SQW_POCKET
 // POCKET MODE. A crown press (or the CYDs' BOOT button) with the screen on
 // turns it off at once, cable or not, and only another press turns it back
 // on: a touch does not, so a board in a pocket or a bag cannot be woken by
@@ -1152,6 +1172,8 @@ static uint32_t s_pocketNoteUntil = 0;
 static const uint32_t POCKET_NOTE_MS = 4000;
 #if defined(TWATCH_S3)
 static const char* const POCKET_HOW = "Press the crown to wake";
+#elif defined(TDECK_PLUS)
+static const char* const POCKET_HOW = "Press the trackball to wake";
 #else
 static const char* const POCKET_HOW = "Press BOOT again to wake";
 #endif
@@ -1178,6 +1200,28 @@ static void pocketPress(uint32_t now) {
         Serial.println("[pocket] on");
     }
 }
+#if defined(TDECK_PLUS)
+// The T-Deck has no free button (its BOOT is the trackball's press), so the
+// ball held 2 s is the press that turns the screen off, and while it is off
+// any press of the ball turns it back on. A press that did either is spent:
+// the UI never sees it, nor anything until the ball comes back up.
+static const uint32_t TB_POCKET_HOLD_MS = 2000;
+static bool s_tbPocketSpent = false;
+static bool tdeckPocketBall(bool pressed, uint32_t pressAt, uint32_t now) {
+    if (!pressed) {
+        const bool spent = s_tbPocketSpent;
+        s_tbPocketSpent = false;
+        return spent || s_crownDark;
+    }
+    if (s_tbPocketSpent) return true;
+    if (s_crownDark || now - pressAt >= TB_POCKET_HOLD_MS) {
+        s_tbPocketSpent = true;
+        pocketPress(now);
+        return true;
+    }
+    return false;
+}
+#endif
 #endif
 
 static void applyCpuClock();
@@ -1219,6 +1263,7 @@ static void applyBrightness() {
     // keeps the firmware's own 0..255-with-255-brightest convention.
     CrowBL::set(duty);
 #elif defined(TDECK_PLUS)
+    if (s_crownDark && s_screenDimmed) duty = 0;   // POCKET MODE is OFF, whatever DIM LEVEL says
     tdeckBacklight(duty);   // a stepped driver chip, not a PWM pin
 #elif defined(WAVESHARE_C5)
     // No backlight GPIO: the CH32 helper's PWM, over I2C.
@@ -1516,7 +1561,15 @@ static DetectionType s_confirmType = DetectionType::UNKNOWN;
 // then s_confirmType's own explanation either way.
 static bool          s_infoPending       = false;
 
-#if defined(SQW_SMALL)
+// The key cursor below: the boards with no touch panel, and the T-Deck Plus,
+// whose trackball (SQW_TRACKBALL, platformio.ini) drives the same cursor
+// beside its touch panel (see pollTouch). (Upstream SquachWatch v1.46.)
+#if defined(SQW_SMALL) || defined(SQW_TRACKBALL)
+#define SQW_KEYCURSOR 1
+#else
+#define SQW_KEYCURSOR 0
+#endif
+#if SQW_KEYCURSOR
 // ---- the small M5 boards' keys, standing in for a finger ---------------------
 // From upstream SquachWatch v1.31.0, laid out for MuleSkin's own screens. No
 // touch panel, so the keys drive the same tap handling every screen already
@@ -1582,6 +1635,97 @@ static SmallKeys smallKeysRead() {
     }
     cardReg(0x02, 0x0F);
     k.press = s_cardEnter;
+    return k;
+}
+#elif defined(SQW_TRACKBALL)
+// The T-Deck's trackball: four hall sensors round the ball, one line each
+// (up GPIO3, down 15, left 1, right 2: LilyGo's utilities.h), each toggling
+// as the ball rolls that way, and the ball itself a button on GPIO0 (BOOT,
+// LOW while pressed). Every edge is counted in an interrupt; a few edges the
+// same way make one step of the cursor: down and right to the next stop, up
+// and left to the one before. The press is the press at the cursor, held as
+// long as the ball is. Console: TBALL traces it, TBALL n sets edges a step.
+static const int TB_UP = 3, TB_DOWN = 15, TB_LEFT = 1, TB_RIGHT = 2, TB_PRESS = 0;
+static volatile uint16_t s_tbEdges[4];   // up, down, left, right
+static void IRAM_ATTR tbIsrUp()    { s_tbEdges[0]++; }
+static void IRAM_ATTR tbIsrDown()  { s_tbEdges[1]++; }
+static void IRAM_ATTR tbIsrLeft()  { s_tbEdges[2]++; }
+static void IRAM_ATTR tbIsrRight() { s_tbEdges[3]++; }
+volatile uint8_t g_ballEdgesPerStep = 4;   // TBALL n on the console
+volatile bool    g_ballTrace = false;      // TBALL: print the edges as they come
+static uint16_t s_tbSeen[4];
+static int16_t  s_tbAcc = 0;               // edges towards the next stop (+) or the last (-)
+static uint32_t s_tbLastEdge = 0;
+static bool     s_tbPressRaw = false, s_tbPress = false;
+static uint32_t s_tbPressAt = 0;
+static bool     s_tbOk = false;
+static const uint32_t TB_ROLL_GAP_MS = 400;   // a pause this long starts a new roll
+static void tdeckBallBegin() {
+    static const int pins[4] = { TB_UP, TB_DOWN, TB_LEFT, TB_RIGHT };
+    static void (*const isr[4])() = { tbIsrUp, tbIsrDown, tbIsrLeft, tbIsrRight };
+    for (int i = 0; i < 4; i++) {
+        pinMode(pins[i], INPUT_PULLUP);
+        attachInterrupt(digitalPinToInterrupt(pins[i]), isr[i], CHANGE);
+        s_tbSeen[i] = s_tbEdges[i];
+    }
+    pinMode(TB_PRESS, INPUT_PULLUP);
+    s_tbOk = true;
+    Serial.printf("[keys] trackball on GPIO %d/%d/%d/%d, press GPIO %d, %u edges a step\n",
+                  TB_UP, TB_DOWN, TB_LEFT, TB_RIGHT, TB_PRESS, (unsigned)g_ballEdgesPerStep);
+}
+// TBALL on the console: every edge counted since boot and each line's level
+// now, so a ball that seems dead can be told from one nobody is rolling.
+void tdeckBallStatus() {
+    Serial.printf("[ball] %s; edges since boot up %u down %u left %u right %u; lines up %d down %d left %d right %d press %d\n",
+                  s_tbOk ? "on" : "NOT STARTED",
+                  (unsigned)s_tbEdges[0], (unsigned)s_tbEdges[1], (unsigned)s_tbEdges[2], (unsigned)s_tbEdges[3],
+                  digitalRead(TB_UP), digitalRead(TB_DOWN), digitalRead(TB_LEFT), digitalRead(TB_RIGHT), digitalRead(TB_PRESS));
+}
+// Anything for the cursor to do: a roll not yet taken, or the ball down.
+static bool tdeckBallPending() {
+    if (!s_tbOk) return false;
+    for (int i = 0; i < 4; i++) if (s_tbEdges[i] != s_tbSeen[i]) return true;
+    const int step = g_ballEdgesPerStep ? g_ballEdgesPerStep : 1;
+    return s_tbPress || s_tbPressRaw || digitalRead(TB_PRESS) == LOW || s_tbAcc >= step || s_tbAcc <= -step;
+}
+// Off the glass: nothing the ball did before the finger counts.
+static void tdeckBallForget() {
+    for (int i = 0; i < 4; i++) s_tbSeen[i] = s_tbEdges[i];
+    s_tbAcc = 0;
+}
+static SmallKeys smallKeysRead() {
+    SmallKeys k = { false, false, false, false };
+    if (!s_tbOk) return k;
+    const uint32_t now = millis();
+    uint16_t d[4];
+    for (int i = 0; i < 4; i++) {
+        const uint16_t e = s_tbEdges[i];
+        d[i] = (uint16_t)(e - s_tbSeen[i]);
+        s_tbSeen[i] = e;
+    }
+    const int step = g_ballEdgesPerStep ? g_ballEdgesPerStep : 1;
+    const int fwd = d[1] + d[3], bwd = d[0] + d[2];
+    if (fwd || bwd) {
+        if (now - s_tbLastEdge > TB_ROLL_GAP_MS) s_tbAcc = 0;   // a new roll: the last one's leftovers don't count
+        s_tbLastEdge = now;
+        int acc = s_tbAcc + fwd - bwd;
+        // A hard flick queues at most three steps, not a page of them.
+        if (acc > 3 * step) acc = 3 * step; else if (acc < -3 * step) acc = -3 * step;
+        s_tbAcc = (int16_t)acc;
+        if (g_ballTrace) Serial.printf("[ball] up %u down %u left %u right %u -> %d\n", d[0], d[1], d[2], d[3], acc);
+    }
+    if (s_tbAcc >= step)       { k.next = true; s_tbAcc -= step; }
+    else if (s_tbAcc <= -step) { k.prev = true; s_tbAcc += step; }
+    const bool raw = digitalRead(TB_PRESS) == LOW;
+    if (raw != s_tbPressRaw) { s_tbPressRaw = raw; s_tbPressAt = now; }
+    else if (raw != s_tbPress && now - s_tbPressAt >= 20) {   // 20 ms steady: a press, not a bounce
+        s_tbPress = raw;
+        if (raw && g_ballTrace) Serial.println("[ball] press");
+    }
+    // POCKET MODE: the press may be its own (held 2 s, or waking a dark
+    // screen); then nothing else sees it, nor the ball rolled in the dark.
+    if (tdeckPocketBall(s_tbPress, s_tbPressAt, now)) { s_tbAcc = 0; return SmallKeys{ false, false, false, false }; }
+    k.press = s_tbPress;
     return k;
 }
 #else
@@ -1806,6 +1950,20 @@ static TouchPoint stickPoll() {
     s_stickKey1Was = k1;
     return tp;
 }
+
+#if defined(SQW_TRACKBALL)
+static bool tdeckBallIdle() {
+    const uint32_t now = millis();
+    return !tdeckBallPending() && !s_stickHoldUntil && !s_stickDrag &&
+           !(s_stickShownAt && now - s_stickShownAt < STICK_SHOW_MS);
+}
+static void tdeckBallTouched() {
+    s_stickShownAt = 0;
+    s_stickHoldUntil = 0;
+    s_stickDrag = 0;
+    tdeckBallForget();
+}
+#endif
 
 // The cursor: amber brackets round the stop, or an arrow on the two that
 // scroll, drawn last, over the frame.
@@ -5074,6 +5232,9 @@ void setup() {
     usingCapTouch = Gt911::begin();
     Serial.println(usingCapTouch ? "T-Deck Plus -- GT911 capacitive touch answered."
                                  : "T-Deck Plus -- GT911 did not answer; no touch.");
+#if defined(SQW_TRACKBALL)
+    tdeckBallBegin();                     // the trackball: a cursor beside the touch panel
+#endif
     { char b[16]; boardBatteryLine(b, sizeof b); Serial.printf("[batt] %s (raw GPIO%d %u mV)\n", b, BOARD_BAT_ADC, (unsigned)analogReadMilliVolts(BOARD_BAT_ADC)); }
 #elif defined(CYD32C) || defined(CYD35C)
     // The GT911, on the CYD's capacitive I2C pins. Raw panel pixels in the
@@ -6236,7 +6397,7 @@ void loop() {
     Regulars::tick(now);
 
     TouchPoint tp = pollTouch();
-#if defined(SQW_SMALL)
+#if defined(SQW_SMALL) || defined(SQW_TRACKBALL)
     if (s_stickHome) {
         s_stickHome = false;
         if (state != AppState::CLEAR && state != AppState::BOOT) enterClear();
@@ -8880,7 +9041,7 @@ void loop() {
         if (now - transitionStart < TRANSITION_MS) {
             Theme::drawTransitionGlitch(frame, now - transitionStart, TRANSITION_MS);
         }
-#if defined(SQW_SMALL)
+#if SQW_KEYCURSOR
         stickDrawCursor(frame, now);
 #endif
         FrameProf::lap(FrameProf::POST);
@@ -8971,7 +9132,7 @@ void loop() {
         // (see Settings::screenTimeoutSec), unless it is set to NEVER.
         if (s_onUsb) wantDim = false;
 #endif
-#if defined(TWATCH_S3) || SQW_BOOT_BTN
+#if SQW_POCKET
         // POCKET MODE, which beats the cable, the desk and a timeout of NEVER.
         // Only the button ends it (pocketPress); a touch never does.
         //
@@ -8993,7 +9154,7 @@ void loop() {
         if (wantDim != s_screenDimmed) {
             s_screenDimmed = wantDim;
             applyBrightness();
-#if defined(TWATCH_S3) || SQW_BOOT_BTN
+#if SQW_POCKET
             if (s_crownDark) Serial.println(wantDim ? "[pocket] screen dark" : "[pocket] screen lit for an alert");
 #endif
         }
