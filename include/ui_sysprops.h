@@ -29,3 +29,6 @@ void        uiSysPropsInit(TFT_eSPI& t);
 // than by the clock must sit still for it. Other boards draw once.
 void        uiSysPropsTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool advance = true);
 SysPropsHit uiSysPropsTouch(TFT_eSPI& t, int x, int y);
+// The buttons and the tabs, as points, for the key cursor (the boards with
+// no touch panel, and the T-Deck's trackball). Up to `cap`; how many.
+uint8_t     uiSysPropsStops(TFT_eSPI& t, int16_t* xs, int16_t* ys, uint8_t cap);

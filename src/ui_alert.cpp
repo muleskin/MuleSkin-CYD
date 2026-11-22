@@ -1002,6 +1002,7 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
     {
         int bx, by, bw, bh;
         moreInfoBtnRect(w, h, bx, by, bw, bh);
+        Theme::hotButton(bx, by, bw, bh, "INFO");   // the Cardputer's I, shared with IGNORE
         t.fillRect(bx, by, bw, bh, Theme::BG);
         t.drawRect(bx, by, bw, bh, Theme::PURPLE);
         t.setTextSize(2);
@@ -1029,6 +1030,7 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
     {
         int bx, by, bw, bh;
         huntBtnRect(w, h, bx, by, bw, bh);
+        Theme::hotButton(bx, by, bw, bh, "HUNT");
         t.fillRect(bx, by, bw, bh, Theme::BG);
         t.drawRect(bx, by, bw, bh, Theme::PURPLE);
         t.setTextSize(2);
@@ -1047,13 +1049,18 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
         snoozeBtnRect(w, h, bx, by, bw, bh);
         Theme::drawButton(t, bx, by, bw, bh, s_snzLabel ? s_snzLabel : "SNOOZE",
                           s_snzLabel != nullptr);
+        Theme::hotButton(bx, by, bw, bh, "SNOOZE");   // its name, whatever it says
         if (s_snzLabel) {
             const int barW = (int)((int32_t)(bw - 6) * s_snzLeft / 1000);
             t.fillRect(bx + 3, by + bh - 4, bw - 6, 2, Theme::BG);
             if (barW > 0) t.fillRect(bx + 3, by + bh - 4, barW, 2, Theme::AMBER);
             // Nothing else on the card says the button counts taps, so once
             // the first one has landed it says so itself, just above.
+#if defined(SQW_SMALL)
+            static const char* HINT = "PRESS AGAIN: LONGER";
+#else
             static const char* HINT = "TAP AGAIN: LONGER";
+#endif
             t.setTextFont(wideAlert(w) ? 2 : 1);
             t.setTextSize(1);
             t.setTextWrap(false);

@@ -49,6 +49,13 @@ extern TFT_eSPI tft;
     #define SD_CS_PIN 10
 #elif defined(TDECK_PLUS)
     #define SD_CS_PIN 39   // on the display's bus (40/38/41), per LilyGo's utilities.h
+#elif defined(CARDPUTER_ADV)
+    // The Cardputer ADV's microSD slot: SCK 40, MISO 39, MOSI 14, CS 12, a
+    // bus of its own (the panel is on 35/36), driven from the S3's other SPI
+    // host so the two never share one. Upstream shares that host with its
+    // EXT screen, which is not ported here. (Upstream SquachWatch v1.43.)
+    #define SD_CS_PIN 12
+    static SPIClass s_cardSpi(HSPI);
 #else
     #define SD_CS_PIN 5
 #endif
@@ -62,7 +69,7 @@ static const uint8_t SD_MAX_FILES = 2;
 
 bool SdLog::begin() {
     if (_ready) return true;
-#if defined(TWATCH_S3) || defined(SQW_SMALL)   // the Cardputer has a slot, on pins of its own: not brought up yet
+#if defined(TWATCH_S3) || defined(STICKS3)
     return false;   // no card slot; GPIO19/20 are the S3's USB pins
 #endif
 #if defined(CROWPANEL7)
@@ -156,6 +163,12 @@ bool SdLog::begin() {
     // CS 39), with the SX1262 beside it on CS 9: the same shared-bus treatment
     // as the C5 above, TFT_eSPI's own instance and nothing extra attached.
     if (!SD.begin(SD_CS_PIN, tft.getSPIinstance(), 4000000, "/sd", SD_MAX_FILES)) {
+#elif defined(CARDPUTER_ADV)
+    // The EXT header's panel CS (GPIO5) is parked high first, so a panel
+    // plugged in there never listens in on the card's clock and data.
+    pinMode(5, OUTPUT); digitalWrite(5, HIGH);
+    s_cardSpi.begin(40, 39, 14, -1);
+    if (!SD.begin(SD_CS_PIN, s_cardSpi, 4000000, "/sd", SD_MAX_FILES)) {
 #elif defined(AWOK)
     if (!SD.begin(SD_CS_PIN, SPI, 4000000, "/sd", SD_MAX_FILES)) {
 #else

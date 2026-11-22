@@ -109,7 +109,9 @@ static const SettingsRow ALL_ROWS[] = {
 #if defined(ESP32) && !defined(TWATCH_S3)
     SettingsRow::CHARGE_MODE,
 #endif
+#if !defined(STICKS3)   // a PIN on two buttons is misery: the StickS3 never locks (security.cpp)
     SettingsRow::SECURITY,
+#endif
     // CALIBRATE, CHECK COLORS, DIAGNOSTICS and RESET STATS moved behind the
     // SYSTEM row -- see SYSTEM_ROWS. They are the four you touch once a year,
     // and they were sitting below everything you actually adjust.
@@ -162,8 +164,14 @@ static const SettingsRow SYSTEM_ROWS[] = {
 #if defined(ESP32) && !defined(TWATCH_S3)
     SettingsRow::LAST_RUN,
 #endif
-    SettingsRow::CALIBRATE, SettingsRow::CHECK_COLORS,
-    SettingsRow::DIAGNOSTICS, SettingsRow::UPDATE_FIRMWARE, SettingsRow::UPDATE_CHECK, SettingsRow::UPDATE_CHANNEL, SettingsRow::AUTO_UPDATE, SettingsRow::WIFI_NETWORKS,
+#if !defined(SQW_SMALL)   // no touch panel to calibrate on the StickS3 or the Cardputer
+    SettingsRow::CALIBRATE,
+#endif
+    SettingsRow::CHECK_COLORS,
+    SettingsRow::DIAGNOSTICS, SettingsRow::UPDATE_FIRMWARE, SettingsRow::UPDATE_CHECK, SettingsRow::UPDATE_CHANNEL, SettingsRow::AUTO_UPDATE,
+#if !defined(STICKS3)   // no WiFi password on two buttons: the StickS3 updates over Bluetooth
+    SettingsRow::WIFI_NETWORKS,
+#endif
     SettingsRow::TIME_ZONE, SettingsRow::AUTO_TIME, SettingsRow::RESET_STATS,
 };
 static const uint8_t SYSTEM_ROWS_N = sizeof(SYSTEM_ROWS) / sizeof(SYSTEM_ROWS[0]);
@@ -547,6 +555,18 @@ void uiSettingsSetConfirm(SettingsRow r) {
 }
 
 SettingsRow uiSettingsConfirmRow() { return s_confirmRow; }
+
+// The two drawn buttons only, nothing around them: for the boards that aim a
+// cursor, where "outside the panel cancels" is a tap target nobody can see.
+// (Upstream SquachWatch v1.42.)
+SettingsConfirmTap uiSettingsConfirmButtonAt(int x, int y, int screenW, int screenH) {
+    if (s_confirmRow == SettingsRow::NONE) return SettingsConfirmTap::NONE;
+    int px, py, pw, ph, okX, okY, okW, okH, cnX, cnY, cnW, cnH;
+    settingsConfirmRects(screenW, screenH, px, py, pw, ph, okX, okY, okW, okH, cnX, cnY, cnW, cnH);
+    if (x >= okX && x <= okX + okW && y >= okY && y <= okY + okH) return SettingsConfirmTap::CONFIRM;
+    if (x >= cnX && x <= cnX + cnW && y >= cnY && y <= cnY + cnH) return SettingsConfirmTap::CANCEL;
+    return SettingsConfirmTap::NONE;
+}
 
 SettingsConfirmTap uiSettingsHitConfirm(int x, int y, int screenW, int screenH) {
     if (s_confirmRow == SettingsRow::NONE) return SettingsConfirmTap::NONE;

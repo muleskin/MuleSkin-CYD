@@ -461,8 +461,50 @@ uint8_t uiMenuTextSize(TFT_eSPI& t) {
     return t.width() >= 400 ? 3 : 2;
 }
 
+#if defined(CARDPUTER_ADV)
+static const uint8_t HOT_MAX = 32;
+static HotButton s_hot[HOT_MAX];
+static uint8_t   s_hotN = 0;
+static uint32_t  s_hotSeq = 0;
+
+void hotButton(int x, int y, int w, int h, const char* label) {
+    if (!label) return;
+    char c = 0;
+    for (const char* p = label; *p; p++) {
+        const char u = (*p >= 'a' && *p <= 'z') ? (char)(*p - 32) : *p;
+        if (u >= 'A' && u <= 'Z') { c = (char)(u + 32); break; }
+    }
+    uint8_t slot = HOT_MAX;
+    for (uint8_t i = 0; i < s_hotN; i++)
+        if (s_hot[i].x == x && s_hot[i].y == y && s_hot[i].w == w && s_hot[i].h == h) { slot = i; break; }
+    if (slot == HOT_MAX) {
+        if (s_hotN < HOT_MAX) slot = s_hotN++;
+        else {
+            slot = 0;
+            for (uint8_t i = 1; i < HOT_MAX; i++) if (s_hot[i].seq < s_hot[slot].seq) slot = i;
+        }
+    }
+    s_hot[slot] = { (int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h, c, ++s_hotSeq, millis() };
+}
+
+uint8_t hotButtons(const HotButton** out) {
+    const uint32_t now = millis();
+    uint8_t k = 0;
+    for (uint8_t i = 0; i < s_hotN; i++)
+        if (now - s_hot[i].at <= 400) s_hot[k++] = s_hot[i];
+    s_hotN = k;
+    *out = s_hot;
+    return s_hotN;
+}
+#else
+void hotButton(int, int, int, int, const char*) {}
+#endif
+
 void drawButton(TFT_eSPI& t, int x, int y, int w, int h,
                 const char* label, bool pressed, uint8_t textSize) {
+#if defined(CARDPUTER_ADV)
+    hotButton(x, y, w, h, label);
+#endif
     uint16_t fill = pressed ? PURPLE : BG;
     uint16_t fg   = pressed ? labelOn(PURPLE) : CYAN;
     t.fillRect(x, y, w, h, fill);
@@ -489,6 +531,9 @@ void drawButton(TFT_eSPI& t, int x, int y, int w, int h,
 
 void drawWin95Button(TFT_eSPI& t, int x, int y, int w, int h,
                      const char* label, bool sunken) {
+#if defined(CARDPUTER_ADV)
+    hotButton(x, y, w, h, label);
+#endif
     // Face first, inset by the two bevel rings so the edges below draw over
     // nothing they need to keep.
     t.fillRect(x + 2, y + 2, w - 4, h - 4, W95_FACE);
@@ -564,6 +609,7 @@ void drawButtonBar(TFT_eSPI& t, ButtonId highlighted, ButtonBarMode mode) {
         t.setTextSize(1);
         const char* m = (t.textWidth("< IN MEETING >") + 6 <= g.w[2]) ? "< IN MEETING >" : "IN MEETING";
         drawButton(t, g.x[2], g.y, g.w[2], g.h, m, highlighted == ButtonId::CLR);
+        hotButton(g.x[2], g.y, g.w[2], g.h, "MEETING");   // the Cardputer's M, not I
     }
 }
 
@@ -583,7 +629,28 @@ void drawScanline(TFT_eSPI& t, int y, uint16_t color) {
 void drawScrollbar(TFT_eSPI& t, int x, int y, int h,
                    int totalItems, int visibleItems, int scrollOffset) {
     if (totalItems <= visibleItems || visibleItems <= 0) return;
-    t.drawFastVLine(x, y, h, PURPLE);
+#if defined(SQW_SMALL)
+    // Shown while the list moves, then gone: on a 240x135 screen a bar that
+    // never leaves is one more thing in the way. A new list, or the same
+    // list scrolled, brings it back for SB_SHOW_MS and it fades out over
+    // the last SB_FADE_MS. (Upstream SquachWatch v1.43.)
+    static const uint32_t SB_SHOW_MS = 1200, SB_FADE_MS = 400;
+    static int sbX = -1, sbY = -1, sbH = -1, sbTotal = -1, sbOff = -1;
+    static uint32_t sbAt = 0;
+    const uint32_t nowMs = millis();
+    if (x != sbX || y != sbY || h != sbH || totalItems != sbTotal || scrollOffset != sbOff) {
+        sbX = x; sbY = y; sbH = h; sbTotal = totalItems; sbOff = scrollOffset;
+        sbAt = nowMs;
+    }
+    const uint32_t age = nowMs - sbAt;
+    if (age >= SB_SHOW_MS + SB_FADE_MS) return;
+    const uint16_t fade = age <= SB_SHOW_MS ? 0 : (uint16_t)((age - SB_SHOW_MS) * 256 / SB_FADE_MS);
+    const uint16_t lineCol  = blend(PURPLE, BG, fade);
+    const uint16_t thumbCol = blend(CYAN, BG, fade);
+#else
+    const uint16_t lineCol = PURPLE, thumbCol = CYAN;
+#endif
+    t.drawFastVLine(x, y, h, lineCol);
     int thumbH = h * visibleItems / totalItems;
     if (thumbH < 6) thumbH = 6;
     int maxScroll = totalItems - visibleItems;
@@ -591,7 +658,7 @@ void drawScrollbar(TFT_eSPI& t, int x, int y, int h,
     if (scrollOffset < 0) scrollOffset = 0;
     int travel = h - thumbH;
     int thumbY = y + (maxScroll > 0 ? (travel * scrollOffset / maxScroll) : 0);
-    t.fillRect(x - 1, thumbY, 3, thumbH, CYAN);
+    t.fillRect(x - 1, thumbY, 3, thumbH, thumbCol);
 }
 
 // The per-type artwork. Positionable, because the ALERT screen now draws it

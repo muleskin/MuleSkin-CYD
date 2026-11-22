@@ -31,6 +31,8 @@ void           uiWifiPassKey(char c, uint32_t now);
 // buffer does not keep the last frame (the 3.5"'s half-height sprite).
 void           uiWifiPassRedrawAll();
 void           uiWifiPassTouch(int x, int y, uint32_t now, WifiPassTouch phase);
+// BACK's rectangle, for the boards that aim a cursor or press ESC.
+bool           uiWifiPassBackRect(int16_t& x, int16_t& y, int16_t& w, int16_t& h);
 WifiPassResult uiWifiPassResult();
 const char*    uiWifiPassText();
 const char*    uiWifiPassSsid();

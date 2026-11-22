@@ -15,6 +15,9 @@ void uiPhoneTouch(int x, int y, uint32_t now, PhoneTouch phase);
 // A character from a physical keyboard (the T-Deck's): digits type, '\b'
 // deletes, anything else is ignored.
 void uiPhoneKey(char c);
+// The rectangle of BACK, when shown. Never the lock screen's FORGOT / WIPE?
+// in the same place: false there, so ESC never wipes. (Upstream v1.43.)
+bool uiPhoneBackRect(int16_t& x, int16_t& y, int16_t& w, int16_t& h);
 
 bool uiPhoneDone();
 

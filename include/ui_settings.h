@@ -135,3 +135,6 @@ enum class SettingsConfirmTap { NONE, CONFIRM, CANCEL };
 void               uiSettingsSetConfirm(SettingsRow r);
 SettingsRow        uiSettingsConfirmRow();
 SettingsConfirmTap uiSettingsHitConfirm(int x, int y, int screenW, int screenH);
+// The same, but only on the two drawn buttons (NONE everywhere else): what the
+// key cursor aims at.
+SettingsConfirmTap uiSettingsConfirmButtonAt(int x, int y, int screenW, int screenH);

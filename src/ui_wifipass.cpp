@@ -91,6 +91,13 @@ void put(int x, int y, int w, int h, char ch) {
 
 void layout(int w, int h) {
     s_keyN = 0;
+#if defined(CARDPUTER_ADV)
+    // The Cardputer types on its own keyboard: no keys on the screen, which
+    // at 135 rows covered the field being typed into. (Upstream v1.43.)
+    (void)w;
+    s_keyTop = h;
+    return;
+#endif
     const int avail = w - 2 * MARGIN;
     const int bandTop = TOP_H + 4, bandBottom = h - 4;
     int rh = (bandBottom - bandTop - 4 * ROW_GAP) / 5;
@@ -259,7 +266,7 @@ void drawAll(TFT_eSPI& t, uint32_t now) {
     // but floating on black they read as a wireframe of a keyboard rather
     // than as one. The panel is the whole difference.
     const int panelTop = s_keyTop - ROW_GAP;
-    Theme::drawSteelPanel(t, 0, panelTop, w, h - panelTop, false);
+    if (s_keyN) Theme::drawSteelPanel(t, 0, panelTop, w, h - panelTop, false);
     t.setTextWrap(false);
     // Header: BACK, then which network this is for.
     Theme::drawWin95Button(t, BACK_X, BACK_Y, BACK_W, BACK_H, "BACK", false);
@@ -277,6 +284,22 @@ void drawAll(TFT_eSPI& t, uint32_t now) {
     drawField(t, w, now);
     drawShow(t, w);
     drawKeys(t);
+#if defined(CARDPUTER_ADV)
+    {
+        // The password and MY ALERTS' patterns and labels share this
+        // keyboard: ENTER is OK for both.
+        const bool pass = strcmp(s_prompt, "PASSWORD FOR") == 0;
+        const char* const HINT[] = { "Type it on the keyboard.",
+                                     pass ? "ENTER joins.  TAB shows it." : "ENTER saves it.",
+                                     "ESC goes back." };
+        t.setTextSize(1);
+        t.setTextColor(Theme::CYAN, Theme::BLACK);
+        for (int i = 0; i < 3; i++) {
+            t.setCursor((w - t.textWidth(HINT[i])) / 2, FIELD_Y + FIELD_H + 18 + i * 14);
+            t.print(HINT[i]);
+        }
+    }
+#endif
     s_full = false;
 }
 
@@ -316,7 +339,14 @@ void uiWifiPassInitText(TFT_eSPI& t, const char* prompt, const char* subject, co
 // the keyboard's own shift and symbol keys already chose the character.
 void uiWifiPassKey(char c, uint32_t now) {
     if (c == '\r') c = K_OK;
+    if (c == '\t') { s_show = !s_show; return; }   // the Cardputer's TAB: SHOW / HIDE
     if (c == K_DEL || c == K_OK || (c >= ' ' && c < 0x7F)) type(c, now);
+}
+
+// BACK's rectangle, for the boards that aim a cursor or press ESC.
+bool uiWifiPassBackRect(int16_t& x, int16_t& y, int16_t& w, int16_t& h) {
+    x = BACK_X; y = BACK_Y; w = BACK_W; h = BACK_H;
+    return true;
 }
 
 void uiWifiPassTick(TFT_eSPI& t, uint32_t now) {

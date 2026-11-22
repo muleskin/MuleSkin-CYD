@@ -289,3 +289,22 @@ DexTap uiDexHitTest(TFT_eSPI& t, int x, int y, int screenW, int screenH) {
         default: return DexTap::NONE;
     }
 }
+
+bool uiDexCardOpen() { return s_card >= 0; }
+
+uint8_t uiDexStops(int screenW, int screenH, int16_t* xs, int16_t* ys, uint8_t cap) {
+    uint8_t n = 0;
+    auto add = [&](int x, int y) { if (n < cap) { xs[n] = (int16_t)x; ys[n] = (int16_t)y; n++; } };
+    if (s_card < 0) {
+        int cols, rows, gx, gy, cw, ch;
+        grid(screenW, screenH, cols, rows, gx, gy, cw, ch);
+        for (uint8_t i = 0; i < Dex::ENTRIES; i++)
+            add(gx + (i % cols) * (cw + 3) + cw / 2, gy + (i / cols) * (ch + 3) + ch / 2);
+        add(screenW / 2, screenH - Theme::pinnedBackH(screenW) / 2);   // BACK
+        return n;
+    }
+    // < (the card before), DEX (the index), > (the next).
+    const Theme::ButtonBarGeom bar = Theme::computeButtonBar(screenW, screenH);
+    for (int b = 0; b < 3; b++) add(bar.x[b] + bar.w[b] / 2, bar.y + bar.h / 2);
+    return n;
+}

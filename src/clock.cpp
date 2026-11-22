@@ -77,6 +77,16 @@ extern volatile uint8_t g_ballEdgesPerStep;
 extern volatile bool    g_ballTrace;
 void tdeckBallStatus();   // the counts and the lines' levels, after either
 #endif
+#if SQW_DEVTOOLS
+#include "shake.h"   // IMU: the BMI270's excursions on the console
+// The dev builds' console keys and screenshot (main.cpp, the key cursor's
+// devKeysMerge and devShotDump). Never in a release. (Upstream v1.42.)
+extern volatile uint8_t  g_devKey;
+extern volatile uint16_t g_devKeyMs;
+extern volatile bool     g_devShot;
+extern char              g_devType[48];
+extern volatile uint8_t  g_devTypeAt, g_devTypeN;
+#endif
 extern volatile bool g_liveOn;   // LIVE ON / OFF (detection.cpp printLive)
 extern volatile bool g_consoleOutfitSet;
 extern volatile bool g_consoleAura;
@@ -632,6 +642,28 @@ void pollSerial() {
         if (strcasecmp(line, "INVERT") == 0) { g_consoleInvert = true; continue; }
         if (strcasecmp(line, "ADC") == 0)    { g_consoleAdc = true; continue; }
         if (strcasecmp(line, "XYZZY") == 0)  { g_consoleXyzzy = true; continue; }
+#if SQW_DEVTOOLS
+        if (strcasecmp(line, "SHOT") == 0)       { g_devShot = true; continue; }
+        if (strcasecmp(line, "IMU") == 0)        { static bool on = false; on = !on; Shake::setTrace(on);
+                                                   Serial.printf("[imu] trace %s", on ? "on" : "off"); Serial.println(); continue; }
+        if (strncasecmp(line, "TYPE ", 5) == 0) {
+            g_devTypeN = 0;
+            strncpy(g_devType, line + 5, sizeof g_devType - 1);
+            g_devType[sizeof g_devType - 1] = 0;
+            g_devTypeAt = 0; g_devTypeN = (uint8_t)strlen(g_devType);
+            continue;
+        }
+        if (strcasecmp(line, "KEY NEXT") == 0)   { g_devKey = 1; continue; }
+        if (strcasecmp(line, "KEY PREV") == 0)   { g_devKey = 2; continue; }
+        if (strcasecmp(line, "KEY HOME") == 0)   { g_devKey = 3; continue; }
+        if (strcasecmp(line, "KEY BACK") == 0)   { g_devKey = 5; continue; }
+        if (strcasecmp(line, "KEY SELECT") == 0) { g_devKey = 6; continue; }
+        if (strncasecmp(line, "KEY PRESS", 9) == 0) {
+            g_devKeyMs = (uint16_t)atoi(line + 9);
+            g_devKey = 4;
+            continue;
+        }
+#endif
         if (strcasecmp(line, "LEGEND") == 0) { g_consoleLegend = true; continue; }
         if (strcasecmp(line, "SELFTEST") == 0) { g_consoleSelfTest = true; continue; }
         // PUSH ALERTS: the topic URL and the token are set here, the switch

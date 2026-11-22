@@ -80,6 +80,7 @@ uint32_t   s_rowSince = 0;          // millis() of the oldest unflushed row
 // the pushes in flight.
 volatile bool s_live = false;
 volatile bool s_paused = false;
+volatile bool s_fixNow = false;     // a real fix on the last tick (the Cardputer queues nothing without one)
 int           s_users = 0;
 
 bool     s_card = false;            // the last sdTick saw a card
@@ -206,6 +207,11 @@ void enqueue(bool wifi, const Pending& p) {
 // paused only a count.
 bool taking() {
     if (!__atomic_load_n(&s_live, __ATOMIC_SEQ_CST)) return false;
+#if defined(CARDPUTER_ADV)
+    // Without a fix nothing could be written: not queued, and not a loss.
+    // (Upstream SquachWatch v1.43.)
+    if (!s_fixNow) return false;
+#endif
     if (s_paused) { addDropped(1); return false; }
     return true;
 }
@@ -324,6 +330,7 @@ void sdTick(uint32_t nowMs, bool cardMounted) {
         // never arms. (See the note at the top of detection.cpp.)
         s_paused = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < PAUSE_BLOCK_B;
     }
+    s_fixNow = realFix(nowMs);
     drain(nowMs);
     if (s_rowCount && nowMs - s_rowSince >= FLUSH_MS) flush();
 }

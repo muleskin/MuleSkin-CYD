@@ -353,6 +353,23 @@ void uiSysPropsTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool 
     Theme::bubbleFontOff(t);
 }
 
+// (Upstream SquachWatch v1.42.)
+uint8_t uiSysPropsStops(TFT_eSPI& t, int16_t* xs, int16_t* ys, uint8_t cap) {
+    const Geom g = geom(t);
+    const Buttons b = buttons(t, g);
+    Theme::bubbleFontOff(t);
+    uint8_t n = 0;
+    auto add = [&](int x, int y) { if (n < cap) { xs[n] = (int16_t)x; ys[n] = (int16_t)y; n++; } };
+    if (s_tab == TAB_UPDATE) {
+        add(b.updX + b.updW / 2, g.btnY + BTN_H / 2);
+        add(b.laterX + b.laterW / 2, g.btnY + BTN_H / 2);
+    } else {
+        add(b.closeX + b.closeW / 2, g.btnY + BTN_H / 2);
+    }
+    for (uint8_t i = 0; i < TAB_N; i++) add(g.x + 4 + i * g.tabW + g.tabW / 2, g.tabY + TAB_H / 2);
+    return n;
+}
+
 SysPropsHit uiSysPropsTouch(TFT_eSPI& t, int x, int y) {
     const Geom g = geom(t);
     const Buttons b = buttons(t, g);

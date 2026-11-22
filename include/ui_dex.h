@@ -20,6 +20,11 @@ void uiDexTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool advan
 
 enum class DexTap : uint8_t { NONE, HANDLED, BACK };
 DexTap uiDexHitTest(TFT_eSPI& t, int x, int y, int screenW, int screenH);
+// For the key cursor (the boards with no touch panel, the T-Deck's ball):
+// whether a card is up, and the points worth stopping on -- every tile and
+// BACK on the index, the three bar buttons on a card. Up to `cap`; how many.
+bool    uiDexCardOpen();
+uint8_t uiDexStops(int screenW, int screenH, int16_t* xs, int16_t* ys, uint8_t cap);
 
 // For the Settings row: "11/17".
 uint8_t uiDexCaught(const DetectionEngine& eng);

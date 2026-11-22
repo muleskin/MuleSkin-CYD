@@ -150,7 +150,9 @@ void drawMenu(TFT_eSPI& t) {
     const char* other = OtaCore::otherVersion();
     pair(t, y, "OTHER SLOT", other ? other : "nothing to switch to");
 
+#if !defined(STICKS3)   // the StickS3 has no way to type a WiFi password: Bluetooth only
     Theme::drawWin95Button(t, g.x, g.wifiY, g.w, BTN_H, "UPDATE OVER WIFI", false);
+#endif
     if (OtaBle::available())
         Theme::drawWin95Button(t, g.x, g.btY,   g.w, BTN_H, "UPDATE OVER BLUETOOTH (BETA)", false);
     if (other) {
@@ -490,7 +492,9 @@ UpdateHit uiUpdateHitTest(TFT_eSPI& t, int x, int y, int* netIndex) {
                 if (in(x, y, p.noX,  p.btnY, p.btnW, BTN_H)) return UpdateHit::SWITCH_CANCEL;
                 return UpdateHit::NONE;
             }
+#if !defined(STICKS3)
             if (in(x, y, g.x, g.wifiY, g.w, BTN_H)) return UpdateHit::WIFI_START;
+#endif
             if (OtaBle::available() && in(x, y, g.x, g.btY, g.w, BTN_H)) return UpdateHit::BT_START;
             if (OtaCore::otherVersion() && in(x, y, g.x, g.switchY, g.w, BTN_H)) return UpdateHit::SWITCH;
             return onBack ? UpdateHit::BACK : UpdateHit::NONE;
