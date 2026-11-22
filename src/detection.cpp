@@ -44,7 +44,23 @@ extern volatile uint32_t g_advDumpUntil;   // ADVDUMP (clock.cpp)
 // on one target and wrong on another is worse than no guard.
 #include <esp_heap_caps.h>
 #include <string.h>
+#include <atomic>
 #include <SD.h>
+
+// -------- which heap the pressure numbers below are about --------
+//
+// Every "largest free block" this file reads is a number about INTERNAL SRAM,
+// and it has to be asked for that way. On a board with PSRAM (the S3s, the
+// T-Deck, the CrowPanel, the StickS3, the Cardputer) arduino-esp32 puts the
+// external RAM into the same allocator, and it carries MALLOC_CAP_8BIT too:
+// heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) walks both pools and
+// returns PSRAM's megabytes, so the seatbelt, the early flush and the passive
+// fallback could never arm there. Internal SRAM is what NimBLE, the WiFi
+// driver and FreeRTOS run out of. MALLOC_CAP_8BIT stays in the mask: on its
+// own MALLOC_CAP_INTERNAL also matches the 32-bit-only IRAM region, and with
+// both a board without PSRAM reads exactly what it read before. (Upstream
+// SquachWatch, issue #54, 2026-11-03.)
+static const uint32_t HEAP_PRESSURE_CAPS = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
 
 // -------- global engine instance (referenced by callbacks) --------
 static DetectionEngine* g_engine = nullptr;
@@ -688,9 +704,26 @@ void DetectionEngine::resetLifetime() {
     saveLifetimeByType();
 }
 
+// The detection log is written from two tasks on two cores: the NimBLE host
+// task (postBle) and the loop (the WiFi and deauth queues, expireStale,
+// CLEAR LOG). Unlocked, two new rows in the same instant could take the same
+// slot -- one catch overwrote the other, a LOG row came out blank, latest()
+// pointed at the wrong row and a type counter drifted. Every writer takes
+// this; readers (the screens) do not, and a torn read there is one frame of
+// one row. Recursive, because the merges call pushLog() with it held.
+// (Upstream SquachWatch review round 2, B7.)
+static SemaphoreHandle_t s_logMx = nullptr;
+namespace {
+struct LogLock {
+    LogLock()  { if (s_logMx) xSemaphoreTakeRecursive(s_logMx, portMAX_DELAY); }
+    ~LogLock() { if (s_logMx) xSemaphoreGiveRecursive(s_logMx); }
+};
+}
+
 bool DetectionEngine::init() {
     if (g_engine) return true;
     g_engine = this;
+    if (!s_logMx) s_logMx = xSemaphoreCreateRecursiveMutex();
 
     // The SD card is mounted LAST, after both radios -- see the end of this
     // function. It used to be first, and on a board with a card in the slot
@@ -733,7 +766,7 @@ bool DetectionEngine::init() {
 #endif
     Serial.println("[boot] starting WiFi");
     serialFlush();
-    Serial.printf("[boot] heap before WiFi: %lu free, %lu largest\n", (unsigned long)ESP.getFreeHeap(), (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    Serial.printf("[boot] heap before WiFi: %lu free, %lu largest\n", (unsigned long)ESP.getFreeHeap(), (unsigned long)heap_caps_get_largest_free_block(HEAP_PRESSURE_CAPS));
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     delay(50);
@@ -787,7 +820,7 @@ bool DetectionEngine::init() {
             WiFi.mode(WIFI_STA);
         }
     }
-    Serial.printf("[boot] heap with WiFi started: %lu free, %lu largest\n", (unsigned long)ESP.getFreeHeap(), (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    Serial.printf("[boot] heap with WiFi started: %lu free, %lu largest\n", (unsigned long)ESP.getFreeHeap(), (unsigned long)heap_caps_get_largest_free_block(HEAP_PRESSURE_CAPS));
     esp_wifi_set_promiscuous(true);
 #if SQW_WIFI_5G
     {
@@ -927,7 +960,7 @@ bool DetectionEngine::init() {
     // asked for both at once -- see the backlight note in main.cpp's setup().
     delay(150);
     s_bootHeap.wifiFree    = ESP.getFreeHeap();
-    s_bootHeap.wifiLargest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    s_bootHeap.wifiLargest = heap_caps_get_largest_free_block(HEAP_PRESSURE_CAPS);
     Serial.printf("[boot] heap with WiFi up: %lu free, %lu largest\n",
                   (unsigned long)s_bootHeap.wifiFree, (unsigned long)s_bootHeap.wifiLargest);
     Serial.println("[boot] starting Bluetooth");
@@ -979,7 +1012,7 @@ bool DetectionEngine::init() {
     scan->setMaxResults(0);
     scan->start(0, false, false);   // forever; not a restart
     s_bootHeap.bleFree    = ESP.getFreeHeap();
-    s_bootHeap.bleLargest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    s_bootHeap.bleLargest = heap_caps_get_largest_free_block(HEAP_PRESSURE_CAPS);
     Serial.printf("[boot] heap with Bluetooth up: %lu free, %lu largest\n",
                   (unsigned long)s_bootHeap.bleFree, (unsigned long)s_bootHeap.bleLargest);
 
@@ -1101,7 +1134,11 @@ static bool scanModeTick(uint32_t now, uint32_t largest) {
     s_advRate = (raw - lastRaw) * 1000UL / (now - lastAt);
     lastRaw = raw;
     lastAt  = now;
-    const bool pressedWindow = s_passiveUntil && (int32_t)(s_passiveUntil - now) > 0;
+    // An expired deadline is cleared, not left set: 2^31 ms later the signed
+    // difference turns positive again and would pin the scan passive for
+    // another 24.8 days. (Upstream review round 1.)
+    if (s_passiveUntil && (int32_t)(s_passiveUntil - now) <= 0) s_passiveUntil = 0;
+    const bool pressedWindow = s_passiveUntil != 0;
     bool want = s_wantPassive;
     // Heap pressure first: the bench may pin the scan active to watch it
     // suffer, but a board that is out of room goes passive whatever the pin
@@ -1139,11 +1176,11 @@ static void scanFlushTick() {
         Serial.printf("[scan] restart %lu freed %lu B (%lu total), heap %lu, largest %lu, dropped %lu\n",
                       (unsigned long)s_flush.count, (unsigned long)s_flush.lastFreed,
                       (unsigned long)s_flush.totalFreed, (unsigned long)ESP.getFreeHeap(),
-                      (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT),
+                      (unsigned long)heap_caps_get_largest_free_block(HEAP_PRESSURE_CAPS),
                       (unsigned long)s_advertsDropped);
     }
     const uint32_t now = millis();
-    const uint32_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    const uint32_t largest = heap_caps_get_largest_free_block(HEAP_PRESSURE_CAPS);
     s_heapLow = largest < 1536;
     bool modeChanged = scanModeTick(now, largest);
     if (s_windowPending) { s_windowPending = false; modeChanged = true; Serial.printf("[scan] window %u from the next restart\n", (unsigned)s_windowReq); }
@@ -1161,7 +1198,7 @@ static void scanFlushTick() {
         for (uint8_t i = 0; i < SCAN_PRESSED_LIMIT; i++)
             if (!s_pressedAt[i] || now - s_pressedAt[i] > 60000) allRecent = false;
         if (allRecent && !(s_passiveUntil && (int32_t)(s_passiveUntil - now) > 0)) {
-            s_passiveUntil = now + SCAN_PASSIVE_MS;
+            s_passiveUntil = (now + SCAN_PASSIVE_MS) | 1u;   // never 0, which means unset
             for (uint8_t i = 0; i < SCAN_PRESSED_LIMIT; i++) s_pressedAt[i] = 0;
             Serial.printf("[scan] passive for %lu s: too many devices for the heap here\n",
                           (unsigned long)(SCAN_PASSIVE_MS / 1000));
@@ -1180,6 +1217,31 @@ static void scanFlushTick() {
     ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_flushEv);
 }
 
+// When the radios stopped listening for the detection log (NEARBY, a WiFi
+// sweep, an update), so the rows can be given that time back on return.
+// Without it, everything still in the room went stale on the first pass
+// after a minute away and then "arrived" again: hits +1, a fresh ALERT for a
+// tag that never left. A rest (NIGHT POWER, the watch's duty cycle) is not
+// counted here; that is how the rest is meant to behave. (Upstream review
+// round 1.)
+static uint32_t s_agePausedAt = 0;   // 0 = listening
+static void noteAgeingPaused() { if (!s_agePausedAt) s_agePausedAt = millis() | 1u; }
+
+void DetectionEngine::resumeAgeing() {
+    if (!s_agePausedAt) return;
+    const uint32_t now = millis();
+    const uint32_t gap = now - s_agePausedAt;
+    s_agePausedAt = 0;
+    LogLock lock;
+    for (uint8_t i = 0; i < _logCount; i++) {
+        Detection& d = _log[(_logHead + LOG_CAP - 1 - i) % LOG_CAP];
+        if (!d.active) continue;
+        uint32_t seen = d.lastSeen + gap;
+        if ((int32_t)(seen - now) > 0) seen = now;   // heard again since: never ahead of now
+        d.lastSeen = seen;
+    }
+}
+
 void DetectionEngine::loop() {
     // Resting radios still take the BLE side of the loop when BLE is up;
     // only the WiFi steps below are skipped, since WiFi is stopped.
@@ -1188,9 +1250,18 @@ void DetectionEngine::loop() {
         // would fight WiFi.scanNetworks()'s own hopping during a WIFI
         // sweep, and the WiFi promiscuous queue is empty anyway (it's
         // disabled for the duration, see startRawWifiScan).
+        // The seatbelt still has to move: the host task keeps building
+        // strings for every advert during NEARBY, and a flag frozen at
+        // "fine" is the abort it exists to prevent (frozen at "low", every
+        // advert is dropped and NEARBY lists nothing).
+        s_heapLow = heap_caps_get_largest_free_block(HEAP_PRESSURE_CAPS) < 1536;
+        noteAgeingPaused();
         _sd.tick();
         return;
     }
+    // Back from NEARBY, a WiFi sweep or an update: the room was not being
+    // listened to, so that time does not count against "last seen".
+    resumeAgeing();
     // After the raw-scan return above, so a raw scan that owns the radio is
     // never restarted out from under it.
     scanFlushTick();
@@ -1358,6 +1429,7 @@ bool DetectionEngine::hop5(uint32_t now) {
 #endif
 
 void DetectionEngine::clearLog() {
+    LogLock lock;
     _logCount = 0;
     _logHead  = 0;
     _latest   = nullptr;
@@ -1418,6 +1490,7 @@ void IRAM_ATTR DetectionEngine::postDeauth(const uint8_t* mac, int8_t rssi, uint
 
 void DetectionEngine::processDeauthQ() {
     while (_deauthQTail != _deauthQHead) {
+        LogLock lock;
         DeauthQEntry e;
         {
             noInterrupts();
@@ -1427,35 +1500,50 @@ void DetectionEngine::processDeauthQ() {
         }
 
         uint32_t now = millis();
+        // Every broadcast frame, whoever sent it, in one shared window.
+        if (now - _deauthAllStart > DEAUTH_WINDOW_MS) { _deauthAllStart = now; _deauthAllBcast = 0; }
+        if (e.bcast && _deauthAllBcast < 255) _deauthAllBcast++;
+
         // This sender's rolling window: resets after a gap longer than the
         // window itself, so an isolated frame (normal traffic) never counts
         // toward a burst that happened long before or after it. A sender
-        // not seen before takes the slot whose window is oldest.
+        // not seen before takes a slot whose window has run out -- the
+        // oldest of those -- and never one still counting: pushing a live
+        // count out let a sender rotation keep every count under the bar.
         DeauthSender* s = nullptr;
         for (uint8_t i = 0; i < DEAUTH_SENDERS; i++)
             if (memcmp(_deauthSenders[i].mac, e.mac, 6) == 0) { s = &_deauthSenders[i]; break; }
         if (!s) {
-            s = &_deauthSenders[0];
-            for (uint8_t i = 1; i < DEAUTH_SENDERS; i++)
-                if (_deauthSenders[i].winStart < s->winStart) s = &_deauthSenders[i];
-            memcpy(s->mac, e.mac, 6);
-            s->winStart = now; s->count = 0; s->bcastCount = 0;
+            for (uint8_t i = 0; i < DEAUTH_SENDERS; i++) {
+                DeauthSender& c = _deauthSenders[i];
+                if (c.winStart && now - c.winStart <= DEAUTH_WINDOW_MS) continue;   // still counting
+                if (!s || (int32_t)(c.winStart - s->winStart) < 0) s = &c;
+            }
+            if (s) {
+                memcpy(s->mac, e.mac, 6);
+                s->winStart = now; s->count = 0; s->bcastCount = 0;
+            }
         }
-        if (now - s->winStart > DEAUTH_WINDOW_MS) {
+        if (s && now - s->winStart > DEAUTH_WINDOW_MS) {
             s->winStart = now;
             s->count = 0; s->bcastCount = 0;
         }
-        if (s->count < 255) s->count++;
-        if (e.bcast && s->bcastCount < 255) s->bcastCount++;
-        const uint8_t burst = s->count;
+        if (s && s->count < 255) s->count++;
+        if (s && e.bcast && s->bcastCount < 255) s->bcastCount++;
+        const bool oneSender = s && (s->count >= DEAUTH_THRESHOLD || s->bcastCount >= DEAUTH_BCAST);
+        const bool anySender = _deauthAllBcast >= DEAUTH_BCAST_ALL;
+        const uint8_t burst = oneSender ? s->count : _deauthAllBcast;
 
         // Window/cooldown bookkeeping above still runs even while
         // disabled, so re-enabling doesn't instantly fire off a stale
-        // accumulated count -- only the actual recording is gated.
-        if ((s->count >= DEAUTH_THRESHOLD || s->bcastCount >= DEAUTH_BCAST) &&
-            (now - _deauthLastFireMs) > DEAUTH_COOLDOWN_MS &&
+        // accumulated count -- only the actual recording is gated. The
+        // cooldown starts at the first alert, not at boot: "0 ms ago" kept
+        // the first fifteen seconds after a restart deaf. (Upstream review
+        // round 2, B8.)
+        if ((oneSender || anySender) &&
+            (!_deauthLastFireMs || now - _deauthLastFireMs > DEAUTH_COOLDOWN_MS) &&
             Settings::typeEnabled(DetectionType::DEAUTH)) {
-            _deauthLastFireMs = now;
+            _deauthLastFireMs = now | 1u;
             Detection d;
             memset(&d, 0, sizeof(d));
             memcpy(d.mac, e.mac, 6);
@@ -1496,7 +1584,7 @@ void DetectionEngine::processDeauthQ() {
                 Regulars::note(e.mac, DetectionType::DEAUTH);
                 _latest = &row;
                 _latestNew = false;      // the row the first flood made
-                _latestChangeMs = now;
+                _latestSeq = _latestSeq + 1;
                 queueBlackBox(row, true);
                 return;
             }
@@ -1528,6 +1616,7 @@ void DetectionEngine::postBle(Detection d) {
     // the normal expireStale() path like any other device that goes
     // out of range.
     if (!Settings::typeEnabled(d.type)) return;
+    LogLock lock;
     // Try to dedupe / merge with existing log entry by MAC
     for (uint8_t i = 0; i < _logCount; i++) {
         uint8_t slot = (_logHead + LOG_CAP - 1 - i) % LOG_CAP;
@@ -1569,7 +1658,6 @@ void DetectionEngine::postBle(Detection d) {
             _log[slot].rssi = d.rssi;
             _log[slot].lastSeen = millis();
             Dex::note(d.type, d.rssi);
-    Regulars::note(d.mac, d.type);
             Regulars::note(d.mac, d.type);
             if (reactivating) {
                 _log[slot].hits++;
@@ -1579,7 +1667,7 @@ void DetectionEngine::postBle(Detection d) {
                 _typeCounts[(uint8_t)d.type]++;
                 _latest = &_log[slot];
                 _latestNew = false;                // ...but a device we had already
-                _latestChangeMs = millis();
+                _latestSeq = _latestSeq + 1;
                 queueBlackBox(_log[slot], true);
             }
             return;
@@ -1600,7 +1688,15 @@ void DetectionEngine::startRawWifiScan() {
     // during the scan) before touching the radio.
     g_rawMode = RawScanMode::WIFI;
     esp_wifi_set_promiscuous(false);
-    WiFi.scanNetworks(true /* async */);
+    // PASSIVE, like the detection sweep in radioReport() above. The default
+    // scanNetworks() is an ACTIVE scan: it TRANSMITS a probe request on every
+    // channel, carrying this board's own MAC. A surveillance detector that
+    // announces itself on all thirteen channels is the one emission nobody
+    // asked for, and the FAQ's "everything that goes out" table never listed
+    // it. Passive is also quicker here: 150ms x 13 ~= 2s, against the active
+    // default of up to 300ms x 13. Hidden networks are the only thing a probe
+    // would have added, and this screen never showed them anyway.
+    WiFi.scanNetworks(true /* async */, false /* no hidden */, true /* passive */, 150);
 }
 
 bool DetectionEngine::rawWifiScanDone() const {
@@ -1680,6 +1776,7 @@ void DetectionEngine::startUpdateRadio() {
     }
     if (g_rawMode == RawScanMode::WIFI) WiFi.scanDelete();
     g_rawMode = RawScanMode::UPDATE;
+    noteAgeingPaused();
     esp_wifi_set_promiscuous(false);
     ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &s_updStopEv);
 }
@@ -1813,8 +1910,15 @@ int8_t DetectionEngine::watchRssiAt(uint8_t idx) const {
 }
 
 void DetectionEngine::huntBle(const uint8_t* mac, const char* name) {
-    _huntKind = WatchKind::BLE;
+    // The scan callback reads these on the other core: the hunt is off while
+    // the new target is written, and on only once it is all there, so an
+    // advert from the old target cannot stamp the new hunt's reading.
+    // (Upstream review round 1.)
+    _huntKind = WatchKind::NONE;
+    std::atomic_signal_fence(std::memory_order_seq_cst);
     memcpy(_huntMac, mac, 6);
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+    _huntKind = WatchKind::BLE;
     strncpy(_huntLabel, (name && name[0]) ? name : "Unnamed device", sizeof(_huntLabel) - 1);
     _huntLabel[sizeof(_huntLabel) - 1] = 0;
     _huntRssiHead = _huntRssiCount = 0;
@@ -1822,8 +1926,11 @@ void DetectionEngine::huntBle(const uint8_t* mac, const char* name) {
 }
 
 void DetectionEngine::huntWifi(const uint8_t* bssid, const char* ssid) {
-    _huntKind = WatchKind::WIFI;
+    _huntKind = WatchKind::NONE;
+    std::atomic_signal_fence(std::memory_order_seq_cst);
     memcpy(_huntMac, bssid, 6);
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+    _huntKind = WatchKind::WIFI;
     strncpy(_huntLabel, (ssid && ssid[0]) ? ssid : "(hidden)", sizeof(_huntLabel) - 1);
     _huntLabel[sizeof(_huntLabel) - 1] = 0;
     _huntRssiHead = _huntRssiCount = 0;
@@ -1927,6 +2034,7 @@ bool DetectionEngine::noteApBeacon(const uint8_t* bssid, const char* ssid, bool 
 
 void DetectionEngine::processWiFiQ() {
     while (_wifiQTail != _wifiQHead) {
+        LogLock lock;   // per frame, so the host task is never kept waiting long
         WiFiQEntry e;
         {
             // copy out under volatile guard
@@ -2041,7 +2149,7 @@ void DetectionEngine::processWiFiQ() {
                     _typeCounts[(uint8_t)t]++;
                     _latest = &_log[slot];
                     _latestNew = false;            // came back; not new to the log
-                    _latestChangeMs = millis();
+                    _latestSeq = _latestSeq + 1;
                     queueBlackBox(_log[slot], true);
                 }
                 merged = true;
@@ -2088,6 +2196,7 @@ void DetectionEngine::processWiFiQ() {
 }
 
 void DetectionEngine::pushLog(const Detection& d) {
+    LogLock lock;
     _log[_logHead] = d;
     _log[_logHead].prevRssi = d.rssi;                 // no trend on a first sight
     _log[_logHead].prevAt   = (uint8_t)(millis() >> 11);
@@ -2096,7 +2205,7 @@ void DetectionEngine::pushLog(const Detection& d) {
     _newRows++;
     _latest = &_log[(_logHead + LOG_CAP - 1) % LOG_CAP];
     _latestNew = true;      // the one place a row the log never held is made
-    _latestChangeMs = millis();
+    _latestSeq = _latestSeq + 1;
     _typeCounts[(uint8_t)d.type]++;
     if (d.channel == 0 && (uint8_t)d.type < SpamWatch::TYPES) _newBle[(uint8_t)d.type]++;
 #if SQW_WIFI_5G
@@ -2252,6 +2361,7 @@ void DetectionEngine::saveLifetime(uint32_t now) {
 static_assert((uint8_t)DetectionType::COUNT <= SpamWatch::TYPES, "SpamWatch is sized for 32 types");
 
 void DetectionEngine::expireStale() {
+    LogLock lock;
     uint32_t now = millis();
     for (uint8_t i = 0; i < _logCount; i++) {
         uint8_t slot = (_logHead + LOG_CAP - 1 - i) % LOG_CAP;

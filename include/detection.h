@@ -85,6 +85,11 @@ public:
     // moves under AUTO SNOOZE. True to the RAM log only -- a device evicted
     // from the ring and seen again reads as new, as the LOG screen shows it.
     bool latestIsNew() const { return _latestNew; }
+    // Bumped every time latest() is pointed at a sighting worth announcing (a
+    // new row, a device coming back, a deauth flood). The screens remember
+    // the last number they announced, so a catch is announced once, whenever
+    // the loop gets to it -- not only if it got there within 200 ms.
+    uint32_t latestSeq() const { return _latestSeq; }
     uint16_t countByType(DetectionType t) const { return _typeCounts[(uint8_t)t]; }
 
     // Lifetime total across reboots (persisted to NVS), unlike the
@@ -384,7 +389,6 @@ private:
     static const uint8_t  LOG_CAP       = 64;
     static const uint8_t  WIFI_Q_CAP    = 8;
     static const uint32_t STALE_MS      = 60000;
-    static const uint32_t ALERT_GRACE_MS= 200;
 
     struct WiFiQEntry {
         uint8_t mac[6];
@@ -423,6 +427,11 @@ private:
     static const uint32_t DEAUTH_WINDOW_MS   = 3000;   // ...this window...
     static const uint32_t DEAUTH_COOLDOWN_MS = 15000;  // ...then this long before re-firing.
     static const uint8_t  DEAUTH_SENDERS     = 4;      // transmitters tracked at once
+    // A "deauth all" tool spoofs each target network as the sender, so with
+    // five or more networks on the channel no single slot fills. This many
+    // broadcast frames in the window from any mix of senders is a flood too.
+    // Routers almost never deauth broadcast, so it is a high bar.
+    static const uint8_t  DEAUTH_BCAST_ALL   = 24;
     struct DeauthQEntry {
         uint8_t mac[6];
         int8_t  rssi;
@@ -479,7 +488,9 @@ private:
     volatile uint8_t      _deauthQHead = 0;
     volatile uint8_t      _deauthQTail = 0;
     DeauthSender _deauthSenders[DEAUTH_SENDERS] = {};
-    uint32_t _deauthLastFireMs = 0;
+    uint32_t _deauthLastFireMs = 0;     // 0 = never fired
+    uint32_t _deauthAllStart = 0;       // the any-sender broadcast window
+    uint8_t  _deauthAllBcast = 0;
 
     // Watched target -- see the public watchBle()/watchWifi() section
     // above.
@@ -529,7 +540,7 @@ private:
     uint8_t    _logHead  = 0;            // next slot to write
     Detection* _latest   = nullptr;      // pointer into _log or null
     bool       _latestNew = false;       // _latest is a fresh row, not a reactivation
-    uint32_t   _latestChangeMs = 0;
+    volatile uint32_t _latestSeq = 0;   // see latestSeq(); written on the radio tasks
     DetectionType _lastAlertType = DetectionType::UNKNOWN;
 
     // Live counters (one per DetectionType)
@@ -587,6 +598,7 @@ private:
     void processWiFiQ();
     void processDeauthQ();
     void expireStale();
+    void resumeAgeing();     // give active rows back the time the radios were away
     void hopChannel();
 #if SQW_WIFI_5G
     bool start5(uint32_t now);

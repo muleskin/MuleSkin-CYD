@@ -32,7 +32,7 @@ static void frame(uint8_t header, const uint8_t* path, uint8_t hops, uint8_t has
 // Seal a plaintext the way MeshCore does: zero-pad to 16, AES-128-ECB, then
 // a 2-byte HMAC-SHA256 over the ciphertext with the 32-byte secret slot.
 static uint8_t seal(const uint8_t key[16], const uint8_t* plain, uint8_t len, uint8_t* out) {
-    uint8_t padded[192] = {0};
+    uint8_t padded[240] = {0};   // room for the oversize case below
     memcpy(padded, plain, len);
     const uint8_t clen = (uint8_t)((len + 15) & ~15);
     LoraCrypto::Aes128 a; a.setKey(key);
@@ -99,6 +99,24 @@ int main() {
         char line[120]; summary(pk, line, sizeof line);
         ck("summary", strstr(line, "ADVERT flood") && strstr(line, "REPEATER") && strstr(line, "DL Repeater 1"));
         ck("too short is not an advert", ({ frame(0x11, nullptr, 0, 1, pay, 100); Decoded e; decode(pk, e) && !e.haveAdvert; }));
+    }
+
+    suite("A sealed text too long for the plaintext buffer is refused");
+    {
+        // The Public key is public, so anyone can seal one of these: 208
+        // bytes, sixteen more than Decoded::plain holds. Opened, it would be
+        // decrypted past the end of it -- a stack overflow from one packet
+        // (upstream SquachWatch review round 1, 2026-11-14).
+        uint8_t plain[208];
+        memset(plain, 'A', sizeof plain);
+        uint8_t pay[1 + 2 + 208];
+        pay[0] = 0x11;
+        const uint8_t sealed = seal(channel(0).key, plain, sizeof plain, pay + 1);
+        const uint8_t path[] = { 0x40 };
+        frame(0x15, path, 1, 1, pay, (uint8_t)(1 + sealed));
+        Decoded d;
+        decode(pk, d);
+        ck("not opened", !d.haveChannel && !d.haveGroup);
     }
 
     suite("A Public channel message, sealed and opened");

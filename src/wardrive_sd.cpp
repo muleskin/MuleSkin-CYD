@@ -311,7 +311,10 @@ void sdTick(uint32_t nowMs, bool cardMounted) {
     }
     if (!s_heapAt || nowMs - s_heapAt >= HEAP_MS) {
         s_heapAt = nowMs ? nowMs : 1;
-        s_paused = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < PAUSE_BLOCK_B;
+        // Internal SRAM, where it was measured: on a PSRAM board
+        // MALLOC_CAP_8BIT alone answers with PSRAM's block and the pause
+        // never arms. (See the note at the top of detection.cpp.)
+        s_paused = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < PAUSE_BLOCK_B;
     }
     drain(nowMs);
     if (s_rowCount && nowMs - s_rowSince >= FLUSH_MS) flush();

@@ -568,6 +568,35 @@ were ported (v3.5.0), adapted where the two have grown apart:
   hardware. (Upstream's emulator GPS replay and main-screen GPS label were
   not brought over.)
 
+### Fixes brought over from upstream SquachWatch (v1.41-v1.49)
+
+- **Espressif's `BC:DD:C2` is no longer "Arlo"**: every ESP32 in that block
+  read as a hidden camera. Arlo's three real blocks are in instead, and
+  `tools/check_ouis.py --fetch` checks the whole table against the IEEE
+  registry (the OUI audit workflow). The manual WiFi scan and the network
+  picker now only listen (a passive sweep); `tools/check_emissions.sh` fails
+  CI if one goes back to probing.
+- **LoRa**: a MeshCore group text or LoRaWAN payload longer than its buffer
+  is refused before it is decrypted -- one packet could overflow the stack.
+- **Memory checks on the PSRAM boards** read internal RAM, so the low-memory
+  seatbelt can actually trip there.
+- **Alerts are announced once each, by sequence number**, not only if the
+  loop reached the catch within 200 ms: a slow pass no longer loses the card,
+  the sound and the push.
+- **Updates**: an image with no version stamp is refused as older; a
+  download clears the slot's old version record first, so SWITCH TO never
+  boots a refused image; the manual WiFi check keeps trying for 90 s after
+  the join; boards with PSRAM keep their frame through a download.
+- **Detection log**: one lock for every writer (two rows could take one
+  slot); a sweep, NEARBY or an update no longer makes the whole room re-alert
+  afterwards; a scan deadline no longer re-arms 24.8 days later; a deauth
+  flood spread across many spoofed senders (24 broadcast frames in 3 s) is
+  caught.
+- **PIN**: a first PIN turns LOCK AT BOOT on; the wipe also clears the
+  regulars, the away days and the home routers.
+- **Toasts** show their whole line; resistive touch rides over short read
+  gaps instead of turning a drag into a tap.
+
 ## Project layout
 
 ```

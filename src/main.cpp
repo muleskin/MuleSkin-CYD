@@ -257,7 +257,10 @@ static void crashCrumbTick(uint32_t now, uint32_t lifetime, uint8_t screen) {
     last = now;
     g_crumb.uptimeMs  = now;
     g_crumb.heapFree  = ESP.getFreeHeap();
-    g_crumb.heapBlock = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    // Internal SRAM, as ESP.getFreeHeap() beside it is: on a PSRAM board
+    // MALLOC_CAP_8BIT alone answers with PSRAM's megabytes, and the crumb
+    // could never say a crash was a fragmented heap. (See detection.cpp.)
+    g_crumb.heapBlock = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     g_crumb.lifetime  = lifetime;
     g_crumb.screen    = screen;
 }
@@ -866,7 +869,24 @@ static TouchPoint pollTouch() {
 #endif
     TouchPoint tp = { false, 0, 0 };
     int16_t a, b;
+#if defined(TOUCH_ON_DISPLAY_BUS) || defined(CYD35R)
+    // A moving finger on these resistive panels fails the "two reads agree"
+    // filter now and then, and each failure looked like a lift: the drag
+    // ended, the next good read began a new press, and lifting off that one
+    // was a tap on whatever lay under it -- scrolling picked rows at random
+    // (upstream #134). Gaps this short are ridden over at the last good
+    // point; only a longer silence is a release.
+    static TouchPoint s_held = { false, 0, 0 };
+    static uint32_t   s_heldMs = 0;
+    constexpr uint32_t HOLD_OVER_MS = 120;
+    if (!readTouchRaw(a, b)) {
+        if (s_held.valid && millis() - s_heldMs <= HOLD_OVER_MS) return s_held;
+        s_held.valid = false;
+        return tp;
+    }
+#else
     if (!readTouchRaw(a, b)) return tp;
+#endif
     const int w = tft.width(), h = tft.height();
     float sx, sy;
     TouchFit::toScreen(s_touchFit, a, b, screenRotation, sx, sy);
@@ -888,6 +908,9 @@ static TouchPoint pollTouch() {
         if (tp.y < 0) tp.y = 0; else if (tp.y >= h) tp.y = h - 1;
     }
     tp.valid = sane;
+#if defined(TOUCH_ON_DISPLAY_BUS) || defined(CYD35R)
+    if (sane) { s_held = tp; s_heldMs = millis(); }
+#endif
     return tp;
 }
 
@@ -1343,6 +1366,31 @@ static bool twatchStill();
 #endif
 static void queuePushAlert(const Detection& d, uint16_t followMins);   // PUSH ALERTS, below
 static void serviceHomeAps();   // the home network's own access points, below
+// The sighting a screen should announce now, or null: one the engine has
+// pointed latest() at since a screen last asked (latestSeq() moved), and only
+// while it is fresh. Asking consumes it, so each catch is announced once.
+//
+// This replaced "firstSeen within 200 ms of this pass", which dropped any
+// catch the loop did not look at quickly enough: at 5 fps (POWER SAVER) a pass
+// is 200 ms, and one slow pass (an SD append, a flash erase) was enough. The
+// catch stayed in the LOG and the counters, with no card, no sound and no
+// push. A catch made while a screen that does not announce was up (SETTINGS,
+// LOG) is still let go: by the time the main screen is back it is older than
+// ALERT_FRESH_MS, as it was before. (Upstream SquachWatch B2, 2026-11-14.)
+static const uint32_t ALERT_FRESH_MS = 2000;
+static uint32_t s_alertSeqSeen = 0;
+static const Detection* freshCatch(uint32_t now) {
+    const uint32_t seq = engine.latestSeq();
+    if (seq == s_alertSeqSeen) return nullptr;
+    const Detection* d = engine.latest();
+    if (!d) { s_alertSeqSeen = seq; return nullptr; }
+    // Stamped on a radio task a moment after `now` was read: the next pass.
+    const int32_t age = (int32_t)(now - d->firstSeen);
+    if (age < 0) return nullptr;
+    s_alertSeqSeen = seq;
+    return age <= (int32_t)ALERT_FRESH_MS ? d : nullptr;
+}
+
 static bool alertMayInterrupt(const Detection& d) {
     const bool exempt = engine.isWatched(d.mac, true) || engine.isWatched(d.mac, false);
 #if defined(TWATCH_S3)
@@ -1397,7 +1445,7 @@ static bool alertMayInterrupt(const Detection& d) {
     // none of the manual ones (NEARBY's hold), which open a card for
     // something already on the glass.
     // Everything upstream of this line is the board's own idea of
-    // alert-worthy: within ALERT_GRACE_MS of firstSeen, past ALERT FILTER,
+    // alert-worthy: fresh (freshCatch()), past ALERT FILTER,
     // not ignored or snoozed, and now past AUTO SNOOZE. The buzzer adds four
     // of its own: it is switched on; the row is one the log never held (a
     // device coming back is news to the screen, not to the room); the saver
@@ -2290,6 +2338,14 @@ static void releaseFrameBuffer(const char* who) {
 static bool s_frameLent = false;
 static void lendFrameToDownload() {
     if (!frameBufferOk) return;
+#if defined(ESP32)
+    // Not on a board with PSRAM. There the internal heap has 80-110 KB to
+    // spare during a download, and the frame is often in PSRAM anyway, so
+    // lending it frees nothing the download wants. Worse, the QSPI/RGB
+    // panels (the Freenove 3.5in above all) cannot be drawn straight to
+    // through TFT_eSPI: the update screen came out as noise (#136).
+    if (psramFound()) return;
+#endif
     releaseFrameBuffer("ota");
     s_frameLent = true;
 }
@@ -3438,8 +3494,13 @@ static nvs_iterator_t sqwNvsEntryNext(nvs_iterator_t it) {
 
 static bool secretNamespace(const char* ns) {
     // "otawifi" is the saved WiFi password for firmware updates; "meshtalk"
-    // held the retired squad's phrase and key, erased at boot since.
-    return !strcmp(ns, "meshtalk") || !strcmp(ns, "ignore") || !strcmp(ns, "otawifi");
+    // held the retired squad's phrase and key, erased at boot since. The
+    // rest say where you live and who you are around: the devices you see
+    // every day (regulars), the trackers seen on your days out (awaydays) and
+    // your home routers (homeaps). Upstream's review round 1 added regulars;
+    // the other two are MuleSkin's own.
+    return !strcmp(ns, "meshtalk") || !strcmp(ns, "ignore") || !strcmp(ns, "otawifi") ||
+           !strcmp(ns, "regulars") || !strcmp(ns, "awaydays") || !strcmp(ns, "homeaps");
 }
 
 static void physicalNvsWipe() {
@@ -6601,8 +6662,8 @@ void loop() {
             // news -- and it has no timeout, so without this it held every
             // alert back until somebody happened to tap it.
             {
-                const Detection* latest = engine.latest();
-                if (latest && (now - latest->firstSeen) < 200 &&
+                const Detection* latest = freshCatch(now);
+                if (latest &&
                     latest->conf >= Settings::minConfidence() && !IgnoreList::silenced(latest->mac) &&
                     alertMayInterrupt(*latest)) {
                     uiAlertSetRedacted(false);
@@ -6735,14 +6796,17 @@ void loop() {
             // is deliberately NOT called in that branch since it's
             // consumed on read; leaving it untouched means it stays
             // pending and still fires for real once onboarding ends.
+            // Taken (and so consumed) before the chain: a catch that lands
+            // during the walkthrough, or alongside a watch hit, is not held
+            // back to pop up a moment later.
+            const Detection* latest = freshCatch(now);
             if (MuleSkin::onboardingActive()
                ) {
                 // deliberately no-op
             } else if (engine.watchHitPending()) {
                 enterWatchAlert();
             } else {
-                const Detection* latest = engine.latest();
-                if (latest && (now - latest->firstSeen) < 200 &&
+                if (latest &&
                     // This sighting's grade, not the type's -- which is what
                     // finally makes ALERT FILTER mean something. Set it to
                     // High and an ESP32 probe request matching a
@@ -8201,8 +8265,8 @@ void loop() {
             // much of a new one reaches the glass. The same test CLEAR makes.
             {
                 const Security::LockAlerts la = Security::lockAlerts();
-                const Detection* latest = engine.latest();
-                if (la != Security::LockAlerts::NONE && latest && (now - latest->firstSeen) < 200 &&
+                const Detection* latest = freshCatch(now);
+                if (la != Security::LockAlerts::NONE && latest &&
                     latest->conf >= Settings::minConfidence() && !IgnoreList::silenced(latest->mac) &&
                     alertMayInterrupt(*latest)) {
                     uiAlertSetRedacted(la == Security::LockAlerts::TYPE_ONLY);

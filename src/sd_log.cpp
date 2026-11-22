@@ -66,7 +66,7 @@ bool SdLog::begin() {
     // sits on the amplifier. So no log and no wipe of it here.
     return false;
 #endif
-    Serial.printf("[sd] mounting: heap %lu, largest block %lu\n", (unsigned long)ESP.getFreeHeap(), (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    Serial.printf("[sd] mounting: heap %lu, largest block %lu\n", (unsigned long)ESP.getFreeHeap(), (unsigned long)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 #if defined(FREENOVE_S3) || defined(FREENOVE_S3_35)
     // SDMMC on the S3's GPIO matrix. (The 3.5": CLK 5, CMD 4, D0 6, D1 7,
     // D2 2, D3 3 -- upstream v1.34.) Pins from Freenove's own SDMMC sketch and

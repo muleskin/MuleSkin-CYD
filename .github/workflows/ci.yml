@@ -24,6 +24,12 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -y -q libmbedtls-dev
       - name: Host tests
         run: make -C test -k -j"$(nproc)"
+      # Costs a second and needs no toolchain. The failure it covers is a
+      # scan quietly going back to active -- which compiles, runs, finds
+      # networks, and transmits a probe request on every channel while the
+      # FAQ tells people the WiFi side only listens.
+      - name: Check no WiFi scan transmits
+        run: tools/check_emissions.sh
       # The bench scripts (tools/bench/) run on a plugged-in board, so nothing
       # here exercises them: at least they must import and print their help,
       # and the server-side quiet check must compile.

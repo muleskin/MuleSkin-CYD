@@ -167,7 +167,10 @@ void fail(Fail f) {
 void startScan() {
     s_netN = 0;
     WiFi.scanDelete();
-    WiFi.scanNetworks(true /* async */, false /* no hidden */);
+    // Passive, for the same reason startRawWifiScan() is: the default is an
+    // active scan that probes on every channel. Every AP you could join
+    // beacons, and hidden ones were already excluded, so nothing is lost.
+    WiFi.scanNetworks(true /* async */, false /* no hidden */, true /* passive */, 150);
     s_state = State::SCANNING;
 }
 
@@ -252,6 +255,17 @@ char     s_host[48]   = "";
 uint16_t s_port       = 80;
 char     s_prefix[48] = "/";
 bool     s_noName     = false;   // the name lookup failed this session: go straight to the remembered address
+// The manual check's patience (upstream #85). Some boards -- the 3.2in
+// capacitive Sunton above all -- join, and then for up to a minute nothing
+// unicast reaches them: the name lookup times out, the address does not
+// connect, or a connection is made and no reply comes. Three knocks gave up
+// inside that gap. Until this moment the first contact keeps knocking, on a
+// shorter fuse, and asks the name again each time. The boot check does not
+// join() and keeps its usual three.
+uint32_t s_patientUntil = 0;
+uint32_t s_joinedAt     = 0;
+const uint32_t PATIENCE_MS = 90000;
+const uint32_t PATIENT_REPLY_MS = 6000;   // a knock's wait for a reply while patient
 
 void parseBase() {
     if (s_host[0]) return;
@@ -444,14 +458,22 @@ Reply get(WiFiClient& c, const char* file, uint32_t timeoutMs) {
 // will say the same thing a second later.
 Reply getTries(WiFiClient& c, const char* file, uint32_t timeoutMs, uint8_t tries) {
     Reply r;
-    for (uint8_t i = 0; i < tries; i++) {
-        r = get(c, file, timeoutMs);
+    for (uint8_t i = 0;; i++) {
+        const bool waiting = (int32_t)(s_patientUntil - millis()) > 0;
+        r = get(c, file, waiting && timeoutMs > PATIENT_REPLY_MS ? PATIENT_REPLY_MS : timeoutMs);
         const bool again = r.got == Got::NO_CONNECT || r.got == Got::NO_ANSWER || r.got == Got::SITE_TROUBLE;
-        if (!again || s_cancel || i + 1 == tries) break;
-        Serial.printf("[ota] %s: %s, trying again\n", file, s_why);
+        // Past the usual three only while a manual check is still waiting
+        // for the network to carry anything at all.
+        const bool patient = (r.got == Got::NO_CONNECT || r.got == Got::NO_ANSWER) &&
+                             (int32_t)(s_patientUntil - millis()) > 0;
+        if (!again || s_cancel || (i + 1 >= tries && !patient) || i >= 30) break;
+        Serial.printf("[ota] %s: %s at +%lu ms after the join, trying again\n", file, s_why,
+                      (unsigned long)(millis() - s_joinedAt));
         c.stop();
-        delay(2000u * (i + 1));
+        if (patient) s_noName = false;   // the router may answer names by now
+        delay(i < 2 ? 2000u * (i + 1) : 5000u);
     }
+    if (r.got == Got::OK) s_patientUntil = 0;   // the network works: later files get the usual three
     return r;
 }
 
@@ -605,6 +627,8 @@ bool join() {
         return false;
     }
     Serial.printf("[ota] joined %s as %s\n", s_ssid, WiFi.localIP().toString().c_str());
+    s_joinedAt     = millis();
+    s_patientUntil = s_joinedAt + PATIENCE_MS;
     // The clock rides along: one NTP round trip while the radio is up anyway.
     Clock::syncWait(1500);
     if (s_save && !saveNetwork(s_ssid, s_pass))

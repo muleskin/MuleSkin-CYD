@@ -592,3 +592,20 @@ Reolink, Bosch, Milesight, Uniview, Dahua, Hikvision), five network names
 (`HC-08`, `FCD_1608`, now exact names like the HC-05's). Each has a MORE
 INFO page. The rules file keeps the notes on where each came from; its set
 6 is empty, and new rules go there until the next release builds them in.
+
+## 2026-11-21: Espressif's BC:DD:C2 was "Arlo" (from upstream SquachWatch)
+
+`BC:DD:C2` sat in the camera table as "Arlo", graded Low. It is registered
+to **Espressif**, so every ESP32 in that block -- dev boards, ESPHome
+sensors, a MuleSkin -- read as a covert camera, while no real Arlo matched:
+none of Arlo Technology's own blocks were in the table. They are now
+(`FC:9C:98`, `48:62:64`, `A4:11:62`, High) and the Espressif row is gone.
+
+Two guards keep it that way. `tools/check_ouis.py --fetch` reads the whole
+table against the IEEE registry (the OUI audit workflow: on demand and when
+the table changes); a row on this board's own chip, or a grade the
+registry contradicts, fails it. And the manual WIFI SCAN (and the WiFi
+network picker) is now a *passive* sweep: Arduino's default scan is active,
+so opening that screen used to send a probe request from the board's own
+address on every channel. `tools/check_emissions.sh` (CI) fails the build
+if any scan goes back to active without a written reason.

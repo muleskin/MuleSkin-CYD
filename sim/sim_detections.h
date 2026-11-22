@@ -92,7 +92,7 @@ inline const SimDetectionProfile kSimProfiles[] = {
     { DetectionType::CAMERA,      {0xF0, 0x27, 0x2D}, "Amazon",      "",               -62, true,  "Amazon device" },
     { DetectionType::CAMERA,      {0xC0, 0x56, 0xE3}, "Hikvision",   "",               -64, true,  "Hikvision camera" },
     { DetectionType::CAMERA,      {0x00, 0xE0, 0x4C}, "Realtek",     "",               -67, true,  "Realtek chip" },
-    { DetectionType::CAMERA,      {0xBC, 0xDD, 0xC2}, "Arlo",        "",               -65, true,  "Arlo camera" },
+    { DetectionType::CAMERA,      {0xFC, 0x9C, 0x98}, "Arlo",        "",               -65, true,  "Arlo camera" },
     { DetectionType::CAMERA,      {0x4C, 0x69, 0x05}, "Blink",       "",               -61, true,  "Blink camera" },
     { DetectionType::CAMERA,      {0xA4, 0xC1, 0x38}, "Tuya",        "",               -68, true,  "Tuya device" },
     { DetectionType::CAMERA,      {0xE0, 0xA7, 0x00}, "Verkada",     "",               -70, true,  "Verkada camera" },

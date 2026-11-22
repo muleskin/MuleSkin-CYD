@@ -1103,8 +1103,10 @@ void dimRegion(TFT_eSPI& t, int x, int y, int w, int h, uint8_t amount) {
         t.drawFastHLine(x, yy, w, BG);
 }
 
-static char     s_toastHead[18] = {0};
-static char     s_toastSub[22]  = {0};
+// 18 and 22 used to cut lines short ("This one, until restart" lost its
+// end); drawToast() keeps the box on the screen. (Upstream, 2026-11-20.)
+static char     s_toastHead[24] = {0};
+static char     s_toastSub[40]  = {0};
 static uint16_t s_toastAccent   = 0;
 static uint32_t s_toastUntil    = 0;
 
@@ -1137,15 +1139,22 @@ void drawToast(TFT_eSPI& t, uint32_t now) {
     t.drawRect(bx, by, bw, bh, s_toastAccent);
     t.drawRect(bx + 1, by + 1, bw - 2, bh - 2, blend(s_toastAccent, BG, 160));
 
+    // A narrow panel (the StickS3, the watch) can't fit the longest lines:
+    // drop letters off the end rather than spill past the box.
+    char line[sizeof s_toastSub];
     t.setTextSize(2);
     t.setTextColor(s_toastAccent, BG);
-    t.setCursor(bx + (bw - t.textWidth(s_toastHead)) / 2, by + 8);
-    t.print(s_toastHead);
+    strcpy(line, s_toastHead);
+    for (size_t n = strlen(line); n > 1 && t.textWidth(line) > bw - 8; ) line[--n] = 0;
+    t.setCursor(bx + (bw - t.textWidth(line)) / 2, by + 8);
+    t.print(line);
     if (s_toastSub[0]) {
         t.setTextSize(1);
         t.setTextColor(WHITE, BG);
-        t.setCursor(bx + (bw - t.textWidth(s_toastSub)) / 2, by + 31);
-        t.print(s_toastSub);
+        strcpy(line, s_toastSub);
+        for (size_t n = strlen(line); n > 1 && t.textWidth(line) > bw - 8; ) line[--n] = 0;
+        t.setCursor(bx + (bw - t.textWidth(line)) / 2, by + 31);
+        t.print(line);
     }
 }
 
