@@ -139,7 +139,10 @@ const char* timeSyncNetwork();   // empty until it has picked one
 // (DetectionEngine::startUpdateRadio) and resumes it once pushBusy() is false.
 using PushMsg = PushQueue::Msg;   // push_queue.h
 enum class PushResult : uint8_t { NONE, SENT, NO_SAVED, NO_JOIN, NO_ANSWER, NO_MEMORY };
-bool        pushStart(const PushMsg* msgs, uint8_t n);   // copies them; false if the radio is taken
+// onLink: send over the network the station is already joined to (HUMAN
+// SENSING's) -- no join, and the link is left as it was. The caller does not
+// pause detection then: sensing already has the radio.
+bool        pushStart(const PushMsg* msgs, uint8_t n, bool onLink = false);   // copies them; false if the radio is taken
 bool        pushBusy();
 PushResult  pushResult();
 uint8_t     pushSentCount();    // how many of the last batch the server took

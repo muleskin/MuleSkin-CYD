@@ -220,6 +220,7 @@ static const char* counterLabel(DetectionType t) {
         case DetectionType::HACKER:      return "HACK";
         case DetectionType::LORAWAN:     return "LWAN";
         case DetectionType::MINE:        return "MINE";
+        case DetectionType::MOTION:      return "MOVE";
         default:                         return "?";
     }
 }
@@ -301,11 +302,19 @@ static const uint8_t LORA_COUNTER_TYPES = 1;
 #else
 static const uint8_t LORA_COUNTER_TYPES = 0;
 #endif
-static const uint8_t MAX_COUNTER_TYPES = FIXED_COUNTER_TYPES_N + 1 + LORA_COUNTER_TYPES;
+#if defined(SENSE_CYD_APP)
+static const uint8_t SENSE_COUNTER_TYPES = 1;
+#else
+static const uint8_t SENSE_COUNTER_TYPES = 0;
+#endif
+static const uint8_t MAX_COUNTER_TYPES = FIXED_COUNTER_TYPES_N + 1 + LORA_COUNTER_TYPES + SENSE_COUNTER_TYPES;
 // Alphabetical by the label the row shows (ALPR, AXON, ... TRACKER), sorted
 // here rather than written in that order above so the beacon column, when
 // it is on, lands in its place among them instead of tacked on the end.
-static uint8_t activeCounterTypes(DetectionType* out) {
+// `motion`: whether MOVE gets a column (see below); the caller knows what it
+// is counting -- the live rows, or the log's.
+static uint8_t activeCounterTypes(DetectionType* out, bool motion) {
+    (void)motion;
     uint8_t n = 0;
     for (; n < FIXED_COUNTER_TYPES_N; n++) out[n] = FIXED_COUNTER_TYPES[n];
     if (mineColumn())                                       out[n++] = DetectionType::MINE;
@@ -315,6 +324,13 @@ static uint8_t activeCounterTypes(DetectionType* out) {
     // the rest. A column with nothing in it is not drawn, so the row only
     // grows while an operator is in earshot. (Upstream v1.45.)
     out[n++] = DetectionType::LORAWAN;
+#endif
+#if defined(SENSE_CYD_APP)
+    // MOVE: HUMAN SENSING's catch, only while there is one to count -- live,
+    // the minute after the sensing screen is left; or in the log, for
+    // TERMINAL MODE's COUNTS. Every other moment it would be a zero nobody
+    // can change from this screen.
+    if (motion) out[n++] = DetectionType::MOTION;
 #endif
     for (uint8_t i = 1; i < n; i++) {
         const DetectionType v = out[i];
@@ -838,7 +854,7 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
     // similarly-sized rows does, and this still never exceeds the
     // per-orientation cap on any row.
     DetectionType counterTypes[MAX_COUNTER_TYPES];
-    uint8_t counterN = activeCounterTypes(counterTypes);
+    uint8_t counterN = activeCounterTypes(counterTypes, eng.countByType(DetectionType::MOTION) > 0);
     // TERMINAL MODE: COUNTS says this, in its own window.
     if (terminal) counterN = 0;
     // A 240x135 screen shows only what is in range: the zeroes are what ran

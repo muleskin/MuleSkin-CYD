@@ -21,6 +21,8 @@ bool important(DetectionType t) {
         case DetectionType::HACKER:
         // MY ALERTS: a name the owner asked to be told about.
         case DetectionType::MINE:
+        // HUMAN SENSING: the owner opened it to be told when a room moves.
+        case DetectionType::MOTION:
             return true;
         default:
             return false;

@@ -1537,17 +1537,24 @@ uint8_t             s_psN      = 0;
 volatile uint8_t    s_psSent   = 0;
 volatile int        s_psCode   = 0;
 volatile uint32_t   s_psRetryS = 0;
+bool                s_psOnLink = false;   // pushStart(..., onLink): someone else's join
 
 void psRun(void*) {
     const uint32_t t0 = millis();
-    char ssid[33];
-    // The best network in range, and if it will not take us -- a hotspot gone
-    // to sleep, a password changed -- the next best, once.
-    int8_t tried = -1;
-    bool joined = joinBest(ssid, sizeof ssid, "push", -1, &tried);
-    if (!joined && tried >= 0) {
-        WiFi.disconnect(false, false);
-        joined = joinBest(ssid, sizeof ssid, "push", tried, nullptr);
+    bool joined;
+    if (s_psOnLink) {
+        // HUMAN SENSING's link: already joined, and it stays joined after.
+        joined = WiFi.status() == WL_CONNECTED;
+    } else {
+        char ssid[33];
+        // The best network in range, and if it will not take us -- a hotspot gone
+        // to sleep, a password changed -- the next best, once.
+        int8_t tried = -1;
+        joined = joinBest(ssid, sizeof ssid, "push", -1, &tried);
+        if (!joined && tried >= 0) {
+            WiFi.disconnect(false, false);
+            joined = joinBest(ssid, sizeof ssid, "push", tried, nullptr);
+        }
     }
     if (!joined) {
         s_push = PushResult::NO_JOIN;
@@ -1625,9 +1632,10 @@ void psRun(void*) {
         pollCommands();   // joined anyway: any IGNORE from the phone
     }
     // Off the network, but the station mode stays up: detection sniffs on it.
-    WiFi.disconnect(false, false);
-    Serial.printf("[push] %u of %u sent in %lu ms\n", (unsigned)s_psSent, (unsigned)s_psN,
-                  (unsigned long)(millis() - t0));
+    // Not off a link that was someone else's to begin with.
+    if (!s_psOnLink) WiFi.disconnect(false, false);
+    Serial.printf("[push] %u of %u sent in %lu ms%s\n", (unsigned)s_psSent, (unsigned)s_psN,
+                  (unsigned long)(millis() - t0), s_psOnLink ? " (on HUMAN SENSING's link)" : "");
     free(s_psMsgs);
     s_psMsgs = nullptr;
     s_psTask = nullptr;
@@ -1635,10 +1643,11 @@ void psRun(void*) {
 }
 }  // namespace
 
-bool pushStart(const PushMsg* msgs, uint8_t n) {
+bool pushStart(const PushMsg* msgs, uint8_t n, bool onLink) {
     if (!n || s_psTask || s_tsTask || s_task || s_state != State::OFF) return false;
     readSaved();
-    if (!s_n) { s_push = PushResult::NO_SAVED; return false; }
+    if (!onLink && !s_n) { s_push = PushResult::NO_SAVED; return false; }
+    s_psOnLink = onLink;
     s_psMsgs = (PushMsg*)malloc(sizeof(PushMsg) * n);
     if (!s_psMsgs) { s_push = PushResult::NO_MEMORY; return false; }
     memcpy(s_psMsgs, msgs, sizeof(PushMsg) * n);

@@ -913,7 +913,7 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             // keeps the full name in its title bar.
             label = "TYPE FILTER";
             snprintf(valBuf, valBufN, "%u/%u", (unsigned)Settings::enabledTypeCount(),
-                     (unsigned)DetectionType::MINE - 1);
+                     (unsigned)Settings::filterTypeCount());
             value = valBuf;
             break;
 #if defined(SENSE_CYD_APP)

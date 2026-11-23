@@ -3599,6 +3599,53 @@ static void enterSensing() {
     transitionStart = millis();
     uiSensingInit(*canvas);
 }
+
+// HUMAN SENSING's catch, a Detection like any other (DetectionType::MOTION):
+// the LOG, the counters, IGNORE, SNOOZE, the TYPE FILTER and PUSH ALERTS all
+// see it. One row per network sensed through, under an address made from its
+// name -- the room, as near as the board can tell one -- like LoRaWAN's
+// operators (Lora::OpAlert::macFor): 02:4D:56 ("MV") and three bytes of hash.
+static void motionMacFor(const char* ssid, uint8_t mac[6]) {
+    uint32_t h = 2166136261u;   // FNV-1a
+    for (const char* p = ssid; *p; p++) { h ^= (uint8_t)*p; h *= 16777619u; }
+    mac[0] = 0x02; mac[1] = 0x4D; mac[2] = 0x56;
+    mac[3] = (uint8_t)(h >> 16); mac[4] = (uint8_t)(h >> 8); mac[5] = (uint8_t)h;
+}
+
+// Every loop pass while sensing runs. PRESENCE (MOTION now, or within the
+// hold) keeps the row live, once a second; postKeyed() makes it news again
+// only after MOTION_GONE_MS of a still room. The news is announced the way
+// the alert screens announce -- ALERT FILTER, IGNORE, AUTO SNOOZE, then the
+// buzzer and PUSH ALERTS -- but the card is not raised: this screen already
+// says PRESENCE, and leaving it would hand the radio back and end the sensing.
+static void serviceMotion(uint32_t now) {
+    static uint32_t postedAt = 0;
+    if (!SenseStore::fresh(now)) return;
+    const SenseReport& r = SenseStore::last();
+    if (!r.presence || !senseModeLive(r.mode)) return;
+    if (postedAt && now - postedAt < 1000) return;
+    postedAt = now;
+    Detection d;
+    memset(&d, 0, sizeof d);
+    motionMacFor(senseCydNetwork(), d.mac);
+    d.rssi      = r.rssi;
+    d.channel   = (uint8_t)r.chan;   // the router's: a WiFi row
+    d.type      = DetectionType::MOTION;
+    d.vendor    = "WiFi sensing";
+    snprintf(d.name, sizeof d.name, "%s", senseCydNetwork());
+    d.firstSeen = d.lastSeen = now;
+    d.hits      = 1;
+    // How far the motion model trusts its own score (SenseReport::rel).
+    d.conf      = r.rel >= 70 ? Confidence::HIGH_CONF : r.rel >= 40 ? Confidence::MED_CONF : Confidence::LOW_CONF;
+    d.active    = true;
+    engine.postKeyed(d, DetectionEngine::MOTION_GONE_MS);
+    const Detection* c = freshCatch(now);
+    if (c && c->type == DetectionType::MOTION && c->conf >= Settings::minConfidence() &&
+        !IgnoreList::silenced(c->mac)) {
+        Serial.printf("[sense] MOTION on %s: logged and announced\n", c->name);
+        alertMayInterrupt(*c);
+    }
+}
 #endif
 // MY ALERTS, and the two trips to the keyboard it makes: the pattern, then
 // its label (or a new label for one already saved). The keyboard is the
@@ -3721,6 +3768,7 @@ static void serviceTimeSyncRadio() {
 // it and starts the joins.
 static PushQueue::Queue s_pushQ;
 static bool             s_pushRadio = false;
+static bool             s_pushOnLink = false;   // the batch out is on HUMAN SENSING's link
 
 static bool pushNightNow() {
     if (!Clock::trusted()) return false;
@@ -4024,7 +4072,7 @@ static uint8_t pushStatusText(char* out, size_t n) {
 static void servicePush(uint32_t now) {
     // A join finished: the radio back to detection, the sent ones off the queue.
     if (s_pushRadio && !OtaWifi::pushBusy()) {
-        engine.stopUpdateRadio();
+        if (!s_pushOnLink) engine.stopUpdateRadio();   // on sensing's link it never took the radio
         s_pushRadio = false;
         // A rate limit (429) is not fixed by asking again in two minutes --
         // that is what kept ntfy.sh's quota spent in 2026-10. Wait as long
@@ -4144,12 +4192,21 @@ static void servicePush(uint32_t now) {
     if (s_pushRadio) return;
     if (!Settings::pushOn()) { if (s_pushQ.count()) s_pushQ.clear(); return; }
     if (!s_pushQ.due(now)) return;
-    // Only with the radio otherwise idle: never under an update, a time join,
-    // a raw WiFi scan or a rest. They come back round in a moment.
-    if (!engine.radioFree() || OtaWifi::timeSyncBusy() || OtaWifi::state() != OtaWifi::State::OFF) return;
-    engine.startUpdateRadio();
-    if (!OtaWifi::pushStart(s_pushQ.items(), s_pushQ.count())) {
-        engine.stopUpdateRadio();
+    // HUMAN SENSING joined: over its link, which is already up and stays up
+    // -- a MOTION push lands while the room is being watched, not after.
+#if defined(SENSE_CYD_APP)
+    const bool onLink = senseCydRunning() && senseCydMode() == SENSE_MODE_STA;
+#else
+    const bool onLink = false;
+#endif
+    if (OtaWifi::timeSyncBusy() || OtaWifi::state() != OtaWifi::State::OFF) return;
+    // Otherwise only with the radio idle: never under an update, a time join,
+    // a raw WiFi scan, a rest, or HUMAN SENSING still joining. They come back
+    // round in a moment.
+    if (!onLink && !engine.radioFree()) return;
+    if (!onLink) engine.startUpdateRadio();
+    if (!OtaWifi::pushStart(s_pushQ.items(), s_pushQ.count(), onLink)) {
+        if (!onLink) engine.stopUpdateRadio();
         s_pushQ.sending(now);
         s_pushQ.finished(0, false, now);
         s_pushStat.result = (uint8_t)OtaWifi::pushResult();
@@ -4157,7 +4214,8 @@ static void servicePush(uint32_t now) {
         s_pushStat.atMs   = now ? now : 1;
         return;
     }
-    s_pushRadio = true;
+    s_pushRadio  = true;
+    s_pushOnLink = onLink;
     s_pushQ.sending(now);
     Serial.printf("[push] sending %u\n", (unsigned)s_pushQ.count());
 }
@@ -7836,8 +7894,10 @@ void loop() {
         // CSI, every ping lost) on upstream's bench; opened later it never did.
         // WIFI TIME (or AUTO TIME) mid-join keeps the radio until it is done.
         const bool want = state == AppState::SENSING && millis() > 8000;
+        // ...and so does a push's own join, which ends by dropping the link
+        // sensing would have just made.
         if (want && !senseCydRunning() && !s_timeSyncRadio && !OtaWifi::timeSyncBusy() &&
-            OtaWifi::state() == OtaWifi::State::OFF) {
+            !OtaWifi::pushBusy() && OtaWifi::state() == OtaWifi::State::OFF) {
             // Remembered (NVS), so a board switched off in SENSING boots back
             // into it (the boot screen's exit). Cleared below when the screen
             // is left any way but a power cut.
@@ -7874,6 +7934,7 @@ void loop() {
         }
         senseCydTick();
         SenseStore::tick(now);
+        if (senseCydRunning()) serviceMotion(now);
     }
 #endif
 #if defined(CYD_GPS)
@@ -7905,7 +7966,7 @@ void loop() {
             d.hits      = 1;
             d.conf      = h.exact ? Confidence::HIGH_CONF : Confidence::MED_CONF;
             d.active    = true;
-            engine.postLora(d);
+            engine.postKeyed(d, DetectionEngine::LORA_GONE_MS);
             engine.checkWatchBle(d.mac, d.rssi);
             engine.checkHuntBle(d.mac, d.rssi);
         }

@@ -520,6 +520,11 @@ namespace Settings {
     const char* muleskinSizeLabel();
     void        cycleMuleSkinSize();
     void     toggleType(DetectionType t);
+    // The TYPE FILTER's rows, in order: the catalogue (FLOCK..LORAWAN), then
+    // MOTION on a board with HUMAN SENSING. Not MINE: MY ALERTS' list is its
+    // switch. toggleType() and enabledTypeCount() go by this same list.
+    uint8_t       filterTypeCount();
+    DetectionType filterTypeAt(uint8_t i);   // i < filterTypeCount()
     uint8_t  enabledTypeCount();   // for a Settings-row "12/14" summary
 
     // How far along an unfinished easter-egg hunt is, kept across restarts.

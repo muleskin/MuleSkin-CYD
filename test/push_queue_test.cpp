@@ -24,6 +24,7 @@ int main() {
     ck("IMPORTANT sends a Flock", wanted(What::IMPORTANT, false, false, DetectionType::FLOCK, false));
     ck("...and a deauth flood", wanted(What::IMPORTANT, false, false, DetectionType::DEAUTH, false));
     ck("...and an attack tool or karma AP", wanted(What::IMPORTANT, false, false, DetectionType::HACKER, false));
+    ck("...and movement HUMAN SENSING was opened to watch for", wanted(What::IMPORTANT, false, false, DetectionType::MOTION, false));
     ck("...but not a passing AirTag", !wanted(What::IMPORTANT, false, false, DetectionType::AIRTAG, false));
     ck("...nor a Ring doorbell", !wanted(What::IMPORTANT, false, false, DetectionType::RING, false));
     ck("ALL sends the AirTag", wanted(What::ALL, false, false, DetectionType::AIRTAG, false));

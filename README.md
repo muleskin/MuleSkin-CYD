@@ -741,6 +741,14 @@ the empty room, so keep still while it says PLEASE STAND BY.
   the radio straight back to the detector; on the StickS3 and the Cardputer
   (no button bar at 240x135) the cursor's one stop is the banner, where a
   press re-calibrates, and BACK or HOME leaves.
+- **Movement is a detection**: `MOTION`, in the LOG, the counters (MOVE),
+  IGNORE and SNOOZE, with a switch in DETECTION FILTER. It does not raise the
+  alert card (this screen already says PRESENCE, and leaving it would end the
+  sensing), but it goes to PUSH ALERTS like any alert, over the network
+  sensing is already joined to, so the phone hears it while the room is
+  being watched (and the buzzer chirps, the first time). Once per room (per network sensed through), and
+  news again only after five still minutes; PUSH ALERTS' one-an-hour per
+  device holds for it too. It is only raised while this screen is open.
 - **A refused board backs off** (20 s, then 40, up to 5 minutes) instead of
   getting itself blocked by the router. A board switched off on this screen
   comes back to it. PRIVACY MODE keeps the network's name and the router's

@@ -470,7 +470,12 @@ void tmAir(TFT_eSPI& t, TmRect r, const TmTheme& T) {
 
 void tmCounts(TFT_eSPI& t, const DetectionEngine& eng, TmRect r, const TmTheme& T) {
     DetectionType cols[MAX_COUNTER_TYPES];
-    const uint8_t nc = activeCounterTypes(cols);
+    bool motion = false;   // MOVE's column: only with a MOTION row to count
+    for (uint8_t i = 0; i < eng.logCount() && !motion; i++) {
+        const Detection* d = eng.logAt(i);
+        motion = d && d->type == DetectionType::MOTION;
+    }
+    const uint8_t nc = activeCounterTypes(cols, motion);
     uint16_t cnt[MAX_COUNTER_TYPES] = {};
     for (uint8_t i = 0; i < eng.logCount(); i++) {
         const Detection* d = eng.logAt(i);

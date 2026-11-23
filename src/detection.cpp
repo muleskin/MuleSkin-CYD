@@ -1816,7 +1816,7 @@ void DetectionEngine::postBle(Detection d) {
     pushLog(d);
 }
 
-void DetectionEngine::postLora(Detection d) {
+void DetectionEngine::postKeyed(Detection d, uint32_t goneMs) {
     if (!Settings::typeEnabled(d.type)) return;
     LogLock lock;
     const uint32_t now = millis();
@@ -1825,8 +1825,8 @@ void DetectionEngine::postLora(Detection d) {
         Detection& row = _log[slot];
         if (memcmp(row.mac, d.mac, 6) != 0 || row.type != d.type) continue;
         // A row kept from before this boot has no lastSeen to measure from,
-        // and the first frame of a new boot is news either way.
-        const bool gone = row.restored || (now - row.lastSeen) > LORA_GONE_MS;
+        // and the first report of a new boot is news either way.
+        const bool gone = row.restored || (now - row.lastSeen) > goneMs;
         {
             const uint8_t nowAt = (uint8_t)(now >> 11);
             if (row.prevAt != nowAt) { row.prevRssi = row.rssi; row.prevAt = nowAt; }

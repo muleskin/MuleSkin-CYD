@@ -154,6 +154,9 @@ uint16_t colorFor(DetectionType t) {
         // nothing else on this screen uses for a warning.
         case DetectionType::LORAWAN:
             return GREEN;
+        // A body in the room, not equipment: a colour no device type has.
+        case DetectionType::MOTION:
+            return VAPOR_BLUE;
         default:
             return GREEN;
     }
@@ -902,6 +905,20 @@ void drawTypeIcon(TFT_eSPI& t, DetectionType type, int cx, int cy, int s) {
         for(int i=1;i<=2;i++) t.drawCircle(cx, cy, i*s/3, ICO_WARN);
         t.fillRect(cx-s/2, cy-s, s, s/3, ICO_PLASTIC);                    // the name tag
         t.fillRect(cx-s/2+3, cy-s+s/8, s-6, s/12, SHELL_LO);
+        break;
+    case DetectionType::MOTION:
+        // Not a device: somebody mid-stride, and the ripples they leave in
+        // the WiFi behind them.
+        for(int i=1;i<=3;i++) t.drawCircle(cx-s/2, cy, i*s/3, ICO_LENS);
+        t.fillRect(cx-s-2, cy-s-2, s/2+2, s*2+4, BG);                     // the ripples' back half off
+        t.fillCircle(cx+s/4, cy-s*3/4, s/4, SHELL_HI);                    // head
+        for(int k=-1;k<=1;k++) {
+            t.drawLine(cx+s/4+k, cy-s/2, cx+k, cy+s/4, SHELL);            // body
+            t.drawLine(cx+k, cy+s/4, cx-s/2+k, cy+s, SHELL);              // back leg
+            t.drawLine(cx+k, cy+s/4, cx+s/2+k, cy+s, SHELL);              // front leg
+            t.drawLine(cx+s/6, cy-s/4+k, cx+s*3/4, cy+k, SHELL_LO);       // arms
+            t.drawLine(cx+s/6, cy-s/4+k, cx-s/3, cy+k, SHELL_LO);
+        }
         break;
     default:
         t.drawCircle(cx,cy,s,ICO_METAL);

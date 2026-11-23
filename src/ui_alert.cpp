@@ -38,6 +38,7 @@ static const char* targetLabel(DetectionType t) {
         case DetectionType::HACKER:      return "HACKER HARDWARE";
         case DetectionType::LORAWAN:     return "LORAWAN NETWORK";
         case DetectionType::MINE:        return "MY ALERT";
+        case DetectionType::MOTION:      return "MOTION IN ROOM";
         default:                     return "UNKNOWN";
     }
 }

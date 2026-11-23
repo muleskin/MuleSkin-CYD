@@ -674,3 +674,34 @@ The payload is encrypted and is never touched. `test/lora_opalert_test.cpp`
 pins all of the above.
 
 ---
+
+## Movement in the room — `MOTION` (shown as `MOVE`) — **graded by the model's own trust**
+
+HUMAN SENSING's catch (`include/sense_cyd.h`), on the ESP32 and ESP32-S3
+boards, and only while the HUMAN SENSING screen is open: the rest of the time
+the detector has the radio. Not a signature and not a device -- the board pings
+its router and a body moving through the path between them changes the
+replies. It can tell a still room from a moving one, not who, how many, or
+where; a pet or a fan does it too.
+
+**One detection per room.** The row's address is made up from the name of the
+network sensed through -- `02:4D:56` and three bytes of its hash
+(`motionMacFor()` in `src/main.cpp`) -- so IGNORE and SNOOZE work on a room the
+way they work on a device. PRESENCE (movement now, or in the last 15 seconds)
+keeps the row live; it is news again only after five still minutes
+(`DetectionEngine::MOTION_GONE_MS`).
+
+**No alert card.** The sensing screen already says PRESENCE, and raising the
+card would leave it and hand the radio back. The news still goes through the
+alert screens' gate -- ALERT FILTER, IGNORE, AUTO SNOOZE -- and from there to
+PUSH ALERTS, which sends over the network sensing is joined to (and to the
+buzzer, for a room's first row, as for any new device).
+PUSH WHAT's IMPORTANT includes it.
+
+| What | Grade |
+|---|---|
+| The motion model's trust in its score 70 or over | **High** |
+| 40 to 69 | **Medium** |
+| Under 40 | **Low** |
+
+---

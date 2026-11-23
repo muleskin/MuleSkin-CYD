@@ -162,7 +162,7 @@ bool        timeSyncStart()       { return false; }
 bool        timeSyncBusy()        { return false; }
 TimeSync    timeSyncState()       { return TimeSync::NO_JOIN; }
 const char* timeSyncNetwork()     { return ""; }
-bool        pushStart(const PushMsg*, uint8_t) { return false; }
+bool        pushStart(const PushMsg*, uint8_t, bool) { return false; }
 bool        pushBusy()            { return false; }
 PushResult  pushResult()          { return PushResult::NO_JOIN; }
 uint8_t     pushSentCount()       { return 0; }

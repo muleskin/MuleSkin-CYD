@@ -63,7 +63,7 @@ static const uint32_t DEFAULT_OFF = (1u << (uint8_t)DetectionType::IBEACON);
 // type on), computed once at namespace-init time rather than a hand-
 // maintained literal so it can never drift out of sync with COUNT.
 // 32-bit, not 16. DetectionType::COUNT reached 17 when IBEACON was added
-// (18 with HACKER, 19 with LORAWAN),
+// (18 with HACKER, 19 with LORAWAN, 21 with MINE and MOTION),
 // and bit 16 does not exist in a uint16_t -- the shift is undefined and the
 // last type silently loses its switch. NVS has always stored this through
 // putUInt/getUInt, so the saved format is unchanged and nothing migrates.
@@ -972,9 +972,27 @@ bool typeEnabled(DetectionType t) {
     return (s_typeMask & (1u << idx)) != 0;
 }
 
+uint8_t filterTypeCount() {
+#if defined(SENSE_CYD_APP)
+    return (uint8_t)DetectionType::MINE;       // 1..MINE-1, and MOTION
+#else
+    return (uint8_t)DetectionType::MINE - 1;   // no HUMAN SENSING: nothing raises MOTION
+#endif
+}
+
+DetectionType filterTypeAt(uint8_t i) {
+    return i + 1 < (uint8_t)DetectionType::MINE ? (DetectionType)(i + 1) : DetectionType::MOTION;
+}
+
+static bool filterable(DetectionType t) {
+    for (uint8_t i = 0; i < filterTypeCount(); i++)
+        if (filterTypeAt(i) == t) return true;
+    return false;
+}
+
 void toggleType(DetectionType t) {
-    uint8_t idx = (uint8_t)t;
-    if (idx == 0 || idx >= (uint8_t)DetectionType::MINE) return;
+    if (!filterable(t)) return;
+    const uint8_t idx = (uint8_t)t;
     s_typeMask ^= (1u << idx);
     s_prefs.putUInt("typemask", s_typeMask);
     // Stamped alongside the mask so a later firmware can tell which
@@ -984,9 +1002,8 @@ void toggleType(DetectionType t) {
 
 uint8_t enabledTypeCount() {
     uint8_t n = 0;
-    for (uint8_t t = 1; t < (uint8_t)DetectionType::MINE; t++) {
-        if (s_typeMask & (1u << t)) n++;
-    }
+    for (uint8_t i = 0; i < filterTypeCount(); i++)
+        if (s_typeMask & (1u << (uint8_t)filterTypeAt(i))) n++;
     return n;
 }
 
