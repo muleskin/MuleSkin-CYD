@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (2.8\" CYD, ILI9341)",
-  "version": "3.12.0",
-  "release_name": "Terminal & sensing",
-  "whats_new": ["TERMINAL MODE replaces BORING MODE", "HUMAN SENSING (WiFi motion, beta)", "StickS3 and Cardputer controls", "Tab5 build (build-it-yourself)"],
+  "version": "3.13.0",
+  "release_name": "Motion detection",
+  "whats_new": ["HUMAN SENSING motion is a detection", "Motion pushes while sensing runs", "MOTION switch in DETECTION FILTER"],
   "new_install_prompt_erase": true,
   "builds": [
     {
