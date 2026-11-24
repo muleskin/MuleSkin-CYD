@@ -228,6 +228,11 @@ namespace Settings {
     // it. Kept on every board so the settings file reads the same.
     bool       sensing();
     void       setSensing(bool on);
+    // SENSE ARM: HUMAN SENSING without its screen -- SenseMotion::ARM_OFF,
+    // ARM_NIGHT or ARM_ALWAYS (include/sense_motion.h). The detector is paused
+    // while it runs. Kept on every board, like the above.
+    uint8_t    senseArm();
+    void       cycleSenseArm();
     // Which HUMAN SENSING page was showing (0 SENSING .. 3 VITALS), so a
     // restart comes back to it. Saved when the page is turned (upstream v1.49).
     uint8_t    sensePage();

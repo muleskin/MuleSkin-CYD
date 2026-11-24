@@ -133,6 +133,8 @@ static void drawWatchPill(TFT_eSPI& t, int screenW, bool watching, bool hunting,
 // scan is the more important thing to know. Not a tap target.
 static uint8_t s_pushWaiting = 0;
 void uiClearSetPushWaiting(uint8_t n) { s_pushWaiting = n; }
+static bool s_senseArmed = false;
+void uiClearSetSenseArmed(bool on) { s_senseArmed = on; }
 
 static void drawPausedPill(TFT_eSPI& t, int screenW, const char* txt, int spanR = -1) {
     const uint16_t accent = Theme::AMBER;
@@ -678,7 +680,7 @@ void uiClearTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng, bool adv
             // Right of the pill: the watch's corner clock, drawn earlier (see
             // drawCornerClock()); -1 elsewhere, the old fixed reserve.
             if (eng.updateRadioOn())
-                drawPausedPill(t, w, "PAUSED", s_cornerClockPillR);
+                drawPausedPill(t, w, s_senseArmed ? "SENSING" : "PAUSED", s_cornerClockPillR);
             else if (eng.radiosResting())
                 drawPausedPill(t, w, "RESTING", s_cornerClockPillR);
             else if (watching || hunting)

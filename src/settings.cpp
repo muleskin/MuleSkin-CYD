@@ -134,6 +134,7 @@ static bool     s_wakeOnAlert  = true;
 static bool     s_quietTrack   = true;
 static bool     s_privacy      = false;
 static bool     s_sensing      = false;
+static uint8_t  s_senseArm     = 0;   // SenseMotion::Arm
 static uint8_t  s_sensePage    = 0;
 struct __attribute__((packed)) RunEntry { uint16_t boot, minutes; };
 static const uint8_t RUNS_N = 8;
@@ -348,6 +349,11 @@ void setSensing(bool on) {
     s_sensing = on;
     s_prefs.putBool("sensing", s_sensing);
 }
+uint8_t senseArm() { return s_senseArm; }
+void cycleSenseArm() {
+    s_senseArm = (uint8_t)((s_senseArm + 1) % 3);   // OFF, AT NIGHT, ALWAYS
+    s_prefs.putUChar("senseArm", s_senseArm);
+}
 void setSensePage(uint8_t p) {
     if (p == s_sensePage) return;
     s_sensePage = p;
@@ -520,6 +526,8 @@ void load() {
     s_quietTrack   = s_prefs.getBool("qTrack", true);
     s_privacy      = s_prefs.getBool("privacy", false);
     s_sensing      = s_prefs.getBool("sensing", false);
+    s_senseArm     = s_prefs.getUChar("senseArm", 0);
+    if (s_senseArm > 2) s_senseArm = 0;
     s_sensePage    = s_prefs.getUChar("sensePg", 0);
     if (s_prefs.getBytesLength("runs") == sizeof s_runs) s_prefs.getBytes("runs", s_runs, sizeof s_runs);
     s_watchPlus    = s_prefs.getBool("wPlus", false);

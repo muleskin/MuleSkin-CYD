@@ -135,7 +135,7 @@ inline const SimDetectionProfile kSimProfiles[] = {
     // MY ALERTS -- an in-car router of the kind it was asked for. The label
     // is the first pattern on the list when there is one (see below).
     { DetectionType::MINE,        {0x02, 0x76, 0x45}, "CITY PD",     "veh912",         -64, true,  "My alert (car WiFi)" },
-    // MOTION -- HUMAN SENSING's made-up address (motionMacFor in main.cpp),
+    // MOTION -- HUMAN SENSING's made-up address (SenseMotion::macFor),
     // named for the network it sensed through.
     { DetectionType::MOTION,      {0x02, 0x4D, 0x56}, "WiFi sensing", "HomeNet",       -48, true,  "Motion (HUMAN SENSING)" },
 };

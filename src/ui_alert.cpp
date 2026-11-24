@@ -835,6 +835,13 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
     // would be a number that means nothing.
     if (s_last.type == DetectionType::LORAWAN)
         snprintf(info, sizeof(info), "%d dBm   LORA   x%u", s_last.rssi, (unsigned)s_last.hits);
+    // HUMAN SENSING's movement: the dBm is the router's and says nothing
+    // about a person. How sure the model was, and how many times this room
+    // has started moving again.
+    else if (s_last.type == DetectionType::MOTION)
+        snprintf(info, sizeof(info), "SENSED   %s   x%u",
+                 s_last.conf == Confidence::HIGH_CONF ? "SURE" : s_last.conf == Confidence::MED_CONF ? "LIKELY" : "MAYBE",
+                 (unsigned)s_last.hits);
     else
     snprintf(info, sizeof(info), "%d dBm   CH %u   x%u",
              s_last.rssi, s_last.channel, (unsigned)s_last.hits);

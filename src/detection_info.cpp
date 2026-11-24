@@ -50,7 +50,7 @@ static const char* const EXPLAIN_TEXT[] = {
     // MINE
     "A WiFi network whose name matches one of YOUR patterns, from Settings > MY ALERTS. Nothing in the built-in tables says what it is: you told the board to watch for this name, and here it is. The label on the alert is the one you gave the pattern. Network names are chosen by whoever runs the router, so anyone can name theirs to match.",
     // MOTION
-    "Not a device: HUMAN SENSING saw something move. The board pings its WiFi router many times a second and watches how the replies change; a body moving through the path between the two changes them. The name is the network it sensed through. It can tell a still room from a room with something moving in it, not who, how many, or where -- a pet or a fan can do it too. Only raised while the HUMAN SENSING screen is open (the detector has the radio otherwise), and once again only after five quiet minutes. Turn it off in DETECTION FILTER.",
+    "Not a device: HUMAN SENSING saw something move. The board pings its WiFi router many times a second and watches how the replies change; a body moving through the path between the two changes them. The name is the network it sensed through. It can tell a still room from a room with something moving in it, not who, how many, or where -- a pet or a fan can do it too. Only raised while sensing runs -- its screen open, or SENSE ARM on, with the detector paused either way -- and once again only after five quiet minutes. Turn it off in DETECTION FILTER.",
 };
 static const uint8_t EXPLAIN_TEXT_N = sizeof(EXPLAIN_TEXT) / sizeof(EXPLAIN_TEXT[0]);
 

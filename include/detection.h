@@ -294,6 +294,11 @@ public:
         const uint8_t slot = (_logHead + LOG_CAP - 1 - i) % LOG_CAP;
         if (memcmp(_log[slot].mac, mac, 6) != 0) continue;
         Detection& d = _log[slot];
+        // HUMAN SENSING's movement has no signal of its own to come closer
+        // with -- the RSSI is the router's, which does not move -- so the
+        // bar below would hold it for half an hour after a few alerts. Its
+        // pace is postKeyed()'s instead: news only after MOTION_GONE_MS still.
+        if (d.type == DetectionType::MOTION) return AlertGate::ALLOW;
 
         const uint16_t nowMin = (uint16_t)(now / 60000u);
         const bool     gone   = (uint16_t)(nowMin - d.askedMin) > QUIET_DECAY_MS / 60000u;

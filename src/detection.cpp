@@ -2488,7 +2488,10 @@ void DetectionEngine::pushLog(const Detection& d) {
         Serial.printf("[5g] new %s %02x:%02x:%02x:%02x:%02x:%02x on ch %u, %d dBm\n", detectionTypeName(d.type),
                       d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5], (unsigned)d.channel, (int)d.rssi);
 #endif
-    _lifetimeTotal++;
+    // A room is not a device caught: the total is what MuleSkin's outfits and
+    // the DIARY count, and HUMAN SENSING's rows stay out of it. Its own
+    // by-type count still keeps them.
+    if (d.type != DetectionType::MOTION) _lifetimeTotal++;
     if ((uint8_t)d.type < (uint8_t)DetectionType::COUNT) _lifetimeByType[(uint8_t)d.type]++;
     // Counted here, on the Bluetooth host task, and written to flash from
     // loop() (see saveLifetime). A flash write stalls both cores for a

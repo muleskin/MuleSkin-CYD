@@ -11,6 +11,7 @@
 #include "theme.h"
 #include "privacy.h"
 #include "settings.h"
+#include "sense_motion.h"
 #include "security.h"
 #include "ignore_list.h"
 #include "my_alerts.h"
@@ -96,6 +97,8 @@ static const SettingsRow ALL_ROWS[] = {
     // Beside what the detector listens for: what the board's radio senses
     // (the detector paused while HUMAN SENSING is up; upstream SquachWatch v1.42).
     SettingsRow::SENSING,
+    // ...and the same without its screen: the room watched, detector paused.
+    SettingsRow::SENSE_ARM,
 #endif
     // APPEARANCE opens the display page -- see APPEARANCE_ROWS. It sat at the
     // very top of this list, which put it under the first thumb that opened
@@ -280,6 +283,7 @@ static RowGroupId groupFor(SettingsRow r) {
         case SettingsRow::IGNORED_DEVICES:
 #if defined(SENSE_CYD_APP)
         case SettingsRow::SENSING:
+        case SettingsRow::SENSE_ARM:
 #endif
             return RowGroupId::BEHAVIOR;
         case SettingsRow::APPEARANCE:
@@ -919,6 +923,9 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
 #if defined(SENSE_CYD_APP)
         case SettingsRow::SENSING:
             label = "HUMAN SENSING"; value = ">";   // opens the screen
+            break;
+        case SettingsRow::SENSE_ARM:
+            label = "SENSE ARM"; value = SenseMotion::armLabel(Settings::senseArm());
             break;
 #endif
         case SettingsRow::MY_ALERTS:

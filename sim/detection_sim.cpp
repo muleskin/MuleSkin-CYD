@@ -79,7 +79,7 @@ void DetectionEngine::pushLog(const Detection& d) {
         _typeCounts[(uint8_t)d.type]++;
         _lifetimeByType[(uint8_t)d.type]++;   // the DEX and the outfits read this
     }
-    _lifetimeTotal++;
+    if (d.type != DetectionType::MOTION) _lifetimeTotal++;   // as the board: a room is not a catch
 }
 
 // Radio-fed entry points: inert here, nothing calls them in the sim.

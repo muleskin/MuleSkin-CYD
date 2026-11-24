@@ -143,5 +143,25 @@ int main() {
            eng.alertGate(other, 5, false) == Gate::ALLOW);
     }
 
+    suite("A room's movement is never held");
+    {
+        // HUMAN SENSING's MOTION: the dBm is the router's and never comes
+        // closer, so the bar would hold it for half an hour. It is paced by
+        // postKeyed() instead.
+        static const uint8_t ROOM[6] = { 0x02, 0x4D, 0x56, 0x01, 0x02, 0x03 };
+        Detection d{};
+        memcpy(d.mac, ROOM, 6);
+        d.rssi = -50;
+        d.type = DetectionType::MOTION;
+        d.conf = Confidence::HIGH_CONF;
+        d.active = true;
+        d.firstSeen = d.lastSeen = millis();
+        eng.postBle(d);
+        bool allowed = true;
+        for (int i = 0; i < 20; i++)
+            if (eng.alertGate(ROOM, 2, false) != Gate::ALLOW) allowed = false;
+        ck("twenty in a row at the same dBm, all allowed", allowed);
+    }
+
     return report();
 }

@@ -342,6 +342,7 @@ static void drawCrashCard(TFT_eSPI& t) {
 #include "sense_store.h"
 #include "ui_sensing_cyd.h"
 #include "sense_cyd.h"
+#include "sense_motion.h"
 #endif
 #include "flood_bench.h"
 #include "ui_boot.h"
@@ -3600,24 +3601,37 @@ static void enterSensing() {
     uiSensingInit(*canvas);
 }
 
-// HUMAN SENSING's catch, a Detection like any other (DetectionType::MOTION):
-// the LOG, the counters, IGNORE, SNOOZE, the TYPE FILTER and PUSH ALERTS all
-// see it. One row per network sensed through, under an address made from its
-// name -- the room, as near as the board can tell one -- like LoRaWAN's
-// operators (Lora::OpAlert::macFor): 02:4D:56 ("MV") and three bytes of hash.
-static void motionMacFor(const char* ssid, uint8_t mac[6]) {
-    uint32_t h = 2166136261u;   // FNV-1a
-    for (const char* p = ssid; *p; p++) { h ^= (uint8_t)*p; h *= 16777619u; }
-    mac[0] = 0x02; mac[1] = 0x4D; mac[2] = 0x56;
-    mac[3] = (uint8_t)(h >> 16); mac[4] = (uint8_t)(h >> 8); mac[5] = (uint8_t)h;
+// The status light's flash for a movement (StatusLight's alert rule), and
+// SLEEP's glance: the screen lit for a few seconds, then dark again unless
+// somebody touched it meanwhile.
+static uint32_t s_motionLightUntil = 0;
+static uint32_t s_senseGlanceUntil = 0;
+static const uint32_t MOTION_LIGHT_MS  = 8000;
+static const uint32_t SENSE_GLANCE_MS  = 10000;
+
+// SENSE ARM: whether the setting has sensing running without its screen now.
+// AT NIGHT goes by the screen's NIGHT DIM hours when set, else the clock's
+// own night -- and never on a clock it cannot believe.
+static bool senseArmed() {
+    const uint8_t arm = Settings::senseArm();
+    if (arm == SenseMotion::ARM_OFF) return false;
+    const uint8_t p = Settings::nightMode();
+    const bool night = Clock::trusted() && (p ? NightMode::active(p, Clock::hour()) : Clock::night());
+    return SenseMotion::armedNow(arm, Clock::trusted(), night);
 }
 
+// HUMAN SENSING's catch, a Detection like any other (DetectionType::MOTION):
+// the LOG, the counters, IGNORE, SNOOZE, the TYPE FILTER and PUSH ALERTS all
+// see it, one row per room (SenseMotion::macFor).
+//
 // Every loop pass while sensing runs. PRESENCE (MOTION now, or within the
 // hold) keeps the row live, once a second; postKeyed() makes it news again
 // only after MOTION_GONE_MS of a still room. The news is announced the way
 // the alert screens announce -- ALERT FILTER, IGNORE, AUTO SNOOZE, then the
-// buzzer and PUSH ALERTS -- but the card is not raised: this screen already
-// says PRESENCE, and leaving it would hand the radio back and end the sensing.
+// buzzer and PUSH ALERTS -- with the status light, and SLEEP's screen lit
+// for a glance. The card is raised only from the main screen (SENSE ARM):
+// on the sensing screen PRESENCE already says it, and leaving that screen
+// would hand the radio back and end the sensing.
 static void serviceMotion(uint32_t now) {
     static uint32_t postedAt = 0;
     if (!SenseStore::fresh(now)) return;
@@ -3627,7 +3641,7 @@ static void serviceMotion(uint32_t now) {
     postedAt = now;
     Detection d;
     memset(&d, 0, sizeof d);
-    motionMacFor(senseCydNetwork(), d.mac);
+    SenseMotion::macFor(senseCydNetwork(), d.mac);
     d.rssi      = r.rssi;
     d.channel   = (uint8_t)r.chan;   // the router's: a WiFi row
     d.type      = DetectionType::MOTION;
@@ -3635,16 +3649,33 @@ static void serviceMotion(uint32_t now) {
     snprintf(d.name, sizeof d.name, "%s", senseCydNetwork());
     d.firstSeen = d.lastSeen = now;
     d.hits      = 1;
-    // How far the motion model trusts its own score (SenseReport::rel).
-    d.conf      = r.rel >= 70 ? Confidence::HIGH_CONF : r.rel >= 40 ? Confidence::MED_CONF : Confidence::LOW_CONF;
+    d.conf      = SenseMotion::confFor(r.rel);
     d.active    = true;
     engine.postKeyed(d, DetectionEngine::MOTION_GONE_MS);
     const Detection* c = freshCatch(now);
-    if (c && c->type == DetectionType::MOTION && c->conf >= Settings::minConfidence() &&
-        !IgnoreList::silenced(c->mac)) {
-        Serial.printf("[sense] MOTION on %s: logged and announced\n", c->name);
-        alertMayInterrupt(*c);
+    if (!c || c->type != DetectionType::MOTION || c->conf < Settings::minConfidence() ||
+        IgnoreList::silenced(c->mac) || !alertMayInterrupt(*c))
+        return;
+    Serial.printf("[sense] MOTION on %s: logged and announced\n", c->name);
+    s_motionLightUntil = now + MOTION_LIGHT_MS;
+    if (!s_motionLightUntil) s_motionLightUntil = 1;
+    if (state == AppState::SENSING && s_senseDark) {
+        senseWake();
+        s_senseGlanceUntil = now + SENSE_GLANCE_MS;
+        if (!s_senseGlanceUntil) s_senseGlanceUntil = 1;
+    } else if (state == AppState::CLEAR) {
+        // Armed, on the main screen: the card, as any catch gets there.
+        uiAlertSetRedacted(false);
+        enterAlert(*c);
     }
+}
+
+// SLEEP's glance is over: dark again, unless a touch or a key since has
+// cleared it (the screen is wanted) or the screen was left.
+static void serviceSenseGlance(uint32_t now) {
+    if (!s_senseGlanceUntil || (int32_t)(now - s_senseGlanceUntil) < 0) return;
+    s_senseGlanceUntil = 0;
+    if (state == AppState::SENSING) senseSleep();
 }
 #endif
 // MY ALERTS, and the two trips to the keyboard it makes: the pattern, then
@@ -3883,7 +3914,10 @@ static void queuePushAlert(const Detection& d, uint16_t followMins) {
         Serial.printf("[push] paused: not pushing %s (%lu min more)\n", detectionTypeName(d.type), (unsigned long)pushPausedMin());
         return;
     }
-    if (!followMins && !s_pushCool.allow(d.mac, millis())) {
+    // Not for a room's movement: postKeyed() already makes it news only after
+    // five still minutes, and somebody watching a room wants each time it
+    // starts moving again. DAILY_CAP below still holds it.
+    if (!followMins && d.type != DetectionType::MOTION && !s_pushCool.allow(d.mac, millis())) {
         s_pushCooled++;
         Serial.printf("[push] %s %02x:%02x:%02x:%02x:%02x:%02x pushed within the hour; not again\n",
                       detectionTypeName(d.type), d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
@@ -3916,6 +3950,17 @@ static void queuePushAlert(const Detection& d, uint16_t followMins) {
                  vendor, vendor[0] ? " -- " : "", (unsigned)followMins, (int)d.rssi,
                  d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
         queuePush(title, body, 5, "rotating_light", true, seq, act);
+#if defined(SENSE_CYD_APP)
+    } else if (d.type == DetectionType::MOTION) {
+        // What the motion model made of it, at the moment it called it: a
+        // router's dBm says nothing about a person. Not the network's name --
+        // no push carries one -- the board's name in front says which room.
+        const SenseReport& r = SenseStore::last();
+        snprintf(title, sizeof title, "MOTION in the room");
+        snprintf(body, sizeof body, "Something moving. Motion %u/100, trust %u%%.",
+                 (unsigned)r.score, (unsigned)r.rel);
+        queuePush(title, body, 4, "walking", false, seq, act);
+#endif
     } else {
         const bool away = strcmp(vendorText(d), "Away-Owner") == 0;
         snprintf(title, sizeof title, away ? "%s away from its owner" : "%s nearby", detectionTypeName(d.type));
@@ -4676,6 +4721,15 @@ static void serviceAutoUpdate(uint32_t now) {
     s_autoVer[0] = (uint8_t)a; s_autoVer[1] = (uint8_t)b; s_autoVer[2] = (uint8_t)c;
     Serial.printf("[auto] night update to v%u.%u.%u: counting down\n", a, b, c);
     enterAutoUpdate();
+}
+
+// HUNT and WATCH follow a device's own signal. A MOTION row is a room, with
+// no signal of its own to follow (the dBm is the router's): the buttons say
+// so rather than starting a hunt whose gauge would never move.
+static bool refuseFollowMotion(DetectionType t) {
+    if (t != DetectionType::MOTION) return false;
+    Theme::showToast("NOTHING TO FOLLOW", "MOTION is a room, not a device", Theme::AMBER);
+    return true;
 }
 
 static void enterHunt() {
@@ -5817,6 +5871,7 @@ static void tdeckKeysTick(uint32_t now) {
     // a new VITALS session.
     else if (state == AppState::SENSING && s_senseDark) senseWake();
     else if (state == AppState::SENSING) {
+        s_senseGlanceUntil = 0;   // a key during a movement's glance: the screen stays on
 #if SENSE_RICH
         if (uiSensingKey(c, now)) {}
         else
@@ -7893,15 +7948,30 @@ void loop() {
         // settle first. Started at once, the first join came up deaf (no
         // CSI, every ping lost) on upstream's bench; opened later it never did.
         // WIFI TIME (or AUTO TIME) mid-join keeps the radio until it is done.
-        const bool want = state == AppState::SENSING && millis() > 8000;
+        // SENSE ARM runs it without the screen too: not with no network saved
+        // to sense through (the detector would be paused for nothing), and not
+        // while a screen that needs the radio itself is up (SenseMotion::
+        // armYields), which gets it and hands it back after.
+        const bool onScreen = state == AppState::SENSING;
+        const bool armed = !onScreen && OtaWifi::savedCount() && !SenseMotion::armYields(state) && senseArmed();
+        const bool want = (onScreen || armed) && millis() > 8000;
+        uiClearSetSenseArmed(armed && senseCydRunning());
+        // The screen was left while SLEEP had it dark, and sensing runs on
+        // (armed): the screen comes back all the same.
+        if (!onScreen && s_senseDark) senseWake();
+        if (!onScreen) s_senseGlanceUntil = 0;
+        serviceSenseGlance(now);
         // ...and so does a push's own join, which ends by dropping the link
         // sensing would have just made.
         if (want && !senseCydRunning() && !s_timeSyncRadio && !OtaWifi::timeSyncBusy() &&
             !OtaWifi::pushBusy() && OtaWifi::state() == OtaWifi::State::OFF) {
             // Remembered (NVS), so a board switched off in SENSING boots back
             // into it (the boot screen's exit). Cleared below when the screen
-            // is left any way but a power cut.
-            if (!Settings::sensing()) Settings::setSensing(true);
+            // is left any way but a power cut. Not for SENSE ARM, which
+            // starts again by itself.
+            if (onScreen && !Settings::sensing()) Settings::setSensing(true);
+            if (!onScreen) Serial.printf("[sense] SENSE ARM %s: sensing, detector paused\n",
+                                         SenseMotion::armLabel(Settings::senseArm()));
             engine.startUpdateRadio();
             SenseStore::begin();
             char ssid[33] = "", pass[65] = "";
@@ -7932,6 +8002,9 @@ void loop() {
         } else if (!want && state != AppState::SENSING && Settings::sensing()) {
             Settings::setSensing(false);   // left before the engine had started
         }
+        // Left the screen with SENSE ARM keeping it running: no longer a
+        // board to boot back into the screen.
+        if (!onScreen && Settings::sensing()) Settings::setSensing(false);
         senseCydTick();
         SenseStore::tick(now);
         if (senseCydRunning()) serviceMotion(now);
@@ -9120,6 +9193,9 @@ void loop() {
                     s_alertArmed  = false;   // the next step needs a fresh tap, not a held finger
                     Serial.println("[snooze] first tap -> step 1");
                     uiAlertSetSnoozePick(SNOOZE_STEP[0].label, 1000);
+                } else if (uiAlertHitHunt(tp.x, tp.y, tft.width(), tft.height()) &&
+                           refuseFollowMotion(lastAlertType)) {
+                    lastTouch = now;
                 } else if (uiAlertHitHunt(tp.x, tp.y, tft.width(), tft.height())) {
                     // Same call pair LOG's confirm panel makes. The
                     // DETECTION trigger fires here too: leaving via HUNT
@@ -9283,7 +9359,11 @@ void loop() {
                     if (!tp.valid) s_confirmArmed = true;
                 } else if (tp.valid && (now - lastTouch) > TOUCH_DEBOUNCE_MS) {
                     LogConfirmTap ctap = uiLogHitConfirm(tp.x, tp.y, tft.width(), tft.height());
-                    if (ctap == LogConfirmTap::WATCH) {
+                    if ((ctap == LogConfirmTap::WATCH || ctap == LogConfirmTap::HUNT) &&
+                        refuseFollowMotion(s_confirmType)) {
+                        lastTouch = now;
+                        s_confirmPending = false;
+                    } else if (ctap == LogConfirmTap::WATCH) {
                         lastTouch = now;
                         s_confirmPending = false;
                         // Toggling like IGNORE beside it -- the only way to
@@ -9687,6 +9767,17 @@ void loop() {
                             Theme::showToast("HUMAN SENSING", "Detector paused while this is open", Theme::CYAN);
                             enterSensing();
                             break;
+                        case SettingsRow::SENSE_ARM: {
+                            Settings::cycleSenseArm();
+                            const uint8_t a = Settings::senseArm();
+                            Theme::showToast(a == SenseMotion::ARM_OFF ? "SENSE ARM OFF" : "SENSE ARM",
+                                             a == SenseMotion::ARM_OFF   ? "Sensing only on its screen"
+                                             : !OtaWifi::savedCount()    ? "Needs a saved WiFi network"
+                                             : a == SenseMotion::ARM_NIGHT ? "At night: sensing, detector paused"
+                                             :                               "Always: sensing, detector paused",
+                                             Theme::CYAN, 3000);
+                            break;
+                        }
 #endif
                         // These ask first -- see the confirm panel over in
                         // ui_settings. A row earns one when tapping it a
@@ -9930,6 +10021,8 @@ void loop() {
             // A tap acts on release, where the finger went down.
             static bool sGesture = false;
             static int  sDownX = 0, sDownY = 0, sLastX = 0, sLastY = 0;
+            // A touch during a movement's glance: the screen is wanted, it stays on.
+            if (touchJustDown) s_senseGlanceUntil = 0;
             // Asleep (SLEEP): the touch that wakes it does nothing else.
             if (s_senseDark) { if (touchJustUp) { senseWake(); lastTouch = now; sGesture = false; } break; }
             if (touchJustDown) { sGesture = true; sDownX = sLastX = tp.x; sDownY = sLastY = tp.y; }
@@ -10833,6 +10926,16 @@ void loop() {
         // A fox caught on the HUNT gauge flashes the light green, the same
         // three flashes a detection gets in its own colour.
         if (state == AppState::HUNT && uiHuntCaught()) { lc.alert = true; lc.alertColor = Theme::GREEN; }
+#if defined(SENSE_CYD_APP)
+        // A movement HUMAN SENSING announced, card or no card: the same
+        // flashes, in MOTION's colour, for a few seconds.
+        if (s_motionLightUntil && (int32_t)(now - s_motionLightUntil) < 0) {
+            lc.alert = true;
+            lc.alertColor = Theme::colorFor(DetectionType::MOTION);
+        } else {
+            s_motionLightUntil = 0;
+        }
+#endif
         lc.update = 0;
         {
             const OtaBle::State  b = OtaBle::state();

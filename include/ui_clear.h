@@ -49,6 +49,9 @@ bool uiClearNearbyHit(int x, int y);
 // PUSH ALERTS waiting for a WiFi network: a "PUSH n" pill in the title bar,
 // 0 for none. Set by main.cpp every pass.
 void uiClearSetPushWaiting(uint8_t n);
+// SENSE ARM has the radio (main.cpp): the title bar's pill says SENSING
+// rather than PAUSED -- the detector is off on purpose, the room watched.
+void uiClearSetSenseArmed(bool on);
 
 // The battery, for TERMINAL MODE's LOG title bar. A board with a battery
 // hands over a function that fills in the percent and whether it is on the

@@ -48,10 +48,10 @@ enum class DetectionType : uint8_t {
     MINE    = 19,
     // HUMAN SENSING: something moving in the room, on the radio path between
     // the router and the board (include/sense_cyd.h). One row per network
-    // sensed through, under a made-up address (motionMacFor() in main.cpp), so
+    // sensed through, under a made-up address (SenseMotion::macFor()), so
     // the LOG, IGNORE, SNOOZE and PUSH ALERTS treat it as they treat any other
-    // catch. Only raised while the HUMAN SENSING screen is open, since the
-    // detector has the radio the rest of the time. After MINE, not before it:
+    // catch. Only raised while sensing runs (its screen, or SENSE ARM), since
+    // the detector has the radio the rest of the time. After MINE, not before:
     // MINE shipped as 19 and its number is in every log and ignore list since.
     // Outside the catalogue like MINE (no DEX card, no BINGO square), but it
     // has a TYPE FILTER row (Settings::filterTypeAt()).

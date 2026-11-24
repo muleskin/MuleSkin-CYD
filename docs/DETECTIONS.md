@@ -678,25 +678,34 @@ pins all of the above.
 ## Movement in the room — `MOTION` (shown as `MOVE`) — **graded by the model's own trust**
 
 HUMAN SENSING's catch (`include/sense_cyd.h`), on the ESP32 and ESP32-S3
-boards, and only while the HUMAN SENSING screen is open: the rest of the time
-the detector has the radio. Not a signature and not a device -- the board pings
+boards, and only while sensing runs: its screen open, or SENSE ARM on. The
+detector is paused either way -- one radio. Not a signature and not a device -- the board pings
 its router and a body moving through the path between them changes the
 replies. It can tell a still room from a moving one, not who, how many, or
 where; a pet or a fan does it too.
 
 **One detection per room.** The row's address is made up from the name of the
 network sensed through -- `02:4D:56` and three bytes of its hash
-(`motionMacFor()` in `src/main.cpp`) -- so IGNORE and SNOOZE work on a room the
-way they work on a device. PRESENCE (movement now, or in the last 15 seconds)
-keeps the row live; it is news again only after five still minutes
-(`DetectionEngine::MOTION_GONE_MS`).
+(`SenseMotion::macFor()`, `include/sense_motion.h`) -- so IGNORE and SNOOZE
+work on a room the way they work on a device.
+PRESENCE (movement now, or in the last 15 seconds) keeps the row live; it is
+news again only after five still minutes (`DetectionEngine::MOTION_GONE_MS`).
+That is its whole pace: AUTO SNOOZE's "come closer" bar would hold it (the
+dBm is the router's, which never moves) and PUSH ALERTS' one-an-hour per
+device would hide a room starting again, so neither applies. The daily push
+cap does.
 
-**No alert card.** The sensing screen already says PRESENCE, and raising the
-card would leave it and hand the radio back. The news still goes through the
-alert screens' gate -- ALERT FILTER, IGNORE, AUTO SNOOZE -- and from there to
-PUSH ALERTS, which sends over the network sensing is joined to (and to the
-buzzer, for a room's first row, as for any new device).
-PUSH WHAT's IMPORTANT includes it.
+**The alert card only from the main screen** (SENSE ARM). On the sensing
+screen PRESENCE already says it, and raising the card would leave it and hand
+the radio back. Either way the news goes through the alert screens' gate --
+ALERT FILTER, IGNORE -- to PUSH ALERTS ("MOTION in the room", the motion score
+and the model's trust, never the network's name), sent over the network
+sensing is joined to; the status light flashes in MOTION's colour, and under
+SLEEP the screen lights for ten seconds. PUSH WHAT's IMPORTANT includes it.
+
+**Not a device.** HUNT and WATCH refuse it (there is no signal of its own to
+follow), and it stays out of the lifetime total the outfits and the DIARY
+count.
 
 | What | Grade |
 |---|---|

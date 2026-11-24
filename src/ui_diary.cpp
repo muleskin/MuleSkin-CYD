@@ -83,6 +83,7 @@ void uiDiaryTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
         DetectionType best = DetectionType::UNKNOWN;
         uint32_t bestN = 0;
         for (uint8_t i = 1; i < (uint8_t)DetectionType::COUNT; i++) {
+            if (i == (uint8_t)DetectionType::MOTION) continue;   // a room, not a catch
             const uint32_t n = eng.lifetimeTypeCount((DetectionType)i);
             if (n > bestN) { bestN = n; best = (DetectionType)i; }
         }

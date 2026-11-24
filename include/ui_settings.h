@@ -76,6 +76,7 @@ enum class SettingsRow : uint8_t {
     NIGHT_POWER,     // on the APPEARANCE page: NIGHT POWER OFF / DARK / DARK+WIFI
 #if defined(SENSE_CYD_APP)
     SENSING,         // HUMAN SENSING: WiFi motion sensing on the board's own radio (opens the screen)
+    SENSE_ARM,       // SENSE ARM: HUMAN SENSING without its screen, OFF / AT NIGHT / ALWAYS
 #endif
     MY_ALERTS,       // MY ALERTS: the owner's own WiFi names to alert on (opens the screen)
     BACK,
