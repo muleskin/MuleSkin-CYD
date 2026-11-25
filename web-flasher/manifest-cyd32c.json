@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (3.2\" capacitive, ESP32-2432S032C)",
-  "version": "3.15.0",
-  "release_name": "Housekeeping",
-  "whats_new": ["Maintenance: no new features", "Every build checked for flash room", "Tab5 radio link and screens tested"],
+  "version": "3.16.0",
+  "release_name": "Roll With It",
+  "whats_new": ["Smart speakers, dashcams, hidden cams", "AirPods are not AirTags any more", "The alert card shows the trail", "WiGLE upload, and a WARDRIVE page"],
   "new_install_prompt_erase": true,
   "builds": [
     {
