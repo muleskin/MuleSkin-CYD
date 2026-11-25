@@ -1,0 +1,69 @@
+# The environments ci.yml does not build: the build-it-yourself boards
+# (Tab5, Waveshare C5, the GPS and LoRa-TX variants), the console dev builds
+# and the bench builds. None of them ships, so none of them blocks a push --
+# but each has its own #if paths in shared code, and without this a change
+# can stop one compiling and nobody finds out until someone builds it.
+# Weekly, and by hand (Actions -> Extra builds -> Run workflow).
+#
+# Not here: cyd35. platformio.ini says why -- it is frozen, it boot loops on
+# hardware, and a green build of it means nothing.
+name: Extra builds
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays
+  workflow_dispatch:
+
+concurrency:
+  group: extra-builds
+  cancel-in-progress: true
+
+jobs:
+  firmware:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # pf: which toolchain cache -- esp32 (espressif32@6.5.0) or c5 (the
+        # pioarduino platform the C5 and P4 boards carry), as in ci.yml.
+        include:
+          - { env: cyd-gps,                pf: esp32 }
+          - { env: cyd-ili9341-gps,        pf: esp32 }
+          - { env: cyd-fast-flood,         pf: esp32 }
+          - { env: rlphantom,              pf: esp32 }
+          - { env: rlphantom-r-alt,        pf: esp32 }
+          - { env: twatch-s3-loratx,       pf: esp32 }
+          - { env: freenove-s3-gps,        pf: esp32 }
+          - { env: freenove-s3-35-gps,     pf: esp32 }
+          - { env: sticks3-dev,            pf: esp32 }
+          - { env: cardputer-adv-dev,      pf: esp32 }
+          - { env: crowpanel7-native,      pf: esp32 }
+          - { env: crowpanel7-paneltest,   pf: esp32 }
+          - { env: crowpanel7-probe,       pf: esp32 }
+          - { env: crowpanel7-touchtrace,  pf: esp32 }
+          - { env: waveshare-c5-28,        pf: c5 }
+          - { env: tab5,                   pf: c5 }
+          - { env: tab5-paneltest,         pf: c5 }
+          - { env: tab5-radiotest,         pf: c5 }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: pio-${{ matrix.pf }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-${{ matrix.pf }}-
+      - run: pip install -q platformio
+      - run: pio run -e ${{ matrix.env }}
+      - name: Size
+        run: |
+          {
+            echo "| board | bytes | slot | used | left | growth |"
+            echo "|---|---:|---:|---:|---:|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/check_size.py ${{ matrix.env }} | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
