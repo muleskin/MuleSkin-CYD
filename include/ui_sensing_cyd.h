@@ -23,7 +23,7 @@ SensingTap uiSensingTap(int x, int y, int screenW, int screenH, uint32_t now);
 // The middle of the banner, where the boards with no touch screen (StickS3,
 // Cardputer) put their one cursor stop: pressed, it re-calibrates.
 void uiSensingBannerStop(int screenW, int screenH, int16_t& x, int16_t& y);
-// The key cursor's stops (main.cpp's SQW_KEYCURSOR): the page dots (SENSE_RICH)
+// The key cursor's stops (main_keycursor.inc): the page dots (SENSE_RICH)
 // and the three buttons, or the banner alone where there is no button bar.
 uint8_t uiSensingStops(int screenW, int screenH, int16_t* xs, int16_t* ys, uint8_t cap);
 // Where the key cursor's BACK taps: the BACK button. False with no button bar

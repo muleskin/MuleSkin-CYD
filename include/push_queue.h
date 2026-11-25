@@ -65,7 +65,7 @@ bool wanted(What what, bool nightWithYouOnly, bool night, DetectionType t, bool 
 // becomes there; never more than it is.
 What atHome(What what, uint8_t homeMode, bool home);
 
-// Everything that decides it, at once -- what main.cpp asks. PUSH AT HOME's
+// Everything that decides it, at once -- what main_push.inc asks. PUSH AT HOME's
 // IMPORTANT, under CHOSEN, means the chosen types that are also important.
 struct Rules {
     What     what = What::IMPORTANT;

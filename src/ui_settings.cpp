@@ -57,12 +57,12 @@ static uint8_t s_dexCaught = 0;
 // removed here, so their SettingsRow values stay stable regardless of
 // which mode is active.
 #if defined(FREENOVE_S3) || defined(FREENOVE_S3_35) || defined(MARAUDER_V8) || defined(TDECK_PLUS)
-void boardBatteryLine(char* out, size_t n);    // main.cpp: the divider on GPIO9
+void boardBatteryLine(char* out, size_t n);    // main_boards.inc: the divider on GPIO9
 #endif
 #if defined(TWATCH_S3)
-void twatchBatteryLine(char* out, size_t n);   // main.cpp, where the power chip lives
+void twatchBatteryLine(char* out, size_t n);   // main_boards.inc, where the power chip lives
 uint8_t twatchGpsState();                      // main.cpp: 0 off, 1 starting, 2 no fix, 3 fix
-int  twatchChipC();                            // main.cpp: the chip's temperature, cached
+int  twatchChipC();                            // main_boards.inc: the chip's temperature, cached
 #endif
 
 static const SettingsRow ALL_ROWS[] = {

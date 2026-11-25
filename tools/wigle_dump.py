@@ -6,7 +6,7 @@
     python tools/wigle_dump.py COM14 -o trip.csv
 
 The watch writes a WigleWifi-1.6 CSV between two marker lines when it is sent
-WIGLE on its console (see wigleExport in src/main.cpp); this keeps what is
+WIGLE on its console (see wigleExport in src/main_gps.inc); this keeps what is
 between them. The result uploads to https://wigle.net/uploads as it is.
 
 The port is opened without touching DTR/RTS: on the S3's native USB, the

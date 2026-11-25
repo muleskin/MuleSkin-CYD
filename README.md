@@ -864,6 +864,8 @@ MuleSkin-CYD/
 │   └── ui_*.h
 ├── src/
 │   ├── main.cpp                  (setup/loop, state machine, touch)
+│   ├── main_*.inc                (parts of main.cpp, #included in place: key cursor,
+│   │                              push, PIN lock, board power, GPS, charge mode)
 │   ├── theme.cpp                 (backgrounds, per-type icons, chrome)
 │   ├── muleskin.cpp               (the mascot's state; not drawn)
 │   ├── signatures.cpp

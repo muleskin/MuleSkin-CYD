@@ -4,7 +4,7 @@
 // its own SPI, an FT6336 capacitive touch controller on I2C (SDA 39, SCL 40,
 // INT 16), and an AXP2101 power chip on a second I2C (SDA 10, SCL 11) that
 // has to be told to power the backlight and the touch chip before either
-// answers -- see twatchPowerUp() in main.cpp. Pins from LilyGo's
+// answers -- see twatchPowerUp() in main_boards.inc. Pins from LilyGo's
 // utilities.h and their own Setup212 for TFT_eSPI.
 #pragma once
 

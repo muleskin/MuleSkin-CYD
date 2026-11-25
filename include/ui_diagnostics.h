@@ -94,7 +94,7 @@ struct DiagnosticsInfo {
     uint32_t    freeHeap;
     uint32_t    largestBlock;
     uint8_t     nvsPercent;    // the settings store's fill, 0-100 (main.cpp nvsFullPercent)
-    char        push[128];     // PUSH ALERTS' last outcome (main.cpp pushStatusText)
+    char        push[128];     // PUSH ALERTS' last outcome (main_push.inc pushStatusText)
     bool        pushWarn;      // ...and whether it needs a look
     char        wifiJoin[40];  // the boot check's join retries (OtaWifi::joinStats)
     bool        wifiWarn;      // ...some stalled joins the retry did not save

@@ -40,9 +40,9 @@ static bool    s_watchPillOn = false;
 // bubble. Returns where the WATCH pill's free span must end, or -1.
 static int16_t s_cornerClockPillR = -1;
 #if defined(TWATCH_S3)
-void twatchGpsBadge(TFT_eSPI& t);   // main.cpp: the GPS counter, top centre, while the GPS is on
+void twatchGpsBadge(TFT_eSPI& t);   // main_gps.inc: the GPS counter, top centre, while the GPS is on
 #if MULESKIN_LORA
-void twatchLoraBadge(TFT_eSPI& t);  // main.cpp: LORA n NEW, under it, while chats are unread
+void twatchLoraBadge(TFT_eSPI& t);  // main_gps.inc: LORA n NEW, under it, while chats are unread
 #endif
 static int16_t drawCornerClock(TFT_eSPI& t, int w) {
     if (!Clock::trusted()) return -1;

@@ -401,7 +401,7 @@ namespace Settings {
     uint32_t    autoSeen(const char* version, uint32_t now);
 
     // PUSH ALERTS: each alert to an ntfy server over a saved WiFi network
-    // (main.cpp servicePush, ota_wifi.cpp pushStart). Off by default, and
+    // (main_push.inc servicePush, ota_wifi.cpp pushStart). Off by default, and
     // only switchable once a topic URL is set -- from the flasher page or the
     // console (PUSH URL / PUSH TOKEN), never typed on the board. The token is
     // optional: ntfy's access token, for a server that does not take

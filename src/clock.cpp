@@ -29,7 +29,7 @@ void benchAwayDays(const uint8_t mac[6]);   // main.cpp: DAYSFAKE, on bench buil
 // RUNTIME: main.cpp lists how long the last few boots ran.
 volatile bool g_consoleRuntime = false;
 #if defined(ARDUINO_ARCH_ESP32) && !defined(TWATCH_S3)
-extern volatile bool g_consoleCharge;   // main.cpp: CHARGE, the CYDs' charge mode
+extern volatile bool g_consoleCharge;   // main_charge.inc: CHARGE, the CYDs' charge mode
 #endif
 
 // PRIM, on every build: main.cpp runs the primitive benchmark on its next pass.
@@ -75,15 +75,15 @@ extern volatile bool g_consoleWho;       // WHO (main.cpp)
 extern volatile bool g_consoleRing;      // RING, the tracker heard most recently (main.cpp)
 #if defined(SQW_TRACKBALL)
 // TBALL: the T-Deck trackball's edges on the console, on or off; TBALL n:
-// how many edges make one step (main.cpp, smallKeysRead).
+// how many edges make one step (main_keycursor.inc, smallKeysRead).
 extern volatile uint8_t g_ballEdgesPerStep;
 extern volatile bool    g_ballTrace;
 void tdeckBallStatus();   // the counts and the lines' levels, after either
 #endif
 #if SQW_DEVTOOLS
 #include "shake.h"   // IMU: the BMI270's excursions on the console
-// The dev builds' console keys and screenshot (main.cpp, the key cursor's
-// devKeysMerge and devShotDump). Never in a release. (Upstream v1.42.)
+// The dev builds' console keys and screenshot (main_keycursor.inc's
+// devKeysMerge, and main.cpp's devShotDump). Never in a release. (Upstream v1.42.)
 extern volatile uint8_t  g_devKey;
 extern volatile uint16_t g_devKeyMs;
 extern volatile bool     g_devShot;

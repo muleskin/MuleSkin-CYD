@@ -71,7 +71,7 @@ comes back.
 
 **Check a new screen's stops.** Open it and send `KEY NEXT` a few times. Each
 stop prints where it is. A stop on empty space means the screen needs its own
-stop source: see `stickStopsBuild()` in main.cpp (a list's hit test in
+stop source: see `stickStopsBuild()` in main_keycursor.inc (a list's hit test in
 `stickListId()`, a screen of buttons in `stickSweepId()`).
 
 **Check the highlight.** `tools/shot.py PORT a.png next`. The whole button
