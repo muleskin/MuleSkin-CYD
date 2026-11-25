@@ -1,8 +1,8 @@
 {
   "name": "MuleSkin-CYD (Elecrow CrowPanel Advance 7.0\")",
-  "version": "3.14.0",
-  "release_name": "Sense arm",
-  "whats_new": ["SENSE ARM: sensing on the main screen", "Motion pushes skip the hourly limit", "Screen glances awake on a movement", "Alert card grades how sure motion is"],
+  "version": "3.15.0",
+  "release_name": "Housekeeping",
+  "whats_new": ["Maintenance: no new features", "Every build checked for flash room", "Tab5 radio link and screens tested"],
   "new_install_prompt_erase": true,
   "builds": [
     {
