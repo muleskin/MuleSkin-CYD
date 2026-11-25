@@ -20,8 +20,16 @@ AIRTAG 1 HIGH 1eff4c00121933b1cf5dbe4ec79616334f50cbd62ffe6b13924a9be37d0087   #
 # ---- SYNTHETIC: Apple --------------------------------------------------------
 # The same beacon with status 0x34: bit 2 set, "maintained" -- near its owner.
 AIRTAG 0 MED  1eff4c00121934b1cf5dbe4ec79616334f50cbd62ffe6b13924a9be37d0087
-# Proximity Pairing (type 0x07), 30 bytes -- AirPods: AirTag-shaped, not a beacon.
-AIRTAG 0 LOW  1eff4c000719010220752b0011223344556677889900aabbccddeeff00112233
+# Proximity Pairing (type 0x07), 30 bytes, model 02 20 -- AirPods. Used to
+# come up as an AIRTAG (LOW); not a tracker since upstream v1.50.0's fix.
+NONE - -      1eff4c000719010220752b0011223344556677889900aabbccddeeff00112233
+# The same block with the AirTag's own model, 00 55: a tag nobody has set up
+# (upstream's bench capture, 2026-11-20: 4c 00 07 19 05 00 55 10 00 00 01 17
+# 17 ..., padded out to 30 bytes). Surely a tag, not away: MED.
+AIRTAG 0 MED  1eff4c00071905005510000001171700112233445566778899aabbccddeeff
+# The short Find My "nearby" frame (12 02), sent only while the owner's phone
+# is close: an AirTag beside its owner.
+AIRTAG 0 MED  02011a07ff4c0012020000
 
 # ---- SYNTHETIC: Google Find Hub (service data 0xFEAA, frame type) ----------
 # Flags, then 0x19 bytes of service data: AA FE, frame 0x41 (unwanted-tracking

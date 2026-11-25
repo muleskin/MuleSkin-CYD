@@ -68,6 +68,8 @@ const Device kDevices[] = {
       "A radio on WatchGuard Video's block: Motorola's police body cameras and in-car video. Not the firewall company of the same name." },
     { DetectionType::AXON, "DIGITAL ALLY", "DigitalAlly", nullptr,
       "A radio on Digital Ally's block: body cameras and in-car video for police, ambulance and security fleets." },
+    { DetectionType::AXON, "FLEET ROUTER", "Cradlepoint|AirLink", nullptr,
+      "A rugged in-vehicle router, the kind that gives a patrol car its own WiFi and links its cameras and laptop to the station. Buses, ambulances and utility trucks carry the same boxes, so it is a hint, graded low." },
 
     // ---- ALPR ---------------------------------------------------------------
     { DetectionType::ALPR, "MOTOROLA", "ALPR-Mtrla", nullptr,
@@ -96,6 +98,8 @@ const Device kDevices[] = {
     // ---- CAMERA -------------------------------------------------------------
     { DetectionType::CAMERA, "WYZE", "Wyze", nullptr,
       "A Wyze camera or smart-home device, on Wyze's own registered block. Cheap, popular home cameras, often pointed at front doors and driveways." },
+    { DetectionType::CAMERA, "SIMPLISAFE", "SimpliSafe", nullptr,
+      "A SimpliSafe home-security device, on SimpliSafe's own registered block. It may be one of their cameras or their video doorbell, or the alarm's base station or keypad: they all share the block." },
     { DetectionType::CAMERA, "WYZE MODULE", "Wyze-Mod", nullptr,
       "A wireless module of the kind Wyze builds its cameras around. Other gadgets use it too, so this one is a maybe." },
     { DetectionType::CAMERA, "AMAZON", "Amazon", nullptr,
@@ -144,6 +148,12 @@ const Device kDevices[] = {
       "A Uniview camera: one of China's biggest CCTV makers, sold widely under its own name and others." },
     { DetectionType::CAMERA, "DAHUA", "Dahua", nullptr,
       "A Dahua camera, or its setup network: the world's second biggest CCTV maker, barred from US government use like Hikvision, and sold under many other brands." },
+    { DetectionType::CAMERA, "DASHCAM", "Viofo|BlackVue|70mai|Thinkware|Nextbase|Vantrue|Rove|Redtiger", nullptr,
+      "A dashcam's own WiFi, up for its phone app: the car it sits in is close and its camera is rolling. They film whatever is ahead, you included; some film the cabin too. Most only put the network up while the app is open." },
+    { DetectionType::CAMERA, "FLEET CAMERA", "Lytx|Samsara", nullptr,
+      "A fleet camera of the kind in delivery vans and trucks: road-facing, often driver-facing too, uploading clips over cellular. Samsara's block also covers its plain vehicle trackers, so that one is a weaker guess." },
+    { DetectionType::CAMERA, "HIDDEN CAMERA", "P2P-Cam|HDWifiCam|LookCam|TinyCam|V380|YCC365|Sricam|Yoosee|Zosi", nullptr,
+      "A cheap WiFi camera in setup mode, putting up its own network under a name from its app's firmware. The mini and hidden cameras sold for home security do this until paired. In a rental, worth a look round the room." },
 
     // ---- META ---------------------------------------------------------------
     { DetectionType::META, "RAY-BAN META", "RayBanMeta", nullptr,
@@ -154,8 +164,18 @@ const Device kDevices[] = {
       "A radio from Luxottica, the eyewear giant behind Ray-Ban and Oakley, which builds Meta's camera glasses." },
     { DetectionType::META, "SPECTACLES", "Snap", nullptr,
       "Snap Spectacles: camera glasses from Snapchat's maker that record clips from the wearer's point of view." },
+    { DetectionType::META, "ROKID", "Rokid", nullptr,
+      "A radio on the block registered to Rokid's parent company. Rokid Glasses carry a camera; its other headsets do not. A weak guess, graded low." },
     { DetectionType::META, "VUZIX", "Vuzix", nullptr,
       "Vuzix smart glasses, sold mostly to warehouses, hospitals and police. Many models have a camera." },
+
+    // ---- LISTENER -----------------------------------------------------------
+    { DetectionType::LISTENER, "SONOS", "Sonos", nullptr,
+      "A Sonos speaker, on Sonos's own registered block or Bluetooth ID. Most current models have microphones for a voice assistant; some older and smaller ones do not." },
+    { DetectionType::LISTENER, "HOMEPOD", "HomePod", nullptr,
+      "An Apple HomePod, caught answering \"Hey Siri\": only a HomePod sends that kind of message, so this one is certain. It is listening for its wake word all day." },
+    { DetectionType::LISTENER, "GOOGLE HOME", "Google speaker", nullptr,
+      "A Google Home or Nest speaker in setup mode, with its own setup network up. Once it joins the room's WiFi it stops showing: it looks like every other Google device then." },
 };
 const uint8_t kDeviceCount = sizeof(kDevices) / sizeof(kDevices[0]);
 

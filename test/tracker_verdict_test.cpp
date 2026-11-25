@@ -60,6 +60,33 @@ int main() {
     snprintf(what, sizeof what, "all %u adverts get their verdict", n);
     ck(what, n >= 14 && wrong == 0);
 
+    suite("what the advert says about the owner");
+    {
+        auto ownerOf = [](const char* hex) {
+            uint8_t adv[64]; uint8_t len = 0;
+            for (size_t i = 0; hex[i] && hex[i + 1] && len < sizeof adv; i += 2) {
+                char b[3] = { hex[i], hex[i + 1], 0 };
+                adv[len++] = (uint8_t)strtoul(b, nullptr, 16);
+            }
+            TrackerVerdict v;
+            return trackerVerdict(adv, len, v) ? (int)v.owner : -1;
+        };
+        ck("a separated AirTag is AWAY",
+           ownerOf("1eff4c001219201e0d170d9e43033f8263145ac325a09835de70b93f59007e") == OWNER_AWAY);
+        ck("'maintained' set is WITH its owner",
+           ownerOf("1eff4c00121934b1cf5dbe4ec79616334f50cbd62ffe6b13924a9be37d0087") == OWNER_WITH);
+        ck("the nearby frame is WITH its owner", ownerOf("02011a07ff4c0012020000") == OWNER_WITH);
+        ck("an AirTag's pairing block is NOT SET UP",
+           ownerOf("1eff4c00071905005510000001171700112233445566778899aabbccddeeff") == OWNER_UNSET);
+        ck("AirPods are not a tracker at all",
+           ownerOf("1eff4c000719010220752b0011223344556677889900aabbccddeeff00112233") == -1);
+        ck("Find Hub 0x41 is AWAY", ownerOf("0201061916aafe41000102030405060708090a0b0c0d0e0f1011121300") == OWNER_AWAY);
+        ck("Find Hub 0x40 is WITH", ownerOf("0201061916aafe40000102030405060708090a0b0c0d0e0f1011121300") == OWNER_WITH);
+        ck("a SmartTag connected to its owner is WITH",
+           ownerOf("15165afdb5000102030405060708090a0b0c0d0e0f10111213") == OWNER_WITH);
+        ck("Tile says nothing", ownerOf("0303edfe") == OWNER_UNKNOWN);
+    }
+
     suite("what is not an advert");
     TrackerVerdict v;
     ck("nothing", !trackerVerdict(nullptr, 0, v));

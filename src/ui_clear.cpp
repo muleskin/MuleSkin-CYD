@@ -223,6 +223,7 @@ static const char* counterLabel(DetectionType t) {
         case DetectionType::LORAWAN:     return "LWAN";
         case DetectionType::MINE:        return "MINE";
         case DetectionType::MOTION:      return "MOVE";
+        case DetectionType::LISTENER:    return "MIC";
         default:                         return "?";
     }
 }
@@ -260,6 +261,9 @@ static uint16_t counterCount(const DetectionEngine& eng, DetectionType t) {
     // column it gives up is what makes room for beacons below.
     if (t == DetectionType::CAMERA) {
         n += eng.countByType(DetectionType::RING);
+        // A smart speaker too: a microphone in the room, filed with the
+        // cameras in the room (its colour says the same).
+        n += eng.countByType(DetectionType::LISTENER);
     }
     // EVILTWIN folds into HACKER the same way, and for a better reason than
     // saving a column: a rogue AP is not a category of hardware, it is a

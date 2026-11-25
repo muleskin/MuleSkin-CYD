@@ -500,6 +500,11 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
                             // off the end of a 20-byte field.
                             snprintf(det.name, sizeof(det.name), "%02X%02X%02X %u.%u",
                                      b[4], b[5], b[6], major, minor);
+                        } else if (isHomePodSiri(b, (uint8_t)mfg.size())) {
+                            // A HomePod answering "Hey Siri": a smart speaker
+                            // with microphones, and certain (see the rule).
+                            det.type = DetectionType::LISTENER;
+                            label    = "HomePod";
                         }
                     }
                 }
@@ -660,10 +665,14 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
             det.type == DetectionType::SAMSUNG_TAG) {
             TrackerVerdict v;
             if (trackerVerdict(adv->getPayload().data(), (uint8_t)adv->getPayload().size(), v) && v.type == det.type) {
-                tagAway  = v.away;
-                det.conf = v.conf;
+                tagAway   = v.away;
+                det.conf  = v.conf;
+                det.owner = v.owner;   // the card's WITH OWNER / AWAY / NOT SET UP
             }
         }
+        // A HomePod's own Siri block: only a HomePod sends that class.
+        if (det.type == DetectionType::LISTENER && label && strcmp(label, "HomePod") == 0)
+            det.conf = Confidence::HIGH_CONF;
 #if defined(BENCH_TOOLS)
         // ADVDUMP (bench): the raw advert of every tracker heard, for
         // test/tracker_adverts.txt. One line each: ADV <type> <mac> <hex>.
@@ -749,6 +758,9 @@ class BleScanCallbacks : public NimBLEScanCallbacks {
             // three service UUIDs and the name prefix are both theirs. The Pineapple and the deauther arrive over WiFi
             // and are labelled in processWiFiQ().
             det.vendor = "Flipper";
+        } else if (det.type == DetectionType::LISTENER) {
+            // HomePod, or the Sonos company ID / UUID row.
+            det.vendor = label ? label : "Speaker";
         } else if (det.type == DetectionType::SKIMMER && label) {
             // The serial-port UUID's row. A skimmer matched on its NAME has
             // no label and stays "BLE": its page is found by the name.
@@ -1780,6 +1792,9 @@ void DetectionEngine::postBle(Detection d) {
             // entry that already exists.
             if (d.name[0]) memcpy(_log[slot].name, d.name, sizeof _log[slot].name);
             if (d.vendor && !_log[slot].vendor) _log[slot].vendor = d.vendor;
+            // A tag's owner state follows its latest advert: one that walks
+            // away from its owner's phone says so here, while it is watched.
+            if (d.owner) _log[slot].owner = d.owner;
             // hits counts distinct sightings (comes-and-goes, gated by
             // expireStale's active flag), not raw advertisement
             // packets -- a BLE beacon like an AirTag advertises every

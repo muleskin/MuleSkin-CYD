@@ -65,12 +65,14 @@ inline const SimDetectionProfile kSimProfiles[] = {
     { DetectionType::AXON,        {0x00, 0x09, 0xBC}, "BodyWorn",    "BodyWorn Remote",-71, false, "BodyWorn remote" },
     { DetectionType::AXON,        {0x00, 0x1D, 0x96}, "WatchGuard",  "",               -73, true,  "WatchGuard Video" },
     { DetectionType::AXON,        {0x00, 0x23, 0xBD}, "DigitalAlly", "",               -74, true,  "Digital Ally" },
+    { DetectionType::AXON,        {0x00, 0x30, 0x44}, "Cradlepoint", "",               -71, true,  "Fleet router" },
     // META
     { DetectionType::META,        {0x02, 0xFD, 0x5F}, "RayBanMeta",  "",               -66, false, "Ray-Ban Meta glasses" },
     { DetectionType::META,        {0x02, 0x01, 0xAB}, "Meta",        "",               -64, false, "Meta radio (glasses or Quest)" },
     { DetectionType::META,        {0x02, 0x0D, 0x53}, "Luxottica",   "",               -67, false, "Luxottica frames" },
     { DetectionType::META,        {0x02, 0x03, 0xC2}, "Snap",        "",               -65, false, "Snap Spectacles" },
     { DetectionType::META,        {0x02, 0x06, 0x0C}, "Vuzix",       "",               -66, false, "Vuzix glasses" },
+    { DetectionType::META,        {0x28, 0xE8, 0x88}, "Rokid",       "",               -68, true,  "Rokid glasses" },
     // SKIMMER -- over Bluetooth a name match is labelled just "BLE"
     { DetectionType::SKIMMER,     {0x98, 0xD3, 0x31}, "BLE",         "HC-05",          -49, false, "HC-05 module" },
     { DetectionType::SKIMMER,     {0x02, 0x42, 0x04}, "BLE",         "RN42",           -52, false, "RN42 module" },
@@ -113,6 +115,12 @@ inline const SimDetectionProfile kSimProfiles[] = {
     { DetectionType::CAMERA,      {0x1C, 0xC3, 0x16}, "Milesight",   "",               -71, true,  "Milesight camera" },
     { DetectionType::CAMERA,      {0x14, 0xBA, 0x88}, "Uniview",     "",               -70, true,  "Uniview camera" },
     { DetectionType::CAMERA,      {0x08, 0xED, 0xED}, "Dahua",       "",               -68, true,  "Dahua camera" },
+    { DetectionType::CAMERA,      {0xF8, 0x51, 0x28}, "SimpliSafe",  "",               -65, true,  "SimpliSafe device" },
+    // The hotspot names, as processWiFiQ() writes them: vendor from the row,
+    // the network's own name in the name field.
+    { DetectionType::CAMERA,      {0x02, 0x56, 0x1F}, "Viofo",       "VIOFO_A139_1234",-63, true,  "Dashcam hotspot" },
+    { DetectionType::CAMERA,      {0x00, 0x16, 0xB2}, "Lytx",        "",               -70, true,  "Fleet camera" },
+    { DetectionType::CAMERA,      {0x02, 0xAC, 0xC0}, "LookCam",     "ACCQ-046396-NNMPZ",-58, true, "Hidden camera setup" },
     // The tag networks, Ring, and the rogue-radio behaviours
     { DetectionType::SAMSUNG_TAG, {0x02, 0xFD, 0x5A}, "Samsung",     "Galaxy SmartTag",-58, false, "Samsung SmartTag" },
     { DetectionType::GOOGLE_TAG,  {0x02, 0xFE, 0xAA}, "Google",      "Find My Device", -61, false, "Google Find My tracker" },
@@ -138,6 +146,10 @@ inline const SimDetectionProfile kSimProfiles[] = {
     // MOTION -- HUMAN SENSING's made-up address (SenseMotion::macFor),
     // named for the network it sensed through.
     { DetectionType::MOTION,      {0x02, 0x4D, 0x56}, "WiFi sensing", "HomeNet",       -48, true,  "Motion (HUMAN SENSING)" },
+    // LISTENER -- the first is what `T LISTENER` gets
+    { DetectionType::LISTENER,    {0x00, 0x0E, 0x58}, "Sonos",       "",               -60, true,  "Sonos speaker" },
+    { DetectionType::LISTENER,    {0x02, 0x4C, 0x08}, "HomePod",     "",               -57, false, "HomePod (Hey Siri)" },
+    { DetectionType::LISTENER,    {0x02, 0x60, 0x0D}, "Google speaker", "GoogleHome1234",-62, true, "Google speaker setup" },
 };
 inline const size_t kSimProfileCount = sizeof(kSimProfiles) / sizeof(kSimProfiles[0]);
 

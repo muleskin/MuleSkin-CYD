@@ -56,7 +56,15 @@ enum class DetectionType : uint8_t {
     // Outside the catalogue like MINE (no DEX card, no BINGO square), but it
     // has a TYPE FILTER row (Settings::filterTypeAt()).
     MOTION  = 20,
-    COUNT   = 21
+    // A smart speaker with microphones: Sonos, Apple's HomePod, and an Echo or
+    // a Google speaker while it is in setup. The room check -- a hotel, a
+    // rental -- next to the hidden cameras. Ships OFF, like IBEACON: a kitchen
+    // counter is not a threat. (Upstream SquachWatch v1.50.0, where it is 20;
+    // here MOTION already had 20, and both numbers are in logs and lists.)
+    // In the catalogue (a DEX card, a TYPE FILTER row): catalogueAt() below
+    // steps over MINE and MOTION to reach it.
+    LISTENER = 21,
+    COUNT   = 22
 };
 
 inline const char* detectionTypeName(DetectionType t) {
@@ -81,8 +89,23 @@ inline const char* detectionTypeName(DetectionType t) {
         case DetectionType::LORAWAN:     return "LORAWAN";
         case DetectionType::MINE:        return "MY ALERT";
         case DetectionType::MOTION:      return "MOTION";
+        case DetectionType::LISTENER:    return "LISTENER";
         default:                         return "UNKNOWN";
     }
+}
+
+// The catalogue of kit: every kind of device there is a DEX card for, in
+// order -- FLOCK..LORAWAN, then LISTENER. Not MY ALERTS (the owner's own list)
+// and not MOTION (a room, not a device), which sit between them in the
+// numbering; the walk steps over the two.
+static const uint8_t CATALOGUE_N = (uint8_t)DetectionType::MINE;   // MINE-1 of them, and LISTENER
+inline DetectionType catalogueAt(uint8_t i) {
+    return (uint8_t)(i + 1) < (uint8_t)DetectionType::MINE ? (DetectionType)(i + 1) : DetectionType::LISTENER;
+}
+inline uint8_t catalogueIndex(DetectionType t) {
+    const uint8_t v = (uint8_t)t;
+    if (v >= 1 && v < (uint8_t)DetectionType::MINE) return (uint8_t)(v - 1);
+    return t == DetectionType::LISTENER ? (uint8_t)(CATALOGUE_N - 1) : CATALOGUE_N;
 }
 
 // How sure we are that a match is what it claims to be.
@@ -152,6 +175,18 @@ struct Detection {
     // so the gap since the last ask is how long it was really gone. Sits in
     // what was padding.
     uint16_t       askedMin;
+    // A tracker's owner, as its own advert says (OWNER_* below; trackers
+    // only, 0 for everything else): the card's WITH OWNER, AWAY FROM OWNER
+    // or NOT SET UP. Kept up to date while the tag is heard.
+    uint8_t        owner;
+};
+
+// What a tracker's advert says about its owner (signatures.h, trackerVerdict).
+enum : uint8_t {
+    OWNER_UNKNOWN = 0,   // not a tracker, or one whose advert does not say (Tile)
+    OWNER_WITH    = 1,   // near its owner's phone
+    OWNER_AWAY    = 2,   // apart from its owner: the one worth an alert
+    OWNER_UNSET   = 3,   // an AirTag nobody has set up: no owner to be with
 };
 
 // A detection's vendor, safe to print. A record is zeroed before it is

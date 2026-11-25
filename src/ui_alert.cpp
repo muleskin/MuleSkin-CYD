@@ -39,6 +39,7 @@ static const char* targetLabel(DetectionType t) {
         case DetectionType::LORAWAN:     return "LORAWAN NETWORK";
         case DetectionType::MINE:        return "MY ALERT";
         case DetectionType::MOTION:      return "MOTION IN ROOM";
+        case DetectionType::LISTENER:    return "SMART SPEAKER";
         default:                     return "UNKNOWN";
     }
 }

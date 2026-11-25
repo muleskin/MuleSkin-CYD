@@ -22,7 +22,10 @@ bool     night()    { return g_night; }
 
 int main() {
     suite("Every type has a card, in order");
-    ck("eighteen entries", Dex::ENTRIES == 18 && Dex::ENTRIES == (uint8_t)DetectionType::MINE - 1);
+    ck("nineteen entries", Dex::ENTRIES == 19 && Dex::ENTRIES == CATALOGUE_N);
+    ck("LISTENER is the last card", Dex::typeAt(18) == DetectionType::LISTENER &&
+                                    Dex::indexOf(DetectionType::LISTENER) == 18);
+    ck("and none for MOTION", Dex::indexOf(DetectionType::MOTION) == Dex::ENTRIES);
     // MY ALERTS is the owner's own list, not a kind of kit to collect.
     ck("and none for MY ALERTS", Dex::indexOf(DetectionType::MINE) == Dex::ENTRIES);
     bool order = true, filled = true, fits = true;

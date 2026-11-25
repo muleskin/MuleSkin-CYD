@@ -57,7 +57,12 @@ static bool        s_backgroundLocked = false;
 // rather than on type, so with an exact-match signature every one of them
 // would take over the display. Off by default, one tap away in DETECTION
 // FILTER, and everything about the detection itself is honest either way.
-static const uint32_t DEFAULT_OFF = (1u << (uint8_t)DetectionType::IBEACON);
+//
+// LISTENER joined it (upstream v1.50.0): a smart speaker on a kitchen counter
+// is not something to be alerted about at home, only when it is somewhere it
+// should not be, and the owner who wants the room check turns it on.
+static const uint32_t DEFAULT_OFF = (1u << (uint8_t)DetectionType::IBEACON) |
+                                    (1u << (uint8_t)DetectionType::LISTENER);
 
 // typeEnabled()'s comment. Default has bits 1..(COUNT-1) set (every real
 // type on), computed once at namespace-init time rather than a hand-
@@ -980,16 +985,17 @@ bool typeEnabled(DetectionType t) {
     return (s_typeMask & (1u << idx)) != 0;
 }
 
+// The catalogue (state.h), then MOTION on the boards that can raise it.
 uint8_t filterTypeCount() {
 #if defined(SENSE_CYD_APP)
-    return (uint8_t)DetectionType::MINE;       // 1..MINE-1, and MOTION
+    return (uint8_t)(CATALOGUE_N + 1);
 #else
-    return (uint8_t)DetectionType::MINE - 1;   // no HUMAN SENSING: nothing raises MOTION
+    return CATALOGUE_N;                        // no HUMAN SENSING: nothing raises MOTION
 #endif
 }
 
 DetectionType filterTypeAt(uint8_t i) {
-    return i + 1 < (uint8_t)DetectionType::MINE ? (DetectionType)(i + 1) : DetectionType::MOTION;
+    return i < CATALOGUE_N ? catalogueAt(i) : DetectionType::MOTION;
 }
 
 static bool filterable(DetectionType t) {

@@ -139,6 +139,8 @@ uint16_t colorFor(DetectionType t) {
             return VAPOR_PURPLE;
         case DetectionType::CAMERA:
         case DetectionType::RING:
+        // A microphone in the room, filed with the cameras in the room.
+        case DetectionType::LISTENER:
             return CYAN;
         case DetectionType::DEAUTH:
         case DetectionType::EVILTWIN:
@@ -894,6 +896,15 @@ void drawTypeIcon(TFT_eSPI& t, DetectionType type, int cx, int cy, int s) {
         t.fillRect(cx-1,cy-s/2,3,s*3/2,ICO_METAL);
         for(int i=1;i<=2;i++) t.drawCircle(cx,cy-s/2,s/4+i*s/4,ICO_LENS);
         t.fillCircle(cx,cy-s/2,3,ICO_LED);
+        break;
+    case DetectionType::LISTENER:
+        // A smart speaker: what it hears coming off it, a fabric body with a
+        // grille, and the light ring on top that says it is listening.
+        for(int i=1;i<=2;i++) t.drawCircle(cx,cy,s*2/3+i*s/4,ICO_LENS);
+        t.fillRoundRect(cx-s*2/3,cy-s,s*4/3,s*2,s/3,SHELL_LO);
+        for(int r=0;r<3;r++) for(int c=0;c<3;c++)
+            t.fillCircle(cx-s/3+c*s/3,cy-s/6+r*s/3,s/10+1,ICO_INK);
+        t.fillRect(cx-s/2,cy-s+3,s,3,ICO_LED);
         break;
     case DetectionType::MINE:
         // A plain router -- the in-car kind it was asked for -- with its

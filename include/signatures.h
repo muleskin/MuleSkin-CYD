@@ -89,6 +89,13 @@ const char* btNameVendor(const char* name);
 // that costs; the short version is that this deliberately trades some
 // precision for actually catching a tag that has just been powered on.
 bool isAirTagPayload(const uint8_t* payload, uint8_t len);
+// A HomePod's "Hey Siri" block: Apple's Continuity type 0x08, seven bytes,
+// whose device class is 0x0007. `mfg` starts at the company ID (4C 00).
+bool isHomePodSiri(const uint8_t* mfg, uint8_t len);
+// A cheap P2P camera's setup hotspot, named after its own UID:
+// "ABCD-123456-ABCDE" (3-4 capitals, 6 digits, 5 capitals). The LookCam,
+// HDWifiCamPro, JXLCAM and TinyCam Pro families all do this.
+bool isP2pCamSsid(const char* ssid);
 // ---- Trackers away from their owner -----------------------------------------
 // Each family says so in its own advertisement; each check below is from that
 // family's published layout. A tracker away from its owner is the one worth an
@@ -126,7 +133,10 @@ int  dultNearOwner(const uint8_t* sd, size_t n);
 // tracker of the four families, with its type, whether it is away from its
 // owner, and this sighting's grade. A DULT tag beside its owner is not
 // reported (false), as the detector does not report it.
-struct TrackerVerdict { DetectionType type; bool away; Confidence conf; };
+// `owner` is what the advert says about the tag's owner (OWNER_*, state.h):
+// the card's WITH OWNER / AWAY FROM OWNER / NOT SET UP. `away` is the same
+// thing as OWNER_AWAY, kept because every caller and test reads it.
+struct TrackerVerdict { DetectionType type; bool away; Confidence conf; uint8_t owner; };
 bool trackerVerdict(const uint8_t* adv, uint8_t len, TrackerVerdict& out);
 
 // iBeacon check, run against the PARSED manufacturer-data field (company
