@@ -24,39 +24,47 @@ decide against to **Never porting** (or the row's notes) with the reason.
 | v1.31.0 – v1.36.0 | done | 5d39c30 (+ boards in 0d3a22e) | GPS/WARDRIVE on `cyd-gps` only; the emulator GPS replay and main-screen GPS label not ported. |
 | v1.37.0 – v1.40.0 | done | d577a3f, 53ce1f5 | MuleSkin keeps its own FMDN, SmartTag and separated-only DULT checks. |
 | v1.41.0 – v1.49.0 | done | 33d2d73, e96849d, 6c24a90, 0d3a22e, d1b5186, 9075908, 46e4422, bc84783, 7d084bb, 923d7ef, c548641, 0e99a5c, 5738fa6 | Tab5: upstream's mascot screens, its Tab5 engine and the web emulator's DEMO left out. Cardputer EXT SCREEN not ported. |
-| **v1.50.0** "Roll With It" (2026-11-22) | **pending** | -- | See below. |
+| v1.50.0 "Roll With It" (2026-11-22) | done | 52be162, 22b5fab, 489fb2d | LISTENER is 21 here (MOTION had 20). The Trail drawn into MuleSkin's card, not upstream's replacement card. AUTO UPLOAD at HOME, not on the charger. Mascot content and the skins left out: see below. |
 
-## v1.50.0, to sort
+## v1.50.0, how it came across
 
-Likely worth taking (detection and fixes, no mascot needed):
+Ported (v3.16.0):
 
-- Signatures: dashcams (BlackVue, 70mai, Thinkware, VIOFO, Nextbase, Rove,
-  Redtiger, Lytx, Vantrue), Samsara, hidden-camera setup hotspots,
-  Rokid/Vuzix (META, low), Wyze F0:C8:8B / 80:48:2C, SimpliSafe F8:51:28.
-  Each OUI through `tools/check_ouis.py` as usual.
-- Cradlepoint / Sierra AirLink routers as AXON low -- MuleSkin left these out
-  on purpose in 07aa44e; decide again with upstream's reasoning in hand.
-- LISTENER type (Sonos, HomePod, GoogleHome hotspot), off by default.
-- AirTag owner state (WITH OWNER / AWAY / NOT SET UP), the set-up and
-  unpaired frames; **AirPods counted as AirTags** fix.
-- LoRaWAN type icon drew a router under it; old Flock/ShotSpotter info text.
-- Holding a LOG row opens that device's alert card; up to four catches queue
-  behind an open card.
-- The Trail card (places from nearby WiFi, NEW / MET BEFORE / FOLLOWING /
-  SPAM FLOOD) -- large; it replaces the alert card, so it needs a MuleSkin
-  design pass rather than a straight port.
-- WARDRIVE page, flasher WiGLE upload and `WIGLEKEY`.
+- The signatures: dashcams, fleet cameras, hidden-camera setup hotspots,
+  Wyze, SimpliSafe, Rokid and Vuzix, and Cradlepoint / Sierra AirLink at
+  AXON LOW (set 3 of the rules had left them out; at LOW they log without
+  alerting unless ALERT FILTER lets LOW through, which answers the reason).
+- LISTENER, off by default -- numbered 21, since MuleSkin's MOTION is 20.
+- AirTags: Proximity Pairing only with the AirTag's model (the AirPods
+  fix), the nearby frame, and the owner state on the card (WITH OWNER /
+  AWAY / NOT SET UP), read through MuleSkin's own trackerVerdict().
+- Flock and ShotSpotter info text. (The LoRaWAN icon fix was already here.)
+- The Trail: places.h and trail.h as upstream wrote them; on the card as a
+  verdict in the banner line, a stops line, a signal ladder and the owner
+  in the readout -- MuleSkin's card keeps its shape rather than being
+  replaced. Catches queue behind an open card; holding a LOG row opens the
+  card (with WATCH where SNOOZE is, since the card replaces the panel that
+  had it).
+- WARDRIVE page (CYD GPS builds), the web flasher's UPLOAD TO WIGLE and
+  SEND KEY, `WIGLEKEY`, and the on-board upload on the T-Deck Plus and the
+  Freenove S3 GPS builds. AUTO UPLOAD runs at HOME (main screen, idle, the
+  home network heard): these boards cannot tell a charger from a full cell,
+  which is what upstream waits for.
 
-Probably not (mascot or look MuleSkin replaced): random encounters, the d20,
-FIELD JOURNAL, FREE ROLL, the Mimic, Squachy's walk-off fix, the alert card
-OS-window skins and DU5K theme, Network Goblin Scout (needs SquachMesh, which
-MuleSkin doesn't have).
+Left out on purpose (moved to Never porting): random encounters, the d20,
+FIELD JOURNAL, FREE ROLL, the Mimic, Squachy's walk-off fix, the alert card's
+eleven OS-window skins and the DU5K theme, Network Goblin Scout.
 
 ## Never porting
 
 - **The squad mesh (SquachMesh)** and anything that rides on it.
 - **The Squachy mascot's scenes and screens**: MuleSkin's main screen, splash
-  and look are its own (docs/MULESKINWARE-AESTHETIC.md).
+  and look are its own (docs/MULESKINWARE-AESTHETIC.md). That takes v1.50.0's
+  random encounters, d20, FIELD JOURNAL, FREE ROLL and the Mimic with it,
+  and the walk-off fix for a Squachy MuleSkin does not draw.
+- **v1.50.0's alert card skins and the DU5K theme**: an OS-window look over
+  the card. MuleSkin's card has its own look; the Trail went into it instead.
+- **Network Goblin Scout** (v1.50.0): its goblins arrive over SquachMesh.
 - The C5 async frame push's keyboard-flicker fix (#52) and the CALIBRATE
   TOUCH white-screen fix: MuleSkin has no counterpart of either.
 - Upstream's DMA frame push on the T-Deck Plus (09744c1) and the Marauder V8

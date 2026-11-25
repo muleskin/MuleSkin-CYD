@@ -165,8 +165,17 @@ showed it broadcasting subtype `0x07` ("Proximity Pairing", the same
 message used for "Connect to AirTag?" setup prompts) rather than
 `0x12`/`0x1E`, which only start once a tag has been in "separated"
 state for a while. `0x07` is now matched too, so a tag is caught
-before it reaches full lost-mode — at the cost of some false-positive
-risk, since other Apple accessories (AirPods, etc.) also use `0x07`.
+before it reaches full lost-mode. Since v3.16.0 (upstream SquachWatch
+v1.50.0) only with the AirTag's own model in it (`00 55`): AirPods and the
+other headphones send the same `0x07` block with their own model, and no
+longer come up as AIRTAG. The short Find My "nearby" frame (`4C 00 12 02`),
+which a tag sends while its owner's phone is close, is matched too.
+
+**Owner state.** The card says what the advert says about the owner:
+**AWAY** (the beacon with "maintained" clear, Find Hub `0x41`, a SmartTag
+lost, DULT separated), **WITH OWNER** (the beacon with it set, the nearby
+frame, Find Hub `0x40`, a SmartTag connected), or **NOT SET UP** (the
+AirTag's own pairing block: nobody has set it up, so there is no owner).
 
 **Source:** Apple FindMy spec (public) + the
 [ESP32Marauder AirTag sniffer](https://github.com/justcallmekoko/ESP32Marauder)
@@ -714,3 +723,53 @@ count.
 | Under 40 | **Low** |
 
 ---
+
+## Smart speakers — `LISTENER` — **Medium, High for a HomePod**, off by default
+
+From upstream SquachWatch v1.50.0. Microphones that wait all day for a wake
+word: the room check for a hotel or a rental, next to the hidden cameras.
+Ships **off**, like IBEACON -- a kitchen counter is not a threat -- and is
+switched on in DETECTION FILTER. Numbered 21 here (upstream 20: MuleSkin's
+MOTION already had that number).
+
+| What | Grade |
+|---|---|
+| Sonos, Inc.'s fifteen IEEE blocks, its SIG company ID `0x05A7`, or its service UUID `0xFE07` | **Medium**: the maker is certain, the microphone is not (One SL, Five, Sub, Amp, Port, Play:1/3, Playbar and Symfonisk have none) |
+| A HomePod's Continuity "Hey Siri" block (type `0x08`, device class `0x0007`), sent only when somebody near it says "Hey Siri" | **High** |
+| A Google Home or Nest speaker's setup hotspot, `GoogleHome` + four digits | **Medium** |
+
+Not matched: an Echo or a Nest speaker once set up. Amazon's 205 blocks and
+Google's 114 are every Kindle, Fire TV, Pixel and Chromecast too. Amazon's
+`Amazon-XXXX` setup name is used by other Amazon kit and is left out.
+`00:04:3C` ("SONOS Co. Ltd") is a different, Korean company.
+
+---
+
+## v3.16.0: dashcams, hidden cameras, fleet routers (from upstream SquachWatch v1.50.0)
+
+- **Dashcams and fleet cameras** (`CAMERA`). By IEEE block: BlackVue
+  `00:25:42`, 70mai `44:27:F3` `B8:59:C8`, Thinkware `00:1F:4F` (High);
+  Lytx (DriveCam) `00:16:B2` `2C:42:05` `50:DF:95` `70:E4:6E` `58:A7:48`
+  (Medium); Samsara `FC:DB:21` `28:EA:5B` (Low: the block covers its plain
+  vehicle gateways too). By hotspot name: `VIOFO_`/`VIOFO-`, `BlackVue`,
+  `70mai_`, `thinkware`, `NEXTBASE ` (the older series, with the space),
+  `ROVE_R`, `REDTIGER_`, `AuxCamera_` (Lytx), and `_VANTRUE_` anywhere in
+  the name. Garmin and Rexing publish no hotspot name; Netradyne and Motive
+  hold only 28-bit blocks, which the table cannot express.
+- **Hidden and mini cameras in setup mode** (`CAMERA`): the UID-shaped
+  hotspot of the LookCam / HDWifiCamPro / JXLCAM / TinyCam family
+  (`ABCD-123456-ABCDE`: 3-4 capitals, six digits, five capitals), V380's
+  `MV` + six or more digits, and `DGK-`, `ACCQ-`, `BCCQ-`, `XCCQ-`, `HCAM-`,
+  `CLOUDCAM_`, `MEYE_`, `GW_IPC`, `IPC_AP_` for the family's name. Rejected
+  as too generic: `CAM-`, `A9`, `HD-`, `Camera-`, `IPCAM-`, `SmartLife-`.
+- **Wyze** `F0:C8:8B` and `80:48:2C` (High), **SimpliSafe** `F8:51:28`
+  (Medium: its base station and keypads share the block).
+- **Camera glasses**: Rokid `28:E8:88` (registered to Lingban Technology)
+  and Vuzix `98:DA:92`, both Low.
+- **In-vehicle routers** (`AXON`, Low): Cradlepoint `00:30:44` `00:E0:1C`,
+  Sierra AirLink `00:A0:D5` `28:A3:31` `50:13:9D` `64:CE:6E` `84:DB:2F`
+  `CC:93:4A`. Left out of the downloadable rules in set 3 because buses,
+  shops and ambulances carry the same boxes. That is still true, which is
+  why they are Low with the maker as the label: logged and counted, and an
+  alert only where ALERT FILTER lets Low through.
+
