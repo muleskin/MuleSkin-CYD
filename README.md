@@ -842,6 +842,7 @@ MuleSkin-CYD/
 │   ├── BUILD.md                  (friendly walkthrough)
 │   ├── PINOUT.md                 (CYD pin map)
 │   ├── DETECTIONS.md             (per-signature provenance)
+│   ├── UPSTREAM.md               (what came across from SquachWatch, and what didn't)
 │   ├── MULESKINWARE-AESTHETIC.md   (CSS → RGB565 mapping)
 │   ├── demo.gif                  (the artwork at the top of this file)
 │   └── radar.gif                 (the radar background's source; see tools/)
