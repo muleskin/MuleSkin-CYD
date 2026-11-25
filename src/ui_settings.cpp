@@ -3,6 +3,11 @@
 #include "buzzer.h"
 #include "night_mode.h"
 #include "wardrive.h"
+#include "wigle_up.h"   // the WARDRIVE page's upload rows
+#if defined(CYD_GPS)
+#include "gnss.h"       // ...and its GPS row
+#include "clock.h"
+#endif
 #if MULESKIN_LORA
 #include "ui_lorachat.h"
 #endif
@@ -112,7 +117,7 @@ static const SettingsRow ALL_ROWS[] = {
     SettingsRow::DEX,
     SettingsRow::POWER_SAVER,
 #if defined(CYD_GPS)
-    SettingsRow::WATCH_WARDRIVE,   // the watch's row and setting, on the CYD GPS builds
+    SettingsRow::WARDRIVE_PAGE,    // WARDRIVE and what it is doing; opens the WARDRIVE page
 #endif
 #if defined(ESP32) && !defined(TWATCH_S3)
     SettingsRow::CHARGE_MODE,
@@ -163,6 +168,20 @@ static const SettingsRow WATCH_ROWS[] = {
 static const uint8_t WATCH_ROWS_N = sizeof(WATCH_ROWS) / sizeof(WATCH_ROWS[0]);
 #endif
 
+#if defined(CYD_GPS)
+// The WARDRIVE page: the switch, what it is doing, and where the log goes --
+// to WiGLE by itself on the boards that can, from the web flasher otherwise.
+static const SettingsRow WD_ROWS[] = {
+    SettingsRow::WATCH_WARDRIVE, SettingsRow::WD_GPS, SettingsRow::WD_COUNT, SettingsRow::WD_KEPT,
+#if SQW_WIGLE_UPLOAD
+    SettingsRow::WD_UPLOAD, SettingsRow::WD_AUTO, SettingsRow::WD_KEY, SettingsRow::WD_LAST,
+#else
+    SettingsRow::WD_WEB,
+#endif
+};
+static const uint8_t WD_ROWS_N = sizeof(WD_ROWS) / sizeof(WD_ROWS[0]);
+#endif
+
 // The SYSTEM page: the rarely-needed machinery, off the main list.
 static const SettingsRow SYSTEM_ROWS[] = {
     SettingsRow::PRIVACY,
@@ -194,6 +213,9 @@ static_assert(SYSTEM_ROWS_N <= LIST_MAX_N, "the display list is sized off LIST_M
 #if defined(TWATCH_S3)
 static_assert(WATCH_ROWS_N <= LIST_MAX_N, "the display list is sized off LIST_MAX_N");
 #endif
+#if defined(CYD_GPS)
+static_assert(WD_ROWS_N <= LIST_MAX_N, "the display list is sized off LIST_MAX_N");
+#endif
 // Kept as a thin shim over s_page so nothing that reads it has to change.
 #define s_appearance (s_page == SettingsPage::APPEARANCE)
 
@@ -217,7 +239,7 @@ static bool isMuleSkinOnlyRow(SettingsRow r) {
            r == SettingsRow::PET || r == SettingsRow::AURA;
 }
 
-enum class RowGroupId : uint8_t { APPEARANCE, BEHAVIOR, MULESKIN, SYSTEM, WATCH };
+enum class RowGroupId : uint8_t { APPEARANCE, BEHAVIOR, MULESKIN, SYSTEM, WATCH, WARDRIVE };
 
 static RowGroupId groupFor(SettingsRow r) {
     // Appearance sits with the MuleSkin rows because that is where it was asked
@@ -228,8 +250,16 @@ static RowGroupId groupFor(SettingsRow r) {
     // part that matters, since the display rows live behind it.
     if (r == SettingsRow::APPEARANCE && Settings::boringMode()) return RowGroupId::SYSTEM;
 #if defined(CYD_GPS)
-    // Under its neighbor's heading: a CYD has no WATCH heading.
-    if (r == SettingsRow::WATCH_WARDRIVE) return groupFor(SettingsRow::POWER_SAVER);
+    // The row that opens the page sits under its neighbor's heading (a CYD
+    // has no WATCH heading); the page's own rows under WARDRIVE.
+    if (r == SettingsRow::WARDRIVE_PAGE) return groupFor(SettingsRow::POWER_SAVER);
+    switch (r) {
+        case SettingsRow::WATCH_WARDRIVE: case SettingsRow::WD_GPS: case SettingsRow::WD_COUNT:
+        case SettingsRow::WD_KEPT: case SettingsRow::WD_UPLOAD: case SettingsRow::WD_AUTO:
+        case SettingsRow::WD_KEY: case SettingsRow::WD_LAST: case SettingsRow::WD_WEB:
+            return RowGroupId::WARDRIVE;
+        default: break;
+    }
 #endif
     switch (r) {
         case SettingsRow::WATCH_BATTERY:
@@ -303,6 +333,7 @@ static const char* groupName(RowGroupId g) {
         case RowGroupId::BEHAVIOR:   return "BEHAVIOR";
         case RowGroupId::MULESKIN:    return "MULESKIN";
         case RowGroupId::WATCH:      return "WATCH";
+        case RowGroupId::WARDRIVE:   return "WARDRIVE";
         default:                     return "SYSTEM";
     }
 }
@@ -316,6 +347,7 @@ static uint16_t groupColor(RowGroupId g) {
         case RowGroupId::BEHAVIOR:   return Theme::AMBER;
         case RowGroupId::MULESKIN:    return Theme::VAPOR_PINK;
         case RowGroupId::WATCH:      return Theme::AMBER;
+        case RowGroupId::WARDRIVE:   return Theme::GREEN;
         default:                     return Theme::VAPOR_PURPLE;
     }
 }
@@ -340,6 +372,9 @@ static uint8_t buildDisplayList(DisplayItem* out) {
     else if (s_page == SettingsPage::SYSTEM) { src = SYSTEM_ROWS;    srcN = SYSTEM_ROWS_N; }
 #if defined(TWATCH_S3)
     else if (s_page == SettingsPage::WATCH)  { src = WATCH_ROWS;     srcN = WATCH_ROWS_N; }
+#endif
+#if defined(CYD_GPS)
+    else if (s_page == SettingsPage::WARDRIVE) { src = WD_ROWS;      srcN = WD_ROWS_N; }
 #endif
     // The tracking rows come first on the main page, and only when a target is
     // actually set -- the whole point is that a watch stops being invisible.
@@ -1001,8 +1036,11 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
             label = "PRIVACY MODE"; value = Settings::privacyMode() ? "ON" : "OFF";
             break;
 #if defined(CYD_GPS)
+        case SettingsRow::WARDRIVE_PAGE:
         case SettingsRow::WATCH_WARDRIVE:
             // OFF, or what stands between it and a row, or the rows written.
+            // The same on the main list's row, which opens the page, and on
+            // the page's own switch.
             label = "WARDRIVE";
             switch (Wardrive::sdState(millis())) {
                 case Wardrive::SdState::OFF:             value = "OFF"; break;
@@ -1015,6 +1053,68 @@ static void rowContent(SettingsRow r, const DetectionEngine& eng, char* valBuf, 
                     break;
             }
             break;
+        // ---- the WARDRIVE page ----------------------------------------------
+        case SettingsRow::WD_GPS: {
+            label = "GPS";
+            const Gnss::Fix& f = Gnss::fix();
+            const uint32_t nowMs = millis();
+            if (Gnss::faked())               value = "BENCH FIX";
+            else if (Gnss::fresh(nowMs))     { snprintf(valBuf, valBufN, "FIX  %u SATS", (unsigned)f.used); value = valBuf; }
+            else if (Gnss::good() == 0)      value = "NO GPS HEARD";
+            else { snprintf(valBuf, valBufN, "SEARCHING  %u IN VIEW", (unsigned)Gnss::sky().view); value = valBuf; }
+            break;
+        }
+        case SettingsRow::WD_COUNT:
+            label = "THIS DRIVE";
+            snprintf(valBuf, valBufN, "%lu WIFI  %lu BT", (unsigned long)Wardrive::writtenWifi(),
+                     (unsigned long)Wardrive::writtenBle());
+            value = valBuf;
+            break;
+        case SettingsRow::WD_KEPT: {
+            // The file this drive writes to, without its leading slash, and
+            // how many finished ones wait for WiGLE.
+            label = "FILE";
+            const char* fn = Wardrive::sdFileName();
+            const uint16_t w = Wardrive::sdWaitingCount();
+            if (*fn) snprintf(valBuf, valBufN, "%s%s", fn[0] == '/' ? fn + 1 : fn, w ? " +" : "");
+            else if (w) snprintf(valBuf, valBufN, "%u WAITING", (unsigned)w);
+            else snprintf(valBuf, valBufN, "NONE YET");
+            value = valBuf;
+            break;
+        }
+#if SQW_WIGLE_UPLOAD
+        case SettingsRow::WD_UPLOAD:
+            label = WigleUp::busy() ? "UPLOADING" : "UPLOAD NOW";
+            value = WigleUp::status(valBuf, valBufN);
+            break;
+        case SettingsRow::WD_AUTO:
+            label = "AUTO UPLOAD"; value = WigleUp::autoOn() ? "AT HOME" : "OFF";
+            break;
+        case SettingsRow::WD_KEY:
+            label = "WIGLE KEY";
+            if (WigleUp::hasKey()) value = WigleUp::keyName()[0] ? WigleUp::keyName() : "SET";
+            else value = "NOT SET";
+            break;
+        case SettingsRow::WD_LAST: {
+            label = "LAST UPLOAD";
+            const uint32_t at = WigleUp::lastEpoch();
+            if (!at) value = "NEVER";
+            else {
+                const uint32_t now = Clock::isSet() ? Clock::nowEpoch() : 0;
+                const uint32_t ago = now > at ? now - at : 0;
+                if (!now)               snprintf(valBuf, valBufN, "%lu ROWS", (unsigned long)WigleUp::lastRows());
+                else if (ago < 3600)    snprintf(valBuf, valBufN, "%lu ROWS, %lum AGO", (unsigned long)WigleUp::lastRows(), (unsigned long)(ago / 60));
+                else if (ago < 86400)   snprintf(valBuf, valBufN, "%lu ROWS, %luh AGO", (unsigned long)WigleUp::lastRows(), (unsigned long)(ago / 3600));
+                else                    snprintf(valBuf, valBufN, "%lu ROWS, %lud AGO", (unsigned long)WigleUp::lastRows(), (unsigned long)(ago / 86400));
+                value = valBuf;
+            }
+            break;
+        }
+#else
+        case SettingsRow::WD_WEB:
+            label = "TO WIGLE"; value = "FROM THE FLASHER";
+            break;
+#endif
 #endif
         case SettingsRow::CHARGE_MODE:
             label = "CHARGE MODE"; value = "START";
@@ -1209,6 +1309,7 @@ void uiSettingsTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng) {
     if (s_page == SettingsPage::APPEARANCE) pageTitle = ">> APPEARANCE <<";
     else if (s_page == SettingsPage::SYSTEM) pageTitle = ">> SYSTEM <<";
     else if (s_page == SettingsPage::WATCH)  pageTitle = ">> WATCH SETTINGS <<";
+    else if (s_page == SettingsPage::WARDRIVE) pageTitle = ">> WARDRIVE <<";
     Theme::drawTitleBar(t, pageTitle);
 
     // +6, not +4: four group headers plus the two tracking rows.

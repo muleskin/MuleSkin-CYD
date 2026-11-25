@@ -79,6 +79,18 @@ enum class SettingsRow : uint8_t {
     SENSE_ARM,       // SENSE ARM: HUMAN SENSING without its screen, OFF / AT NIGHT / ALWAYS
 #endif
     MY_ALERTS,       // MY ALERTS: the owner's own WiFi names to alert on (opens the screen)
+    // The WARDRIVE page, on the CYD GPS builds (upstream v1.50.0).
+    // WARDRIVE_PAGE is the main list's row that opens it, showing what
+    // WARDRIVE is doing; the page has the switch (WATCH_WARDRIVE) and these:
+    WARDRIVE_PAGE,
+    WD_GPS,          // the fix: satellites, or why there is none
+    WD_COUNT,        // this drive: networks and Bluetooth devices written
+    WD_KEPT,         // the file being written, and how many wait for WiGLE
+    WD_UPLOAD,       // UPLOAD NOW: to WiGLE over the saved WiFi (SQW_WIGLE_UPLOAD)
+    WD_AUTO,         // AUTO UPLOAD: OFF, or AT HOME
+    WD_KEY,          // WIGLE KEY: whose, or how to set it
+    WD_LAST,         // LAST UPLOAD: when, and how many rows
+    WD_WEB,          // the boards without the upload: it is on the web flasher
     BACK,
     COUNT,
     NONE = 255
@@ -95,7 +107,7 @@ void uiSettingsScroll(int delta);     // positive = scroll down
 // Each page keeps its OWN scroll position, so leaving a page and coming back
 // puts you where you were instead of at the top -- the list is long enough
 // that losing your place was the most-felt annoyance on this screen.
-enum class SettingsPage : uint8_t { MAIN = 0, APPEARANCE = 1, SYSTEM = 2, WATCH = 4 };
+enum class SettingsPage : uint8_t { MAIN = 0, APPEARANCE = 1, SYSTEM = 2, WARDRIVE = 3, WATCH = 4 };
 void         uiSettingsOpenPage(SettingsPage p);
 SettingsPage uiSettingsCurrentPage();
 

@@ -98,6 +98,7 @@ uint32_t s_headSeq = 0;
 uint16_t s_used = 0;           // slots taken in the head sector
 uint32_t s_full = 0;           // full sectors behind the head (<= SECTORS-1)
 uint32_t s_written = 0, s_skipped = 0, s_dropped = 0;
+uint32_t s_wWifi = 0, s_wBle = 0;
 
 uint32_t off(uint32_t sec, uint16_t slot) { return sec * SECTOR + (uint32_t)slot * REC; }
 
@@ -259,7 +260,7 @@ void tick(uint32_t nowMs) {
         r.lat7 = f.lat7; r.lon7 = f.lon7; r.altM = f.altM; r.accM = f.accM;
         r.epoch = epoch;
         r.nameLen = p.nameLen; memcpy(r.name, p.name, p.nameLen);
-        if (append(r)) s_written++;
+        if (append(r)) { s_written++; if (r.kind == KIND_WIFI) s_wWifi++; else s_wBle++; }
     }
 }
 
@@ -267,6 +268,8 @@ bool     ready()    { return s_ready; }
 uint32_t capacity() { return SECTORS * PER; }
 uint32_t count()    { return s_head < 0 ? 0 : s_full * PER + s_used; }
 uint32_t written()  { return s_written; }
+uint32_t writtenWifi() { return s_wWifi; }
+uint32_t writtenBle()  { return s_wBle; }
 uint32_t skipped()  { return s_skipped; }
 uint32_t dropped()  { return s_dropped; }
 

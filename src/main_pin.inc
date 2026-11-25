@@ -212,6 +212,9 @@ static void performWipe(WipeBoot after) {
 #elif defined(CYD_GPS)
     Wardrive::sdWipe();      // the WiGLE file is a record of everywhere the board has been
 #endif
+#if SQW_WIGLE_UPLOAD
+    WigleUp::wipe();         // the WiGLE key and the upload history
+#endif
 #if HAVE_NVS_ERASE
     // The frame buffer is 77 KB the wipe can have: the board restarts in a
     // moment and the screen is meant to go quiet anyway. Without it the copy

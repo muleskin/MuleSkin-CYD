@@ -437,6 +437,17 @@ static void cydGpsTick(uint32_t now) {
         const char* fn = Wardrive::sdFileName();
         Serial.printf("[wardrive] the WiGLE file is on the SD card: %s\n", *fn ? fn : "none yet");
     }
+#if SQW_WIGLE_UPLOAD
+    else if (cmd == 10) {
+        // WIGLEKEY, from the web flasher's SEND KEY TO MY BOARD. The page
+        // waits for one of these three lines.
+        if (WigleUp::setKey((const char*)g_consoleWigleKey))
+            Serial.printf("[wigle] key saved for %s\n", WigleUp::keyName()[0] ? WigleUp::keyName() : "your account");
+        else
+            Serial.println("[wigle] key refused: it is not WiGLE's \"Encoded for use\" value");
+        memset((void*)g_consoleWigleKey, 0, sizeof g_consoleWigleKey);
+    }
+#endif
     else if (cmd) Serial.println("[gps] not on this board");
 
     // A bench fix is held until a real one replaces it; refreshed here so it

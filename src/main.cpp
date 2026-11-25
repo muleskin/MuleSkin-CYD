@@ -126,6 +126,7 @@ static void cydGpsTick(uint32_t now);
 #include <time.h>
 #include "regulars.h"
 #include "places.h"
+#include "wigle_up.h"
 #include "notices.h"
 #include "theme.h"            // the crash card on the splash
 #include "clock.h"            // ...and the ten-minute IGNORE on it
@@ -2130,6 +2131,9 @@ volatile bool g_consoleRtc = false;   // RTC: read the clock chip (watch)
 volatile bool g_consolePmu = false;   // PMU: dump the power chip's registers (watch)
 volatile uint8_t g_consoleGps = 0;    // GPS, WARDRIVE and WIGLE commands: the S3 Plus's GNSS (watch)
 volatile int32_t g_consoleFakeLat7 = 0, g_consoleFakeLon7 = 0;   // GPS FAKE lat lon
+#if SQW_WIGLE_UPLOAD
+volatile char g_consoleWigleKey[128] = "";    // WIGLEKEY's value, until cydGpsTick takes it
+#endif
 
 #ifdef BENCH_TOOLS
 // UPDATE NOW and UPDATE STOP on the console, for the bench: the unattended
@@ -4118,6 +4122,11 @@ void setup() {
     Places::setHomeCheck([](const char* ssid) {
         return engine.homeSsid()[0] && strcmp(ssid, engine.homeSsid()) == 0;
     });
+#if SQW_WIGLE_UPLOAD
+    // The upload pauses the radios the way a WiFi update does.
+    WigleUp::begin();
+    WigleUp::setRadioHooks([] { engine.startUpdateRadio(); }, [] { engine.stopUpdateRadio(); });
+#endif
     MyAlerts::begin();
     // AWAYDAYS on the console, and "2d away" on the LOG (the away-days table).
     awayDaysLoad();
@@ -4621,6 +4630,18 @@ void loop() {
         touchJustUp = false;
     }
     engine.loop();
+#if SQW_WIGLE_UPLOAD
+    // AUTO UPLOAD goes by itself only on the main screen, a minute after the
+    // last touch, at home (the home network heard where the board is): these
+    // boards cannot tell a charger from a full cell, which is what upstream
+    // waits for, and home is where the saved WiFi is anyway.
+    {
+        const uint32_t t = millis();
+        const bool autoOk = state == AppState::CLEAR && t - lastTouch > 60000 &&
+                            Places::isHome(Places::current());
+        WigleUp::tick(t, autoOk);
+    }
+#endif
 #if defined(SENSE_CYD_APP)
     // HUMAN SENSING on the board's own radio, and only while its screen is up:
     // one radio, so the detector lets go of it the way it does for WIFI TIME
@@ -6464,6 +6485,29 @@ void loop() {
                             break;
 #endif
 #if defined(CYD_GPS)
+                        // The WARDRIVE page (upstream v1.50.0).
+                        case SettingsRow::WARDRIVE_PAGE: uiSettingsOpenPage(SettingsPage::WARDRIVE); break;
+                        case SettingsRow::WD_GPS: case SettingsRow::WD_COUNT: case SettingsRow::WD_KEPT: break;   // readings
+#if SQW_WIGLE_UPLOAD
+                        case SettingsRow::WD_UPLOAD:
+                            if (WigleUp::busy()) { WigleUp::cancel(); Theme::showToast("UPLOAD", "Stopping", Theme::AMBER); }
+                            else if (WigleUp::start()) Theme::showToast("UPLOAD TO WIGLE", "Joining the saved WiFi", Theme::CYAN);
+                            else Theme::showToast("UPLOAD TO WIGLE", WigleUp::failText(), Theme::AMBER);
+                            break;
+                        case SettingsRow::WD_AUTO:
+                            WigleUp::toggleAuto();
+                            Theme::showToast("AUTO UPLOAD", WigleUp::autoOn() ? "At home, idle, over the saved WiFi" : "Off", Theme::CYAN);
+                            break;
+                        case SettingsRow::WD_KEY:
+                            Theme::showToast("WIGLE KEY", WigleUp::hasKey() ? "Change it from the web flasher" : "Set it from the web flasher, over USB",
+                                             Theme::CYAN);
+                            break;
+                        case SettingsRow::WD_LAST: break;
+#else
+                        case SettingsRow::WD_WEB:
+                            Theme::showToast("UPLOAD TO WIGLE", "SD card files, on the web flasher", Theme::CYAN);
+                            break;
+#endif
                         case SettingsRow::WATCH_WARDRIVE:
                             // Through the console's path, as on the watch.
                             g_consoleGps = Wardrive::enabled() ? 6 : 5;

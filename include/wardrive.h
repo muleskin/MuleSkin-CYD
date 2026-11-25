@@ -70,6 +70,8 @@ void noteWifi(const uint8_t* bssid, const char* ssid, uint16_t auth, uint8_t cha
 void noteBle(const uint8_t* mac, const char* name, int8_t rssi, bool haveMfgr, uint16_t mfgr);
 
 uint32_t written();        // this boot
+uint32_t writtenWifi();    // ...of which networks
+uint32_t writtenBle();     // ...and Bluetooth devices
 uint32_t skipped();        // this boot: heard again too soon, same place
 uint32_t dropped();        // this boot: the queue was full, or (CYD) memory ran low
 
@@ -103,6 +105,18 @@ SdState sdState(uint32_t nowMs);
 const char* sdFileName();
 // Deletes every /wigle-*.csv on the card. The duress wipe calls this.
 void sdWipe();
+
+// For the WiGLE upload (wigle_up.cpp) and the WARDRIVE page (upstream
+// SquachWatch v1.50.0). The files waiting are the session files in the
+// root; one is moved to /wigle-sent once WiGLE has it. The file this session
+// is still writing to is never offered while WARDRIVE is on. Called from the
+// loop only: the card shares a bus with the screen.
+uint8_t  sdWaitingFiles(char (*names)[32], uint32_t* sizes, uint8_t cap);
+uint16_t sdWaitingCount();     // a cached count, refreshed every 15 s by sdTick
+bool     sdOpen(const char* path, uint32_t& size);
+int      sdRead(uint8_t* buf, size_t n);   // -1 on a read error, 0 at the end
+void     sdClose();
+bool     sdMarkSent(const char* path);
 #endif
 
 }  // namespace Wardrive

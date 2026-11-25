@@ -104,6 +104,9 @@ extern volatile bool g_consoleRadioTest;
 extern volatile bool g_consolePmu;
 extern volatile uint8_t g_consoleGps;
 extern volatile int32_t g_consoleFakeLat7, g_consoleFakeLon7;
+#if SQW_WIGLE_UPLOAD
+extern volatile char g_consoleWigleKey[128];   // WIGLEKEY's value, for main_gps.inc
+#endif
 extern volatile bool g_consoleRtc;
 extern volatile bool g_consoleBuzz;
 extern volatile bool g_consoleMotion;
@@ -798,6 +801,18 @@ void pollSerial() {
         if (strcasecmp(line, "WIGLE") == 0)        { g_consoleGps = 7; continue; }
         if (strcasecmp(line, "WIGLE ALL") == 0)    { g_consoleGps = 8; continue; }
         if (strcasecmp(line, "WIGLE CLEAR") == 0)  { g_consoleGps = 9; continue; }
+        // WIGLEKEY <WiGLE's "Encoded for use" value>: the key for the boards
+        // that upload by themselves (wigle_up.h), from the web flasher. The
+        // others say so, so the page can tell the person to upload from it.
+        if (strncasecmp(line, "WIGLEKEY ", 9) == 0) {
+#if SQW_WIGLE_UPLOAD
+            snprintf((char*)g_consoleWigleKey, sizeof g_consoleWigleKey, "%s", line + 9);
+            g_consoleGps = 10;
+#else
+            Serial.println("[wigle] no upload on this board: send its files from the web flasher");
+#endif
+            continue;
+        }
         if (strcasecmp(line, "RTC") == 0)    { g_consoleRtc = true; continue; }
         if (strcasecmp(line, "BUZZ") == 0)   { g_consoleBuzz = true; continue; }
         if (strcasecmp(line, "MOTION") == 0) { g_consoleMotion = true; continue; }
