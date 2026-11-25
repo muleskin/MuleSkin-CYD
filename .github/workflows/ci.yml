@@ -105,7 +105,20 @@ jobs:
         run: pip install -q platformio
       - name: Build ${{ matrix.env }}
         run: pio run -e ${{ matrix.env }}
+      # How full the app slot is, from the build's own partition table, and
+      # how much it grew since the last release (that release's copy of the
+      # same bin). Warns past 90%, fails past 95% -- the 4 MB boards' 1.9 MB
+      # slots are the ones that will hit it first.
       - name: Size
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          f=.pio/build/${{ matrix.env }}/firmware.bin
-          echo "${{ matrix.env }}: $(stat -c%s "$f") bytes" >> "$GITHUB_STEP_SUMMARY"
+          e=${{ matrix.env }}
+          tag=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
+          prev=$(gh release view --json assets -q ".assets[] | select(.name==\"$e-firmware.bin\") | .size" 2>/dev/null || true)
+          {
+            echo "| board | bytes | slot | used | left | growth |"
+            echo "|---|---:|---:|---:|---:|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          python3 tools/check_size.py "$e" ${prev:+--previous "$prev" --tag "$tag"} | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"

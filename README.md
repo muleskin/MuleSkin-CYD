@@ -876,6 +876,7 @@ MuleSkin-CYD/
 │   ├── sd_log.cpp
 │   └── ui_*.cpp
 ├── tools/
+│   ├── check_size.py             (CI: how full each board's app slot is)
 │   ├── make_boot_art.py          (docs/input.png -> muleskin_art.h)
 │   ├── make_radar.py             (docs/radar.gif -> radar_art.h)
 │   └── gen_headline_font.py      (Orbitron -> bangers_font.h)
