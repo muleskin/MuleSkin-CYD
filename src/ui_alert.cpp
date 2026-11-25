@@ -6,6 +6,8 @@
 #include "detection.h"
 #include "ignore_list.h"
 #include "tag_ring.h"
+#include "trail.h"      // the trail: stops, the signal ring, FOLLOWING
+#include "regulars.h"   // MET BEFORE
 #include <Arduino.h>
 #if defined(CYD_GPS)
 #include "sd_row.h"   // degreesText() for the place line
@@ -261,6 +263,133 @@ static uint16_t s_followMin = 0;
 void uiAlertSetFollow(uint16_t minutes) { s_followMin = minutes; }
 static uint8_t s_days = 0;
 void uiAlertSetDays(uint8_t days) { s_days = days; }
+static uint8_t s_queue = 0;
+void uiAlertSetQueue(uint8_t n) { s_queue = n; }
+static bool s_byHand = false, s_watching = false;
+void uiAlertSetByHand(bool on)   { s_byHand = on; }
+void uiAlertSetWatching(bool on) { s_watching = on; }
+
+// ---- the trail (upstream SquachWatch v1.50.0, drawn MuleSkin's way) -------
+// Upstream rebuilt its card around one question -- has this thing been
+// following you? -- and replaced the card to ask it. Here the card keeps its
+// shape and the answer goes where the card already says things: the verdict
+// in the banner line, the stops on a line under the plate, the last minute of
+// signal as a ladder in the SIGNAL bar, and a tracker's owner in the readout.
+//
+// The verdict, strongest first. WITH YOU and NEAR YOU ON N DAYS (the
+// tracker-only checks) still outrank it, and FIRST / AT NIGHT take the line
+// when the verdict is just NEW.
+enum class Verdict : uint8_t { NEW, MET, FOLLOWING, SPAM };
+static Verdict verdictOf(const Detection& d) {
+    if (s_spam) return Verdict::SPAM;
+    if (Trail::following(d)) return Verdict::FOLLOWING;
+    if (Regulars::nameFor(d.mac)) return Verdict::MET;
+    return Verdict::NEW;
+}
+
+// The banner line's text and colour, or nullptr for none. Shared by the big
+// card and the 240x135 one so the two never disagree about what to say.
+static const char* bannerText(char* buf, size_t n, uint16_t& col, Verdict v) {
+    col = Theme::RED;
+    if (s_followMin) { snprintf(buf, n, "* WITH YOU %u MIN *", (unsigned)s_followMin); return buf; }
+    if (s_days)      { snprintf(buf, n, "* NEAR YOU ON %u DAYS *", (unsigned)s_days); return buf; }
+    if (v == Verdict::FOLLOWING) {
+        snprintf(buf, n, "* FOLLOWING: %u STOPS, %u MIN *", (unsigned)s_last.stops, (unsigned)Trail::spanMin(s_last));
+        return buf;
+    }
+    if (v == Verdict::SPAM) { snprintf(buf, n, "* SPAM: %u FAKE TAGS *", (unsigned)s_spamFakes); return buf; }
+    if (v == Verdict::MET && !s_redacted) {
+        col = Theme::VAPOR_BLUE;
+        snprintf(buf, n, "* MET BEFORE: %s, %u DAYS *", Regulars::nameFor(s_last.mac), (unsigned)Regulars::daysFor(s_last.mac));
+        return buf;
+    }
+    if (s_first || s_night) {
+        col = Theme::VAPOR_YELLOW;
+        return (s_first && s_night) ? "* FIRST, AND AT NIGHT *" : s_first ? "* FIRST OF ITS KIND *" : "* AT NIGHT *";
+    }
+    if (s_lastFree) { col = Theme::CYAN; return "* QUIET UNLESS IT NEARS *"; }
+    return nullptr;
+}
+
+// A tracker's owner, in the words the card uses; nullptr when the advert
+// does not say. AWAY also shows as the vendor line ("AWAY FROM OWNER").
+static const char* ownerWord(uint8_t owner) {
+    switch (owner) {
+        case OWNER_WITH:  return "WITH OWNER";
+        case OWNER_AWAY:  return "AWAY";
+        case OWNER_UNSET: return "NOT SET UP";
+        default:          return nullptr;
+    }
+}
+
+// "41m", "3h", "2d": how long ago a minute of uptime was.
+static void agoText(char* b, size_t n, uint16_t nowMin, uint16_t thenMin) {
+    const unsigned m = (uint16_t)(nowMin - thenMin);
+    if (m < 60)        snprintf(b, n, "%um", m);
+    else if (m < 1440) snprintf(b, n, "%uh", m / 60);
+    else               snprintf(b, n, "%ud", m / 1440);
+}
+
+// The stops line: "TRAIL HOME 41m > 18m > HERE  1.2KM". Only once there are
+// two stops -- one stop is just "here", which says nothing.
+static bool trailText(char* b, size_t n, uint32_t now) {
+    if (s_last.stops < 2 || s_redacted) return false;
+    const uint16_t nowMin = (uint16_t)(now / 60000u);
+    size_t k = (size_t)snprintf(b, n, "TRAIL");
+    for (uint8_t i = 0; i < s_last.stops && k < n; i++) {
+        const uint8_t pl = s_last.stopPlace[i];
+        char ago[8];
+        const bool here = (i == s_last.stops - 1) && pl == Places::current();
+        if (here) snprintf(ago, sizeof ago, "HERE");
+        else      agoText(ago, sizeof ago, nowMin, s_last.stopLastMin[i]);
+        k += (size_t)snprintf(b + k, n - k, "%s%s%s", i ? " > " : " ",
+                              Places::isHome(pl) ? "HOME " : "", ago);
+    }
+    const uint16_t m = Trail::spanM(s_last);
+    if (m && k < n) {
+        if (m >= 1000) k += (size_t)snprintf(b + k, n - k, "  %u.%uKM", m / 1000, (m % 1000) / 100);
+        else           k += (size_t)snprintf(b + k, n - k, "  %uM", (unsigned)m);
+    }
+    return true;
+}
+
+// The card keeps the row it was opened with, but its trail moves while it is
+// up: the ladder, the stops and the owner are read off the live row.
+static void refreshTrail(const DetectionEngine& eng) {
+    for (uint8_t i = 0; i < eng.logCount(); i++) {
+        const Detection* d = eng.logAt(i);
+        if (!d || d->type != s_last.type || memcmp(d->mac, s_last.mac, 6) != 0) continue;
+        memcpy(s_last.spark, d->spark, sizeof s_last.spark);
+        s_last.sparkHead  = d->sparkHead;
+        s_last.sparkCount = d->sparkCount;
+        s_last.sparkAt    = d->sparkAt;
+        s_last.stops      = d->stops;
+        memcpy(s_last.stopPlace, d->stopPlace, sizeof s_last.stopPlace);
+        memcpy(s_last.stopFirstMin, d->stopFirstMin, sizeof s_last.stopFirstMin);
+        memcpy(s_last.stopLastMin, d->stopLastMin, sizeof s_last.stopLastMin);
+        if (d->owner) s_last.owner = d->owner;
+        return;
+    }
+}
+
+// The last minute of signal as a ladder of bars, oldest on the left, in the
+// SIGNAL bar's box: -90 dBm empty, -40 full, the newest bar brightest.
+static void drawLadder(TFT_eSPI& t, int x, int y, int w, int h, uint16_t col) {
+    t.drawRect(x, y, w, h, col);
+    const int n = Detection::SPARK_N;
+    const int slot = (w - 2) / n;
+    if (slot < 2) return;
+    const int x0 = x + 1 + ((w - 2) - slot * n) / 2;
+    for (int i = 0; i < s_last.sparkCount && i < n; i++) {
+        int v = Trail::sparkAt(s_last, (uint8_t)i);
+        if (v < -90) v = -90;
+        if (v > -40) v = -40;
+        const int bh = (v + 90) * (h - 2) / 50;
+        if (bh <= 0) continue;
+        const int bx = x0 + (n - 1 - i) * slot;
+        t.fillRect(bx, y + h - 1 - bh, slot - 1, bh, i == 0 ? Theme::WHITE : col);
+    }
+}
 
 void uiAlertInit(TFT_eSPI& t, const Detection& d) {
     s_ringW = t.width(); s_ringH = t.height();
@@ -272,6 +401,9 @@ void uiAlertInit(TFT_eSPI& t, const Detection& d) {
     s_snzLabel = nullptr;
     s_followMin = 0;
     s_days = 0;
+    s_queue = 0;
+    s_byHand = false;
+    s_watching = false;
 #if defined(CYD_GPS)
     s_place    = false;   // a card never shows an earlier alert's place
 #endif
@@ -515,15 +647,10 @@ static void drawTinyCard(TFT_eSPI& t, int w, int h) {
     int y = py + 4;
     t.setTextSize(1);
     char line[48];
-    const char* banner = nullptr;
     uint16_t bannerCol = Theme::RED;
-    if (s_followMin)      { snprintf(line, sizeof line, "* WITH YOU %u MIN *", (unsigned)s_followMin); banner = line; }
-    else if (s_days)      { snprintf(line, sizeof line, "* NEAR YOU ON %u DAYS *", (unsigned)s_days); banner = line; }
-    else if (s_spam)      { snprintf(line, sizeof line, "* SPAM: %u FAKE TAGS *", (unsigned)s_spamFakes); banner = line; }
-    else if (s_first || s_night) {
-        banner = (s_first && s_night) ? "* FIRST, AND AT NIGHT *" : s_first ? "* FIRST OF ITS KIND *" : "* AT NIGHT *";
-        bannerCol = Theme::VAPOR_YELLOW;
-    }
+    const char* banner = bannerText(line, sizeof line, bannerCol, verdictOf(s_last));
+    // QUIET UNLESS IT NEARS is housekeeping; this card has no line to spare.
+    if (banner && !strcmp(banner, "* QUIET UNLESS IT NEARS *")) banner = nullptr;
     if (banner) {
         t.setTextColor(bannerCol, Theme::BG);
         t.setCursor((w - t.textWidth(banner)) / 2, y);
@@ -564,6 +691,13 @@ static void drawTinyCard(TFT_eSPI& t, int w, int h) {
         const uint16_t confColor = (conf == Confidence::HIGH_CONF) ? Theme::GREEN
                                  : (conf == Confidence::MED_CONF) ? Theme::AMBER : Theme::RED;
         const int by = py + ph - 12;
+        const char* ow = ownerWord(s_last.owner);
+        if (ow && s_last.owner != OWNER_AWAY && !s_redacted) {
+            // WITH OWNER / NOT SET UP over the bar (AWAY is the vendor line).
+            t.setTextColor(Theme::VAPOR_BLUE, Theme::BG);
+            t.setCursor((w - t.textWidth(ow)) / 2, by - 10);
+            t.print(ow);
+        }
         snprintf(line, sizeof line, "%d dBm", (int)s_last.rssi);
         t.setTextColor(confColor, Theme::BG);
         t.setCursor(10, by + 1);
@@ -583,12 +717,21 @@ static void drawTinyCard(TFT_eSPI& t, int w, int h) {
     }
     // HUNT / SNOOZE / INFO.
     static const char* const LABELS[3] = { "HUNT", "SNOOZE", "INFO" };
+    if (s_queue && !banner) {
+        char q[12];
+        snprintf(q, sizeof q, "+%u MORE", (unsigned)s_queue);
+        t.setTextSize(1);
+        t.setTextColor(Theme::AMBER, Theme::BG);
+        t.setCursor(w - 8 - t.textWidth(q), py + 4);
+        t.print(q);
+    }
     for (int i = 0; i < 3; i++) {
         int bx, by, bw, bh;
         tinyBtnRect(i, w, h, bx, by, bw, bh);
         const bool picking = (i == 1 && s_snzLabel);
-        const char* label = picking ? s_snzLabel : LABELS[i];
-        t.fillRect(bx, by, bw, bh, Theme::BG);
+        const bool watch   = (i == 1 && s_byHand);
+        const char* label = picking ? s_snzLabel : watch ? ("WATCH") : LABELS[i];
+        t.fillRect(bx, by, bw, bh, watch && s_watching ? Theme::PURPLE : Theme::BG);
         t.drawRect(bx, by, bw, bh, picking ? Theme::AMBER : Theme::PURPLE);
         t.setTextSize(1);
         t.setTextColor(i == 0 || picking ? Theme::AMBER : Theme::CYAN, Theme::BG);
@@ -606,6 +749,8 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
     int w = t.width();
     int h = t.height();
     s_ringW = w; s_ringH = h;
+    refreshTrail(eng);
+    const Verdict verdict = verdictOf(s_last);
 
     uint32_t elapsed = now - s_alertStart;
     // Capped well short of wrapping the uint8_t step counter -- an
@@ -808,7 +953,9 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
         // line below, where the four fields together ran 174px into a 168px
         // plate and pushed the sighting count off the edge.
         t.setCursor(PLATE_X + 8, BAR_Y - LABEL_DY);
-        t.print("SIGNAL");
+        // Which way it is going over the last minute, once there is a minute.
+        const int8_t tr = Trail::trend(s_last);
+        t.print(tr > 0 ? "CLOSER" : tr < 0 ? "FURTHER" : "SIGNAL");
         t.setTextColor(confColor, Theme::BG);
         const char* cl = confidenceLabel(conf);
         t.setCursor(PLATE_X + PLATE_W - 8 - t.textWidth(cl), BAR_Y - LABEL_DY);
@@ -816,9 +963,14 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
         int v = s_last.rssi;
         if (v < -90) v = -90;
         if (v > -40) v = -40;
-        const int fill = (v + 90) * (BAR_W - 2) / 50;
-        t.drawRect(BAR_X, BAR_Y, BAR_W, BAR_H, Theme::CYAN);
-        if (fill > 0) t.fillRect(BAR_X + 1, BAR_Y + 1, fill, BAR_H - 2, Theme::CYAN);
+        // Two readings or more: the ladder of the last minute. One: the bar.
+        if (s_last.sparkCount >= 2) {
+            drawLadder(t, BAR_X, BAR_Y, BAR_W, BAR_H, Theme::CYAN);
+        } else {
+            const int fill = (v + 90) * (BAR_W - 2) / 50;
+            t.drawRect(BAR_X, BAR_Y, BAR_W, BAR_H, Theme::CYAN);
+            if (fill > 0) t.fillRect(BAR_X + 1, BAR_Y + 1, fill, BAR_H - 2, Theme::CYAN);
+        }
     }
 
     // The numbers, without the grade -- that moved up to the SIGNAL row so
@@ -843,49 +995,49 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
         snprintf(info, sizeof(info), "SENSED   %s   x%u",
                  s_last.conf == Confidence::HIGH_CONF ? "SURE" : s_last.conf == Confidence::MED_CONF ? "LIKELY" : "MAYBE",
                  (unsigned)s_last.hits);
+    // A tracker that says where its owner is: that, in place of "CH 0",
+    // which is all a Bluetooth catch had there.
+    else if (ownerWord(s_last.owner) && !s_redacted)
+        snprintf(info, sizeof(info), "%d dBm   %s   x%u",
+                 s_last.rssi, ownerWord(s_last.owner), (unsigned)s_last.hits);
     else
     snprintf(info, sizeof(info), "%d dBm   CH %u   x%u",
              s_last.rssi, s_last.channel, (unsigned)s_last.hits);
     t.setTextColor(confColor, Theme::BG);
     t.setCursor(PLATE_X + (PLATE_W - t.textWidth(info)) / 2, PLATE_Y + PLATE_H - INFO_DY);
     t.print(info);
-    // The first one of its kind, ever, on this board: a line in the gap
-    // between the strip and the plate, in the strip's own colour.
-    if (s_followMin || s_days) {
-        // A tracker that has travelled with you, or one away from its owner
-        // that keeps turning up near you. Ahead of everything: these are the
-        // banners about you rather than about the device.
-        char fl[32];
-        if (s_followMin) snprintf(fl, sizeof fl, "* WITH YOU %u MIN *", (unsigned)s_followMin);
-        else             snprintf(fl, sizeof fl, "* NEAR YOU ON %u DAYS *", (unsigned)s_days);
+    // The banner line, in the gap between the strip and the plate: the
+    // verdict and the rest, strongest first (bannerText()). WITH YOU and
+    // NEAR YOU ON N DAYS are about you rather than the device and lead;
+    // FOLLOWING is the trail's answer; a spam flood is about the room; MET
+    // BEFORE, FIRST and AT NIGHT are about this catch; QUIET UNLESS IT
+    // NEARS is housekeeping and takes the line only when nothing else does.
+    char fl[48];
+    uint16_t flCol = Theme::RED;
+    const char* banner = bannerText(fl, sizeof fl, flCol, verdict);
+    if (banner) {
         t.setTextSize(1);
-        t.setTextColor(Theme::RED, Theme::BG);
-        t.setCursor(PLATE_X + (PLATE_W - t.textWidth(fl)) / 2, stripHOf(w) + 2);
-        t.print(fl);
-    } else if (s_spam) {
-        // A flood of fake tags, and this is its one alert. Beats FIRST and
-        // AT NIGHT: they are about one catch, and this is about the room.
-        char fl[32];
-        snprintf(fl, sizeof fl, "* SPAM: %u FAKE TAGS *", (unsigned)s_spamFakes);
-        t.setTextSize(1);
-        t.setTextColor(Theme::RED, Theme::BG);
-        t.setCursor(PLATE_X + (PLATE_W - t.textWidth(fl)) / 2, stripHOf(w) + 2);
-        t.print(fl);
-    } else if (s_first || s_night) {
-        const char* fl = (s_first && s_night) ? "* FIRST, AND AT NIGHT *"
-                       : s_first ? "* FIRST OF ITS KIND *" : "* AT NIGHT *";
-        t.setTextSize(1);
-        t.setTextColor(Theme::VAPOR_YELLOW, Theme::BG);
-        t.setCursor(PLATE_X + (PLATE_W - t.textWidth(fl)) / 2, stripHOf(w) + 2);
-        t.print(fl);
-    } else if (s_lastFree) {
-        // Shares the line, and loses it to FIRST or AT NIGHT, both of which
-        // are about the catch itself. This one is housekeeping.
-        const char* fl = "* QUIET UNLESS IT NEARS *";
-        t.setTextSize(1);
-        t.setTextColor(Theme::CYAN, Theme::BG);
-        t.setCursor(PLATE_X + (PLATE_W - t.textWidth(fl)) / 2, stripHOf(w) + 2);
-        t.print(fl);
+        t.setTextColor(flCol, Theme::BG);
+        t.setCursor(PLATE_X + (PLATE_W - t.textWidth(banner)) / 2, stripHOf(w) + 2);
+        t.print(banner);
+    }
+    // The stops line, under the plate when the gauge is beside it, under the
+    // gauge when it is below. Red while it is FOLLOWING.
+    int underY = wide ? PLATE_Y + PLATE_H + 3 : PLATE_Y + PLATE_H + 62;
+    {
+        char tl[64];
+        if (trailText(tl, sizeof tl, now)) {
+            t.setTextSize(1);
+            if (underY + t.fontHeight() <= h - 56) {
+                const int tw = t.textWidth(tl);
+                const int tx = tw <= PLATE_W ? PLATE_X + (PLATE_W - tw) / 2 : PLATE_X;
+                t.fillRect(tx - 2, underY - 1, tw + 4, t.fontHeight() + 2, Theme::BG);
+                t.setTextColor(verdict == Verdict::FOLLOWING ? Theme::RED : Theme::CYAN, Theme::BG);
+                t.setCursor(tx, underY);
+                t.print(tl);
+                underY += t.fontHeight() + 3;
+            }
+        }
     }
 #if defined(CYD_GPS)
     // Where it was caught, from a fresh GPS fix (upstream SquachWatch
@@ -893,14 +1045,11 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
     // plate when the gauge is beside it, or under the gauge when it is below.
     // Never on a locked card: it would show where the owner was.
     if (s_place && !s_redacted) {
-        const bool banner = s_followMin || s_days || s_spam || s_first || s_night || s_lastFree;
         char la[16], lo[16], pl[40];
         SdRow::degreesText(la, sizeof la, s_placeLat7, 5);
         SdRow::degreesText(lo, sizeof lo, s_placeLon7, 5);
         snprintf(pl, sizeof pl, "%s, %s%s", la, lo, s_placeFake ? " FAKE" : "");
-        const int py = !banner ? stripHOf(w) + 2
-                     : wide    ? PLATE_Y + PLATE_H + 3
-                               : PLATE_Y + PLATE_H + 62;
+        const int py = !banner ? stripHOf(w) + 2 : underY;
         t.setTextSize(1);
         if (py + t.fontHeight() <= h - 56) {
             t.setTextColor(Theme::CYAN, Theme::BG);
@@ -973,6 +1122,19 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
             t.drawLine(gx, gy, gx + (int)(sinf(sweep) * gr),
                        gy - (int)(cosf(sweep) * gr), Theme::GREEN);
             t.drawCircle(gx, gy, gr, Theme::VAPOR_PINK);
+        }
+        // Catches waiting behind this card, in the box's top corner: any tap
+        // that closes the card brings the next one up.
+        if (s_queue && gr > 8) {
+            char q[12];
+            snprintf(q, sizeof q, "+%u MORE", (unsigned)s_queue);
+            t.setTextSize(1);
+            const int qw = t.textWidth(q);
+            const int qx = gx + gr + 4 - qw - 3, qy = gy - gr - 4 + 3;
+            t.fillRect(qx - 2, qy - 1, qw + 4, t.fontHeight() + 2, Theme::BG);
+            t.setTextColor(Theme::AMBER, Theme::BG);
+            t.setCursor(qx, qy);
+            t.print(q);
         }
     }
 
@@ -1056,8 +1218,13 @@ void uiAlertTick(TFT_eSPI& t, uint32_t now, const DetectionEngine& eng,
     {
         int bx, by, bw, bh;
         snoozeBtnRect(w, h, bx, by, bw, bh);
-        Theme::drawButton(t, bx, by, bw, bh, s_snzLabel ? s_snzLabel : "SNOOZE",
-                          s_snzLabel != nullptr);
+        // A card opened from LOG: WATCH, pushed in while it is watched (the way
+        // IGNORE reads MUTED by staying in).
+        if (s_byHand)
+            Theme::drawButton(t, bx, by, bw, bh, "WATCH", s_watching);
+        else
+            Theme::drawButton(t, bx, by, bw, bh, s_snzLabel ? s_snzLabel : "SNOOZE",
+                              s_snzLabel != nullptr);
         Theme::hotButton(bx, by, bw, bh, "SNOOZE");   // its name, whatever it says
         if (s_snzLabel) {
             const int barW = (int)((int32_t)(bw - 6) * s_snzLeft / 1000);

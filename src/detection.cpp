@@ -1,6 +1,10 @@
 // MuleSkin-CYD — DetectionEngine implementation
 #include "detection.h"
 #include "wardrive.h"
+#include "trail.h"      // the alert card's trail: each row's signal and stops
+#if defined(CYD_GPS)
+#include "gnss.h"       // a fresh fix starts a new place sharper than WiFi can
+#endif
 #include "wifi_auth.h"
 #include "serial_flush.h"
 #include "signatures.h"
@@ -1411,6 +1415,19 @@ void DetectionEngine::loop() {
     // Back from NEARBY, a WiFi sweep or an update: the room was not being
     // listened to, so that time does not count against "last seen".
     resumeAgeing();
+    // Where the board is, for the trail: the WiFi fingerprint every pass, a
+    // GPS position when there is a fresh one.
+    {
+        const uint32_t now = millis();
+        Places::tick(now);
+#if defined(CYD_GPS)
+        static uint32_t s_fixAt = 0;
+        if (Gnss::fresh(now) && now - s_fixAt >= 5000) {
+            s_fixAt = now;
+            Places::noteFix(Gnss::fix().lat7, Gnss::fix().lon7, now);
+        }
+#endif
+    }
     // After the raw-scan return above, so a raw scan that owns the radio is
     // never restarted out from under it.
     scanFlushTick();
@@ -1795,6 +1812,7 @@ void DetectionEngine::postBle(Detection d) {
             // A tag's owner state follows its latest advert: one that walks
             // away from its owner's phone says so here, while it is watched.
             if (d.owner) _log[slot].owner = d.owner;
+            Trail::noteSighting(_log[slot], d.rssi, millis());
             // hits counts distinct sightings (comes-and-goes, gated by
             // expireStale's active flag), not raw advertisement
             // packets -- a BLE beacon like an AirTag advertises every
@@ -2323,6 +2341,9 @@ void DetectionEngine::processWiFiQ() {
         // (beacon), same offsets postWiFi() was already called with.
         checkWatchWifi(e.mac, e.rssi);
         checkHuntWifi(e.mac, e.rssi);
+        // Every named network tells the places tracker what is about (a
+        // pwnagotchi's or a drone's beacon names no network).
+        if (e.ssid[0] && !e.pwnagotchi && !e.drone) Places::noteBssid(e.mac, e.rssi, e.ssid, millis());
         // Every captured frame feeds the spectrum-waterfall's channel
         // activity level, whether or not it ends up matching anything
         // below — this is meant to reflect real ambient RF traffic,
@@ -2424,6 +2445,7 @@ void DetectionEngine::processWiFiQ() {
                 _log[slot].rssi = e.rssi;
                 _log[slot].lastSeen = millis();
                 _log[slot].channel = e.channel;
+                Trail::noteSighting(_log[slot], e.rssi, millis());
                 if (reactivating) {
                     _log[slot].active = true;
                     _log[slot].restored = 0;
@@ -2487,6 +2509,7 @@ void DetectionEngine::pushLog(const Detection& d) {
     _log[_logHead] = d;
     _log[_logHead].prevRssi = d.rssi;                 // no trend on a first sight
     _log[_logHead].prevAt   = (uint8_t)(millis() >> 11);
+    Trail::noteSighting(_log[_logHead], d.rssi, millis());
     _logHead = (_logHead + 1) % LOG_CAP;
     if (_logCount < LOG_CAP) _logCount++;
     _newRows++;

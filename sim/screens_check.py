@@ -75,6 +75,12 @@ SCREENS = [
     # the TAP AGAIN line sits above it -- on the CYD and on the small card.
     ("alert-snooze",  "alert",      ["--alert", "1"], {"MULESKINSIM_SNOOZE": "30 MIN"}),
     ("alert-snooze-240", "alert",   ["--alert", "1", "--size", "240x135"], {"MULESKINSIM_SNOOZE": "30 MIN"}),
+    # The trail (upstream v1.50.0, drawn here as part of the card): an AirTag
+    # heard at three stops over 25 minutes -- FOLLOWING in the banner, the
+    # stops under the plate, the last minute as a ladder -- with two catches
+    # waiting behind it; and a card opened by holding a LOG row, WATCH for SNOOZE.
+    ("alert-trail",   "alert",      ["--alert", "6"], {"MULESKINSIM_TRAIL": "1", "MULESKINSIM_QUEUE": "2"}),
+    ("alert-byhand",  "alert",      ["--alert", "6"], {"MULESKINSIM_BYHAND": "1"}),
     # TERMINAL MODE (the BORING MODE switch): the main screen as a desktop of
     # windows -- the sortable LOG with the battery in its title bar, AIR,
     # COUNTS and LATEST -- on the CYD, and the LOG alone on the StickS3 and

@@ -179,6 +179,23 @@ struct Detection {
     // only, 0 for everything else): the card's WITH OWNER, AWAY FROM OWNER
     // or NOT SET UP. Kept up to date while the tag is heard.
     uint8_t        owner;
+
+    // ---- the trail (trail.h; upstream SquachWatch v1.50.0) -------------
+    // The last minute of signal: one reading every four seconds or so,
+    // oldest first from sparkHead. The alert card draws it as a ladder.
+    static const uint8_t SPARK_N = 12;
+    int8_t         spark[SPARK_N];
+    uint8_t        sparkHead;       // next slot to write
+    uint8_t        sparkCount;      // readings held, <= SPARK_N
+    uint8_t        sparkAt;         // millis() >> 12 of the last reading
+    // The places (places.h) this device was heard at, oldest first, with the
+    // minutes of uptime it was first and last heard there. Three is what the
+    // card draws; an older stop drops off the front.
+    static const uint8_t STOPS_N = 3;
+    uint8_t        stops;
+    uint8_t        stopPlace[STOPS_N];
+    uint16_t       stopFirstMin[STOPS_N];
+    uint16_t       stopLastMin[STOPS_N];
 };
 
 // What a tracker's advert says about its owner (signatures.h, trackerVerdict).

@@ -27,7 +27,16 @@ void uiAlertSetFollow(uint16_t minutes);
 // A tracker away from its owner seen on this many different days (the
 // regulars, regulars.h): "* NEAR YOU ON N DAYS *" in red. 0 = not one.
 void uiAlertSetDays(uint8_t days);
+// How many catches wait behind this card ("+N MORE", in the gauge's corner).
+// 0 hides it. Any tap that closes the card brings the next one up.
+void uiAlertSetQueue(uint8_t n);
+// A card opened by hand -- holding a LOG row -- rather than by a catch: the
+// SNOOZE button is WATCH instead (pushed in while the device is watched),
+// since the LOG's panel, which had WATCH, is what this card replaces.
+void uiAlertSetByHand(bool on);
+void uiAlertSetWatching(bool on);
 // SNOOZE (this device, for a while), bottom centre between HUNT and MORE INFO.
+// On a card opened by hand the same button is WATCH.
 bool uiAlertHitSnooze(int x, int y, int screenW, int screenH);
 // While SNOOZE is being tapped through its steps: the button shows the step
 // ("30 MIN"), held down, with a bar that runs out when the pick locks in.

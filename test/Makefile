@@ -27,7 +27,7 @@ ifneq ($(findstring mingw,$(shell $(CXX) -dumpmachine)),)
 CXXFLAGS += -include $(SIM)/win_compat.h
 endif
 
-TESTS := remote_id_test ibeacon_test signatures_test emitter_roundtrip_test ignore_list_test hacker_test pwnagotchi_test shim_fidelity_test qwerty_test device_info_test security_test blackbox_test hunt_test bgretire_test autoquiet_test framepush_test touchfit_test logindex_test dex_test regulars_test spam_test gnss_test wigle_test wardrive_test wardrive_seen_test lora_survey_test lora_msgs_test lora_json_test lora_feed_test lora_airtime_test lora_ident_test lora_enrich_test lora_channels_test lora_nodes_test lora_crypto_test lora_meshtastic_test lora_meshcore_test lora_lorawan_test lora_ham_test version_test auto_time_test radar_blip_test night_mode_test tracker_follow_test today_test sig_extra_test push_queue_test muleskin_art_test karma_watch_test tracker_verdict_test away_days_test home_aps_test sd_row_test myalerts_test lora_opalert_test sense_motion_test tab5_wire_test
+TESTS := remote_id_test ibeacon_test signatures_test emitter_roundtrip_test ignore_list_test hacker_test pwnagotchi_test shim_fidelity_test qwerty_test device_info_test security_test blackbox_test hunt_test bgretire_test autoquiet_test framepush_test touchfit_test logindex_test dex_test regulars_test spam_test gnss_test wigle_test wardrive_test wardrive_seen_test lora_survey_test lora_msgs_test lora_json_test lora_feed_test lora_airtime_test lora_ident_test lora_enrich_test lora_channels_test lora_nodes_test lora_crypto_test lora_meshtastic_test lora_meshcore_test lora_lorawan_test lora_ham_test version_test auto_time_test radar_blip_test night_mode_test tracker_follow_test today_test sig_extra_test push_queue_test muleskin_art_test karma_watch_test tracker_verdict_test away_days_test home_aps_test sd_row_test myalerts_test lora_opalert_test sense_motion_test tab5_wire_test places_test
 
 # Only the units under test get linked in. Pulling the whole firmware
 # would drag in TFT_eSPI, NimBLE and the UI, and a test that needs a
@@ -63,14 +63,17 @@ blackbox_test_FLAGS          := -DBLACKBOX_TEST
 # One LOG row per device, over the same RAM flash.
 logindex_test_SRCS           := $(SRC)/blackbox.cpp $(SRC)/log_index.cpp
 # The DEX's cards and the record, through the Preferences shim; the clock is stubbed.
-dex_test_SRCS                := $(SRC)/dex.cpp $(SIM)/detection_sim.cpp $(SRC)/remote_id.cpp
+dex_test_SRCS                := $(SRC)/dex.cpp $(SIM)/detection_sim.cpp $(SRC)/remote_id.cpp $(SRC)/places.cpp
 # The neighbours table; the clock is stubbed.
 regulars_test_SRCS           := $(SRC)/regulars.cpp
+# Places, and the trail over them (trail.h is header-only); the AirTag
+# checks come along for the last suite.
+places_test_SRCS             := $(SRC)/places.cpp $(SRC)/signatures.cpp
 # The card: winnable, and it keeps what it earned. The clock is stubbed in
 # the test; the engine comes along for its lifetime counts.
 # An unfinished egg hunt, through the settings store. Theme and Clock are
 # stubbed in the test; settings.cpp only calls a handful of each.
-autoquiet_test_SRCS       := $(SIM)/detection_sim.cpp $(SRC)/remote_id.cpp
+autoquiet_test_SRCS       := $(SIM)/detection_sim.cpp $(SRC)/remote_id.cpp $(SRC)/places.cpp
 bgretire_test_SRCS := $(SRC)/settings.cpp
 hunt_test_SRCS               := $(SRC)/settings.cpp
 # Header-only, both: the colour arithmetic the overlapped frame push

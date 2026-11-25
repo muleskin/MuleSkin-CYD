@@ -17,6 +17,7 @@
 // screen full of detections, but it is NOT exercising the real matching
 // logic that decides what counts as a detection in the first place.
 #include "detection.h"
+#include "trail.h"
 #include <cstring>
 
 // ---- SdLog: no card, ever -------------------------------------------
@@ -29,7 +30,7 @@ void SdLog::openDaily() {}
 // ---- DetectionEngine -------------------------------------------------
 
 bool DetectionEngine::init() { return true; }
-void DetectionEngine::loop() {}
+void DetectionEngine::loop() { Places::tick(millis()); }
 // No radio, so nothing to restart and nothing freed.
 ScanFlushStats scanFlushStats() { return ScanFlushStats{ 0, 0, 0 }; }
 BootHeap bootHeap()             { return BootHeap{ 0, 0, 0, 0 }; }
@@ -70,6 +71,7 @@ void DetectionEngine::resetLifetime() {
 
 void DetectionEngine::pushLog(const Detection& d) {
     _log[_logHead] = d;
+    Trail::noteSighting(_log[_logHead], d.rssi, millis());
     _latest = &_log[_logHead];
     _latestNew = true;   // the stand-in only ever pushes; nothing here reactivates
     _latestSeq = _latestSeq + 1;

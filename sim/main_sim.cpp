@@ -52,6 +52,7 @@
 #include "ui_meeting.h"
 #include "ui_timesync.h"
 #include "ui_today.h"
+#include "trail.h"
 #include "ota_wifi.h"
 #include "ui_update.h"
 #include "ui_wifipass.h"
@@ -847,6 +848,22 @@ int main(int argc, char** argv) {
             d = engine.logAt(0);
         }
         if (!d) { fprintf(stderr, "no seeded detection to alert on\n"); return 1; }
+        // MULESKINSIM_TRAIL=1: the row was heard at three stops over 25
+        // minutes -- home, then two more -- with its last minute of signal
+        // climbing, so the card says FOLLOWING and draws the stops and the
+        // ladder. Written onto the engine's own row, which the card reads.
+        if (getenv("MULESKINSIM_TRAIL")) {
+            Detection& row = const_cast<Detection&>(*d);
+            if (now < 30u * 60000u) now += 30u * 60000u;   // half an hour of uptime to have stopped in
+            const uint32_t t0 = now - 26u * 60000u;
+            Places::forceNew(t0, true);
+            Trail::noteSighting(row, -71, t0);
+            Places::forceNew(t0 + 11u * 60000u);
+            Trail::noteSighting(row, -66, t0 + 11u * 60000u);
+            Places::forceNew(t0 + 25u * 60000u);
+            for (int k = 0; k < 12; k++)
+                Trail::noteSighting(row, (int8_t)(-74 + 2 * k + (k % 3 == 0 ? -3 : 0)), now - 60000u + (uint32_t)k * 4200u);
+        }
         uiAlertInit(frame, *d);
         // The banners, the way main.cpp sets them: after init, which clears them.
         if (alertFirst)    uiAlertSetFirst(true);
@@ -856,6 +873,10 @@ int main(int argc, char** argv) {
         if (const char* f = getenv("MULESKINSIM_FOLLOW")) uiAlertSetFollow((uint16_t)atoi(f));
         // MULESKINSIM_SNOOZE=label: SNOOZE mid-pick, its bar half run out.
         if (const char* z = getenv("MULESKINSIM_SNOOZE")) uiAlertSetSnoozePick(z, 500);
+        // MULESKINSIM_QUEUE=N: N catches waiting behind the card.
+        if (const char* q = getenv("MULESKINSIM_QUEUE")) uiAlertSetQueue((uint8_t)atoi(q));
+        // MULESKINSIM_BYHAND=1: opened by holding a LOG row (WATCH for SNOOZE).
+        if (getenv("MULESKINSIM_BYHAND")) uiAlertSetByHand(true);
     }
 
     // After uiSettingsInit(), which clears any pending question.

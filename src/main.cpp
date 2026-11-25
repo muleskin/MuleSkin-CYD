@@ -125,6 +125,7 @@ static void cydGpsTick(uint32_t now);
 #endif
 #include <time.h>
 #include "regulars.h"
+#include "places.h"
 #include "notices.h"
 #include "theme.h"            // the crash card on the splash
 #include "clock.h"            // ...and the ten-minute IGNORE on it
@@ -1836,8 +1837,25 @@ static const uint32_t SNOOZE_PICK_MS = 3000;
 static uint8_t  s_snoozeStep  = 0;
 static uint32_t s_snoozeTapAt = 0;
 
+// Catches that arrive while a card is up wait their turn behind it (the
+// "+N MORE" on the card), instead of being dropped (upstream SquachWatch
+// v1.50.0). The address and type, since the log row can be overwritten; and
+// the two banner flags alertMayInterrupt() worked out for it, since they are
+// about that catch and not whichever card is up when it gets its turn.
+struct QueuedCatch { uint8_t mac[6]; DetectionType type; bool lastFree, spam; };
+static QueuedCatch s_queue[4];
+static uint8_t     s_queueN = 0;
+
+// The card on screen was opened by hand -- holding a LOG row -- not by a
+// catch: no timeout, WATCH where SNOOZE is, back to LOG when it closes, and
+// MuleSkin does not hear about it as a catch (he did when it was caught).
+static bool s_alertByHand = false;
+
 static void enterAlert(const Detection& d) {
+    const bool fresh = state != AppState::ALERT;   // a card from nothing, not the next in line
     state = AppState::ALERT;
+    s_alertByHand = false;
+    if (fresh) s_queueN = 0;
     s_snoozeStep = 0;
 #if defined(TWATCH_S3)
     twatchBuzz(Buzz::ALERT);
@@ -1902,6 +1920,7 @@ static void enterAlert(const Detection& d) {
     // entry this came from can be overwritten before HUNT is tapped.
     memcpy(s_alertMac, d.mac, 6);
     s_alertIsBle = (d.channel == 0);   // same discriminator LOG's long-press uses
+    uiAlertSetQueue(s_queueN);
     {
         const char* lbl = d.name[0] ? d.name : vendorText(d);
         strncpy(s_alertLabel, lbl, sizeof(s_alertLabel) - 1);
@@ -1910,6 +1929,74 @@ static void enterAlert(const Detection& d) {
 #if defined(CYD35)
     clearSharedFrameBuffer();
 #endif
+}
+
+// A catch heard while a card was up: behind it, once, unless it is the card.
+static void queueCatch(const Detection& d) {
+    if (memcmp(d.mac, s_alertMac, 6) == 0 && d.type == lastAlertType) return;
+    for (uint8_t i = 0; i < s_queueN; i++)
+        if (memcmp(s_queue[i].mac, d.mac, 6) == 0 && s_queue[i].type == d.type) return;
+    if (s_queueN == sizeof s_queue / sizeof s_queue[0]) return;
+    QueuedCatch& q = s_queue[s_queueN++];
+    memcpy(q.mac, d.mac, 6);
+    q.type     = d.type;
+    q.lastFree = s_alertLastFree;
+    q.spam     = s_alertSpam;
+    s_alertSpam = false;
+    uiAlertSetQueue(s_queueN);
+}
+
+// The next waiting catch's card, if its row is still in the log. False when
+// nothing waits, so the caller goes home.
+static bool nextQueued() {
+    while (s_queueN) {
+        const QueuedCatch q = s_queue[0];
+        for (uint8_t i = 1; i < s_queueN; i++) s_queue[i - 1] = s_queue[i];
+        s_queueN--;
+        for (uint8_t i = 0; i < engine.logCount(); i++) {
+            const Detection* d = engine.logAt(i);
+            if (d && memcmp(d->mac, q.mac, 6) == 0 && d->type == q.type) {
+                const Detection copy = *d;
+                s_alertLastFree = q.lastFree;
+                s_alertSpam     = q.spam;
+                enterAlert(copy);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void enterLog();   // below; a card opened from LOG goes back to it
+
+// Leaving the card by any route that acknowledges it: MuleSkin hears about a
+// catch, and the next waiting catch takes the screen, or home does -- or the
+// LOG, for a card opened from it.
+static void leaveAlert() {
+    if (s_alertByHand) {
+        s_alertByHand = false;
+        if (!nextQueued()) enterLog();
+        return;
+    }
+    muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
+    if (!nextQueued()) enterClear();
+}
+
+// Holding a LOG row: that device's card -- its trail, its owner, the ladder,
+// the buttons -- in place of the old WATCH / IGNORE / HUNT / INFO panel,
+// whose WATCH the card takes over (where SNOOZE sits). A copy, because the
+// log keeps being written.
+static void openCardFromLog(const Detection& d) {
+    const Detection copy = d;
+    s_alertSpam = false;
+    s_alertLastFree = false;
+    enterAlert(copy);
+    s_firstLine[0] = '\0';     // FIRST EVER and AT NIGHT are for a catch, not a look
+    uiAlertSetFirst(false);
+    uiAlertSetNight(false);
+    s_alertByHand = true;
+    uiAlertSetByHand(true);
+    uiAlertSetWatching(engine.isWatched(copy.mac, s_alertIsBle));
 }
 
 static void enterWatchAlert() {
@@ -4024,6 +4111,13 @@ void setup() {
     // type sits out, and those are read in init().
     Dex::begin();
     Regulars::begin();
+    // The trail: where the board has been. A place is HOME when the home
+    // network (the saved one marked USE) is heard there -- by name, which is
+    // all a label needs; nothing is decided on it.
+    Places::begin();
+    Places::setHomeCheck([](const char* ssid) {
+        return engine.homeSsid()[0] && strcmp(ssid, engine.homeSsid()) == 0;
+    });
     MyAlerts::begin();
     // AWAYDAYS on the console, and "2d away" on the LOG (the away-days table).
     awayDaysLoad();
@@ -5659,6 +5753,18 @@ void loop() {
                 else           tp.valid = false;
             }
 
+            // Catches that arrive while a card is up are not dropped: they
+            // wait behind it, through the same gates the main screen applies,
+            // and the card says how many. Not while locked: the lock screen
+            // has its own way of showing what it caught.
+            if (!Security::locked()) {
+                if (const Detection* f = freshCatch(now)) {
+                    if (f->conf >= Settings::minConfidence() && !IgnoreList::silenced(f->mac) &&
+                        alertMayInterrupt(*f))
+                        queueCatch(*f);
+                }
+            }
+
             // Same "ignore the touch that opened this until it releases"
             // gate LOG's info panel uses, applied here too -- MORE INFO
             // appears on the exact tap that opened it, so without this
@@ -5687,8 +5793,7 @@ void loop() {
                         // dismiss step once you'd already read the
                         // explanation.
                         s_infoPending = false;
-                        muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
-                        enterClear();
+                        leaveAlert();
                     }
                 }
                 break;
@@ -5737,8 +5842,7 @@ void loop() {
                     s_snoozeStep = 0;
                     lastTouch = now;
                     Theme::showToast("SNOOZED", sub, Theme::AMBER);
-                    muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
-                    enterClear();
+                    leaveAlert();
                     break;
                 }
                 uiAlertSetSnoozePick(SNOOZE_STEP[s_snoozeStep - 1].label,
@@ -5778,8 +5882,20 @@ void loop() {
                     lastTouch = now;
                     if (IgnoreList::contains(s_alertMac)) IgnoreList::remove(s_alertMac);
                     else                                  IgnoreList::add(s_alertMac, lastAlertType);
-                    muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
-                    enterClear();
+                    leaveAlert();
+                } else if (s_alertByHand && uiAlertHitSnooze(tp.x, tp.y, tft.width(), tft.height())) {
+                    // A card opened from LOG: WATCH where SNOOZE is, as the
+                    // LOG's panel had it, and a second tap takes it back.
+                    // The card stays up.
+                    if (engine.isWatched(s_alertMac, s_alertIsBle)) {
+                        engine.clearWatch();
+                        Theme::showToast("UNWATCHED", "Not following it now", Theme::CYAN);
+                    } else {
+                        if (s_alertIsBle) engine.watchBle(s_alertMac, s_alertLabel);
+                        else              engine.watchWifi(s_alertMac, s_alertLabel);
+                        Theme::showToast("WATCHING", "You hear when it is back", Theme::CYAN);
+                    }
+                    uiAlertSetWatching(engine.isWatched(s_alertMac, s_alertIsBle));
                 } else if (uiAlertHitSnooze(tp.x, tp.y, tft.width(), tft.height())) {
                     // This device, for a while: no more alerts from it,
                     // while it goes on being scanned, counted and logged like
@@ -5807,15 +5923,15 @@ void loop() {
                     // on the info panel) both fire it.
                     if (s_alertIsBle) engine.huntBle(s_alertMac, s_alertLabel);
                     else              engine.huntWifi(s_alertMac, s_alertLabel);
-                    muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
+                    if (!s_alertByHand) muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
+                    s_alertByHand = false;
+                    s_queueN = 0;      // the hunt has the screen; what queued is in the LOG
                     enterHunt();
                 } else {
-                    muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
-                    enterClear();
+                    leaveAlert();
                 }
-            } else if ((now - alertStart) > ALERT_AUTO_DISMISS_MS && !s_snoozeStep) {
-                muleskinCatch(lastAlertType, s_alertMac, lastAlertHits, lastAlertRssi, lastAlertConf);
-                enterClear();
+            } else if ((now - alertStart) > ALERT_AUTO_DISMISS_MS && !s_snoozeStep && !s_alertByHand) {
+                leaveAlert();     // a card opened from LOG stays until it is closed
             }
             break;
         }
@@ -6105,7 +6221,7 @@ void loop() {
                     const Detection* d = (row >= 0) ? uiLogRow(engine, row) : nullptr;
                     if (d) {
                         rowHoldFired = true;
-                        openConfirmFor(d);
+                        openCardFromLog(*d);
                     }
                 }
             }

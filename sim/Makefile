@@ -85,6 +85,7 @@ UI_SRCS  := $(SRC)/theme.cpp \
             $(SRC)/log_index.cpp \
             $(SRC)/dex.cpp \
             $(SRC)/regulars.cpp \
+            $(SRC)/places.cpp \
             $(SRC)/notices.cpp \
             $(SRC)/ui_dex.cpp \
             $(SRC)/ui_meeting.cpp \
