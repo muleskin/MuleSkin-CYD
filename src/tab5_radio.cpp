@@ -20,6 +20,7 @@
 //     re-initialising the bus, and only after the panel is up.
 #if defined(TAB5)
 #include "tab5_radio.h"
+#include "tab5_wire.h"
 #include "tab5_panel.h"
 #include <Arduino.h>
 #include <M5GFX.h>
@@ -43,20 +44,8 @@ extern const uint8_t c6_image_end[]   asm("_binary_tools_tab5_c6_c6_radio_bin_en
 
 namespace {
 
-// ---- The protocol, as squach_sniff.c defines it ---------------------------
-const uint32_t CMD_SNIFF   = 0x5100;   // u8 on/off
-const uint32_t CMD_CHANNEL = 0x5101;   // u8 1-14
-const uint32_t CMD_HOP     = 0x5102;   // u8 n, n channels, u16 dwell ms LE; n = 0 stops
-const uint32_t CMD_HELLO   = 0x5103;   // one byte, any
-const uint32_t EVT_ACK     = 0x5180;   // u16 cmd, i32 status
-const uint32_t EVT_HELLO   = 0x5181;   // char tag[16], u8 sniffing
-const uint32_t EVT_FRAME   = 0x5200;   // the packed header below, then the frame bytes
-const uint32_t EVT_STATS   = 0x5201;   // u32 seen, forwarded, dropped; u8 channel
-
-struct __attribute__((packed)) WireFrame { int8_t rssi; uint8_t channel, type, subtype; uint16_t sigLen, dataLen; };
-struct __attribute__((packed)) WireAck   { uint16_t cmd; int32_t status; };
-struct __attribute__((packed)) WireHello { char tag[16]; uint8_t sniffing; };
-struct __attribute__((packed)) WireStats { uint32_t seen, forwarded, dropped; uint8_t channel; };
+// The protocol (IDs, layouts, decoding) is include/tab5_wire.h.
+using namespace Tab5Wire;
 
 // ---- The Tab5's wiring -------------------------------------------------------
 const int SDIO_CLK = 12, SDIO_CMD = 13, SDIO_D0 = 11, SDIO_D1 = 10, SDIO_D2 = 9, SDIO_D3 = 8, C6_RESET = 15;
@@ -81,43 +70,36 @@ Tab5Radio::Frame  s_in;
 
 // ---- Receive side: the RPC task. Copy and queue, never parse. ---------------
 void onFrame(uint32_t, const uint8_t* d, size_t n, void*) {
-    if (!s_q || n < sizeof(WireFrame)) return;
-    WireFrame h;
-    memcpy(&h, d, sizeof h);
-    const size_t have = n - sizeof(WireFrame);
-    uint16_t take = h.dataLen;
-    if (take > have) take = (uint16_t)have;
-    if (take > Tab5Radio::FRAME_MAX) take = Tab5Radio::FRAME_MAX;
+    if (!s_q) return;
+    FrameHead h;
+    const int take = frameTake(d, n, &h);
+    if (take < 0) return;
     s_in.rssi = h.rssi; s_in.channel = h.channel; s_in.type = h.type; s_in.subtype = h.subtype;
-    s_in.sigLen = h.sigLen; s_in.dataLen = take;
-    memcpy(s_in.data, d + sizeof(WireFrame), take);
+    s_in.sigLen = h.sigLen; s_in.dataLen = (uint16_t)take;
+    memcpy(s_in.data, d + sizeof(FrameHead), (size_t)take);
     if (xQueueSend(s_q, &s_in, 0) == pdTRUE) s_stats.received++;
     else s_stats.queueFull++;
 }
 
 void onAck(uint32_t, const uint8_t* d, size_t n, void*) {
-    if (n < sizeof(WireAck)) return;
-    WireAck a;
-    memcpy(&a, d, sizeof a);
+    Ack a;
+    if (!readPayload(d, n, &a)) return;
     s_stats.acks++;
     s_stats.lastAckCmd = a.cmd;
     s_stats.lastAckStatus = a.status;
 }
 
 void onHello(uint32_t, const uint8_t* d, size_t n, void*) {
-    if (n < sizeof(WireHello)) return;
-    WireHello h;
-    memcpy(&h, d, sizeof h);
-    memcpy(s_tag, h.tag, 16);
-    s_tag[16] = 0;
+    Hello h;
+    if (!readPayload(d, n, &h)) return;
+    helloTag(h, s_tag);
     s_helloSniffing = h.sniffing;
     s_helloAt = millis() ? millis() : 1;
 }
 
 void onStats(uint32_t, const uint8_t* d, size_t n, void*) {
-    if (n < sizeof(WireStats)) return;
-    WireStats s;
-    memcpy(&s, d, sizeof s);
+    Tab5Wire::Stats s;
+    if (!readPayload(d, n, &s)) return;
     s_stats.seen = s.seen; s_stats.forwarded = s.forwarded; s_stats.dropped = s.dropped;
     s_stats.channel = s.channel;
     s_stats.statsAt = millis() ? millis() : 1;
@@ -417,13 +399,9 @@ bool setChannel(uint8_t ch) {
 }
 
 bool hop(const uint8_t* chans, uint8_t n, uint16_t dwellMs) {
-    if (n > 14) return false;
-    uint8_t msg[1 + 14 + 2];
-    msg[0] = n;
-    for (uint8_t i = 0; i < n; i++) msg[1 + i] = chans[i];
-    msg[1 + n] = (uint8_t)(dwellMs & 0xFF);
-    msg[2 + n] = (uint8_t)(dwellMs >> 8);
-    return send(CMD_HOP, msg, (size_t)(3 + n));
+    uint8_t msg[Tab5Wire::HOP_MSG_MAX];
+    const size_t len = hopMsg(chans, n, dwellMs, msg);
+    return len && send(CMD_HOP, msg, len);
 }
 
 bool hopStop() { return hop(nullptr, 0, 250); }

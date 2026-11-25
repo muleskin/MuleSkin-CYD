@@ -22,6 +22,7 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+#include "tab5_wire.h"
 
 namespace Tab5Radio {
 
@@ -29,7 +30,7 @@ namespace Tab5Radio {
 // dataLen bytes. sigLen is the frame's length on air (the detector's
 // sig_len); dataLen is what came over the link (whole up to 600 bytes for a
 // management frame, 24 for a data frame).
-static const uint16_t FRAME_MAX = 600;
+static const uint16_t FRAME_MAX = Tab5Wire::FRAME_MAX;
 struct Frame {
     int8_t   rssi;
     uint8_t  channel;

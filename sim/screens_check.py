@@ -48,7 +48,8 @@ SCREENS = [
     # at a time (src/muleskin_art.cpp) -- the one screen that draws it. It
     # prints the version, so the emulator is built with FW_VERSION=sim (CI).
     ("boot",          "boot",       [], {}),
-    # The other panels: the 3.5" (480x320) and the CrowPanel 7" (800x480).
+    # The other panels: the 3.5" (480x320), the CrowPanel 7" (800x480) and
+    # the Tab5 (640x360).
     # Every screen lays itself out against the panel's size, and these are
     # otherwise only ever seen on the board itself.
     ("settings-480",  "settings",   ["--size", "480x320"], {}),
@@ -57,6 +58,11 @@ SCREENS = [
     ("settings-800",  "settings",   ["--size", "800x480"], {}),
     ("alert-800",     "alert",      ["--alert", "1", "--size", "800x480"], {}),
     ("log-800",       "log",        ["--size", "800x480"], {}),
+    # The Tab5 (BETA): 1280x720 drawn at 640x360 and doubled by its blit, so
+    # this is the frame the app lays out.
+    ("settings-640",  "settings",   ["--size", "640x360"], {}),
+    ("alert-640",     "alert",      ["--alert", "1", "--size", "640x360"], {}),
+    ("log-640",       "log",        ["--size", "640x360"], {}),
     # The StickS3 and the Cardputer (240x135): the compact layouts, and the
     # small alert card with its own HUNT / SNOOZE / INFO row.
     ("settings-240",  "settings",   ["--size", "240x135"], {}),
